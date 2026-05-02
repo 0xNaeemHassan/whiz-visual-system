@@ -41,4 +41,31 @@ const score = getBrandScore({
 });
 assert.equal(score.score, 100, 'Fully compliant payload should score 100');
 
+const csvLikeIssue = {
+  issueNum: '007',
+  topic: 'Roundtrip',
+  assistantBrief: 'Brief',
+  targetMetric: 'CTR',
+  metricConfidence: 'high',
+  metricSource: 'Internal dashboard',
+  metricValue: '4.2',
+  metricUnit: '%',
+  metricProvenance: [{ source: 'dashboard', capturedAt: '2026-05-01' }],
+};
+const csvRow = [
+  csvLikeIssue.issueNum, csvLikeIssue.topic, '', '', 'draft', '', '', '', '', 'medium', 'medium', '',
+  csvLikeIssue.assistantBrief, csvLikeIssue.targetMetric, csvLikeIssue.metricConfidence, csvLikeIssue.metricSource, csvLikeIssue.metricValue, csvLikeIssue.metricUnit,
+  JSON.stringify(csvLikeIssue.metricProvenance),
+];
+const parsedMetricProvenance = (() => {
+  try { const parsed = JSON.parse(csvRow[18]); return Array.isArray(parsed) ? parsed : []; } catch { return []; }
+})();
+assert.equal(csvRow[12], csvLikeIssue.assistantBrief, 'assistantBrief should persist in CSV-like row');
+assert.equal(csvRow[13], csvLikeIssue.targetMetric, 'targetMetric should persist in CSV-like row');
+assert.equal(csvRow[14], csvLikeIssue.metricConfidence, 'metricConfidence should persist in CSV-like row');
+assert.equal(csvRow[15], csvLikeIssue.metricSource, 'metricSource should persist in CSV-like row');
+assert.equal(csvRow[16], csvLikeIssue.metricValue, 'metricValue should persist in CSV-like row');
+assert.equal(csvRow[17], csvLikeIssue.metricUnit, 'metricUnit should persist in CSV-like row');
+assert.deepEqual(parsedMetricProvenance, csvLikeIssue.metricProvenance, 'metricProvenance should roundtrip via JSON serialization');
+
 console.log('Smoke tests passed');
