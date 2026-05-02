@@ -11,7 +11,10 @@ import ImageUpload from '../components/ImageUpload';
 import AspectRatioSelector, { RATIOS } from '../components/AspectRatioSelector';
 import PatternSelector from '../components/PatternSelector';
 import { CONTENT_TEMPLATES } from '../data/templates';
-import { nearestTypeScale, getComplianceIssues, getBrandScore } from '../utils/editorCompliance';
+import { applyContentTemplate, initializeFrameTemplate as initializeFrameTemplateService } from '../domain/services/templateService';
+import { computeCompliance, computeBrandScore, strictPolishOverrides } from '../domain/services/complianceService';
+import { initializeNewFrameState, resetDesignState } from '../domain/services/frameStateService';
+import { buildFrameSave, parseImportedState } from '../domain/services/serializationService';
 
 const DEFAULT_CONTENT = {
   issueNum:'001',date:'05.01.26',desk:'YIELD',volume:'I',topicTag:'STABLECOIN RISK',
@@ -62,10 +65,13 @@ function DesignPanel({selectedEl,setSelectedEl,overrides,setOverrides,theme,bgGr
     </div>
     <button className="btn btn-danger w-full btn-sm" onClick={()=>{
       if(window.confirm('Reset all design overrides? This cannot be undone.')){
-        resetOverrides(DEFAULT_OVERRIDES);
-        setBgGradient(null);
-        setPatternOverlay(null);
-        showToast('Design reset to defaults');
+        resetDesignState({
+          resetOverrides,
+          defaultOverrides: DEFAULT_OVERRIDES,
+          setBgGradient,
+          setPatternOverlay,
+          showToast,
+        });
       }
     }}>Reset All</button></div></div>);
 }
@@ -113,38 +119,37 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   useEffect(()=>{
     if(newFrameSignal===0)return;
     setFrameId(4);
-    resetContent(DEFAULT_CONTENT);
-    // P3-05: Load frame-specific content template
-    if(selectedFrameId){
-      const tmpl=getFrameTemplate(selectedFrameId,DEFAULT_CONTENT);
-      setContent(tmpl);
-    }
-    resetOverrides(DEFAULT_OVERRIDES);
-    setBgGradient(null);setPatternOverlay(null);
-    setTheme(activeTheme);
-    setAspectRatio(RATIOS[0]);
-    showToast('New frame started');
+    initializeNewFrameState({
+      resetContent,
+      defaultContent: DEFAULT_CONTENT,
+      initializeFrameTemplate: (id) => initializeFrameTemplateService({ frameId: id, defaultContent: DEFAULT_CONTENT, setContent, getFrameTemplate }),
+      frameId: 4,
+      resetOverrides,
+      defaultOverrides: DEFAULT_OVERRIDES,
+      setBgGradient,
+      setPatternOverlay,
+      setTheme,
+      activeTheme,
+      setAspectRatio,
+      defaultAspectRatio: RATIOS[0],
+      showToast,
+    });
   },[newFrameSignal]);
 
   useEffect(()=>{try{const r=localStorage.getItem('whiz-autosave');if(r){const d=JSON.parse(r);if(d.savedAt&&Date.now()-d.savedAt<86400000){autosaveDataRef.current=d;setShowAutosavePrompt(true);}}}catch(e){}},[]);
   const restoreAutosave=()=>{const d=autosaveDataRef.current;if(d){d.frameId&&setFrameId(d.frameId);d.theme&&(setTheme(d.theme),setActiveTheme(d.theme));d.content&&resetContent(d.content);d.overrides&&setOverrides(d.overrides);d.aspectRatio&&setAspectRatio(d.aspectRatio);d.bgGradient&&setBgGradient(d.bgGradient);d.patternOverlay&&setPatternOverlay(d.patternOverlay);showToast('Restored');}setShowAutosavePrompt(false);};
   const selectedFrame=FRAMES.find(f=>f.id===frameId)||FRAMES[0];
   const complianceIssues = useMemo(
-    () => getComplianceIssues({ overrides, content }),
+    () => computeCompliance({ overrides, content }),
     [overrides, content],
   );
   const brandScore = useMemo(
-    () => getBrandScore({ overrides, content }),
+    () => computeBrandScore({ overrides, content }),
     [overrides, content],
   );
 
   const applyStrictPolish = () => {
-    setOverrides((prev) => ({
-      ...prev,
-      title: { ...(prev.title || {}), fontSize: nearestTypeScale(prev.title?.fontSize ?? 52) },
-      deck: { ...(prev.deck || {}), fontSize: nearestTypeScale(prev.deck?.fontSize ?? 18) },
-      body: { ...(prev.body || {}), fontSize: nearestTypeScale(prev.body?.fontSize ?? 15) },
-    }));
+    setOverrides((prev) => strictPolishOverrides(prev));
     showToast('Strict polish applied (type scale snapped).');
   };
   const updateZoom=useCallback(()=>{if(!centerRef.current)return;const{width:w,height:h}=centerRef.current.getBoundingClientRect();if(w<10||h<10)return;const p=w<640?16:40;setZoom(+(Math.min((w-p)/(aspectRatio?.w||1080),(h-p)/(aspectRatio?.h||1350),1)).toFixed(3));},[aspectRatio]);
@@ -184,13 +189,13 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     return()=>window.removeEventListener('keydown',h);
   },[isActive]);
   useEffect(()=>{if(editMode||selectedEl)setRightTab('design');},[editMode,selectedEl]);
-  const buildSave=()=>({frameId,theme,content,overrides,aspectRatio,bgGradient,patternOverlay,savedAt:Date.now()});
+  const buildSave=()=>buildFrameSave({frameId,theme,content,overrides,aspectRatio,bgGradient,patternOverlay});
   const doSave=()=>{const n=saveName.trim()||`${content.topicTag} \u2014 ${new Date().toLocaleDateString()}`;setSaves(p=>[...p,{id:`s_${Date.now()}`,title:n,...buildSave()}]);setShowSaveModal(false);setSaveName('');showToast(`Saved "${n}"`);};
   const loadSave=s=>{setFrameId(s.frameId);setTheme(s.theme);resetContent(s.content);s.overrides&&setOverrides(s.overrides);s.aspectRatio&&setAspectRatio(s.aspectRatio);s.bgGradient&&setBgGradient(s.bgGradient);s.patternOverlay&&setPatternOverlay(s.patternOverlay);setShowLoadModal(false);showToast(`Loaded`);};
   const confirmDel=()=>{if(showDeleteConfirm){setSaves(p=>p.filter(s=>s.id!==showDeleteConfirm));showToast('Deleted','info');setShowDeleteConfirm(null);}};
   const exportJSON=()=>{const d=JSON.stringify(buildSave(),null,2);const b=new Blob([d],{type:'application/json'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=`whiz_${content.topicTag.replace(/[^a-zA-Z0-9]/g,'_').toLowerCase()}.json`;a.click();URL.revokeObjectURL(u);showToast('JSON exported');};
   const exportManifest=()=>{const payload={issueNum:content.issueNum,topic:content.topicTag,title:content.title,date:content.date,frameId,themeId:theme.id,strictMode,brandScore,complianceIssues,sources:(content.sourceLinks||'').split(',').map(s=>s.trim()).filter(Boolean),exportedAt:new Date().toISOString()};const d=JSON.stringify(payload,null,2);const b=new Blob([d],{type:'application/json'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=`whiz_issue${content.issueNum||'000'}_manifest.json`;a.click();URL.revokeObjectURL(u);showToast('Manifest exported');};
-  const importJSON=e=>{const f=e.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=ev=>{try{const d=JSON.parse(ev.target.result);d.frameId&&setFrameId(d.frameId);d.theme&&(setTheme(d.theme),setActiveTheme(d.theme));d.content&&resetContent(d.content);d.overrides&&setOverrides(d.overrides);d.aspectRatio&&setAspectRatio(d.aspectRatio);d.bgGradient&&setBgGradient(d.bgGradient);d.patternOverlay&&setPatternOverlay(d.patternOverlay);showToast('Imported');}catch(err){showToast('Invalid JSON','error');}};r.readAsText(f);e.target.value='';};
+  const importJSON=e=>{const f=e.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=ev=>{try{const d=parseImportedState(JSON.parse(ev.target.result));d.frameId&&setFrameId(d.frameId);d.theme&&(setTheme(d.theme),setActiveTheme(d.theme));d.content&&resetContent(d.content);d.overrides&&setOverrides(d.overrides);d.aspectRatio&&setAspectRatio(d.aspectRatio);d.bgGradient&&setBgGradient(d.bgGradient);d.patternOverlay&&setPatternOverlay(d.patternOverlay);showToast('Imported');}catch(err){showToast('Invalid JSON','error');}};r.readAsText(f);e.target.value='';};
   const exportHTML=()=>{const el=frameRef.current;if(!el)return;const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&family=Inter:wght@300..700&family=JetBrains+Mono:wght@400..700&display=swap" rel="stylesheet"><style>*{margin:0;padding:0;box-sizing:border-box}body{background:#0F1318;display:flex;justify-content:center;align-items:center;min-height:100vh}.whiz-frame{position:relative;overflow:hidden;flex-shrink:0}.wf-spine{position:absolute;left:0;top:0;bottom:0;width:3px;z-index:5}.wf-corner{position:absolute;width:16px;height:16px;z-index:6;opacity:.5}.wf-corner.tl{top:12px;left:12px;border-top:1.5px solid currentColor;border-left:1.5px solid currentColor}.wf-corner.tr{top:12px;right:12px;border-top:1.5px solid currentColor;border-right:1.5px solid currentColor}.wf-corner.bl{bottom:12px;left:12px;border-bottom:1.5px solid currentColor;border-left:1.5px solid currentColor}.wf-corner.br{bottom:12px;right:12px;border-bottom:1.5px solid currentColor;border-right:1.5px solid currentColor}.wf-content{position:relative;z-index:4;padding:40px 36px 32px 44px;display:flex;flex-direction:column;height:100%;box-sizing:border-box}.wf-title{font-family:'Space Grotesk',sans-serif;font-weight:700;letter-spacing:-.02em;line-height:1.05}.wf-deck{font-family:'Inter',sans-serif;line-height:1.6}.wf-body{font-family:'Inter',sans-serif;line-height:1.75}.wf-stat{display:flex;flex-direction:column;gap:4;padding:12px 14px;border-radius:6px}.wf-stat-val{font-family:'Space Grotesk',sans-serif;font-weight:700;line-height:1}.wf-stat-label{font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.1em}.wf-ticker{overflow:hidden;white-space:nowrap;height:28px;display:flex;align-items:center;width:100%;position:relative;z-index:4}.wf-ticker-scroll{display:inline-block;animation:whiz-ticker-scroll 30s linear infinite;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase}.wf-section-head{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.15em;text-transform:uppercase;display:flex;align-items:center;gap:8px;margin-bottom:12px}.wf-section-head::before{content:'';width:12px;height:1.5px;background:currentColor;opacity:.5}.wf-handle{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.08em}.wf-table{width:100%;border-collapse:collapse}.wf-table th{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;text-align:left;padding:7px 10px;border-bottom:1px solid rgba(255,255,255,.06)}.wf-table td{font-family:'Inter',sans-serif;font-size:12px;padding:7px 10px;border-bottom:1px solid rgba(255,255,255,.04)}@keyframes whiz-ticker-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}</style></head><body>${el.outerHTML}</body></html>`;const b=new Blob([html],{type:'text/html'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=`whiz_export.html`;a.click();URL.revokeObjectURL(u);showToast('HTML exported');};
   const exportPNG=async()=>{if(!frameRef.current||exporting)return;if(strictMode&&complianceIssues.length){showToast(`Strict mode blocked export (${complianceIssues.length} issues)`,'error');return;}if(!strictMode&&complianceIssues.length&&!window.confirm(`Whiz compliance warnings:\\n- ${complianceIssues.join('\\n- ')}\\n\\nExport anyway?`))return;setExporting(true);showToast('Generating PNG...','info');try{const h2c=(await import('html2canvas')).default;const c=frameRef.current.cloneNode(true);c.style.cssText=`position:absolute;left:-9999px;top:0;transform:none;width:${aspectRatio.w}px;height:${aspectRatio.h}px`;document.body.appendChild(c);let cv;try{cv=await h2c(c,{scale:2,useCORS:true,allowTaint:true,width:aspectRatio.w,height:aspectRatio.h,backgroundColor:overrides.frameBg||theme.base,logging:false});}finally{if(document.body.contains(c))document.body.removeChild(c);}try{cv.toBlob(bl=>{bl&&navigator.clipboard?.write&&navigator.clipboard.write([new ClipboardItem({'image/png':bl})]).catch(()=>{});});}catch(e){}const u=cv.toDataURL('image/png');const a=document.createElement('a');a.href=u;a.download=`whiz_export.png`;a.click();showToast(`PNG exported at 2x`);}catch(e){console.error(e);showToast(`Export failed: ${e.message||'unknown error'}`,'error');}setExporting(false);}
   const exportWebP=async()=>{
@@ -218,7 +223,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const updateContent=(k,v)=>setContent(c=>({...c,[k]:v}));
   useEffect(()=>{if(!isActive)return;const t=setTimeout(()=>{try{localStorage.setItem('whiz-autosave',JSON.stringify({frameId,theme,content,overrides,aspectRatio,bgGradient,patternOverlay,savedAt:Date.now()}));}catch(e){}},3000);return()=>clearTimeout(t);},[content,overrides,frameId,theme,aspectRatio,bgGradient,patternOverlay]);
   const applyTheme=t=>{setTheme(t);setActiveTheme(t);};
-  const applyTemplate=t=>{resetContent({...DEFAULT_CONTENT,...t.content});showToast(`Template: ${t.name}`);};
+  const applyTemplate=t=>applyContentTemplate({ template: t, defaultContent: DEFAULT_CONTENT, resetContent, showToast });
   const filteredFrames=useMemo(()=>{if(!frameSearch)return FRAMES;const q=frameSearch.toLowerCase();return FRAMES.filter(f=>f.name.toLowerCase().includes(q)||f.tags.some(t=>t.includes(q))||f.layout.includes(q));},[frameSearch]);
   // Fix #33: scroll frame list to top when search changes
   useEffect(()=>{if(frameListRef.current)frameListRef.current.scrollTop=0;},[frameSearch,filteredFrames]);
