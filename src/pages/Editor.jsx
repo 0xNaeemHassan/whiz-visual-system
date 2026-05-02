@@ -17,6 +17,7 @@ import { createDefaultContent, createDefaultOverrides, createDefaultEditorState 
 import { nearestTypeScale, getComplianceIssues, getBrandScore } from '../utils/editorCompliance';
 import { normalizeContentTaxonomy } from '../utils/contentNormalization';
 import { buildMutationDispatcher } from './EditorMutations';
+import { normalizeDateInput, normalizeTimelineEvents } from '../domain/services/dateNormalizationService';
 import { SemanticChip } from '../components/primitives';
 
 /** @typedef {import('../types/editor.js').FrameContent} FrameContent */
@@ -294,7 +295,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     setExporting(false);
   };
   const mutations = useMemo(() => buildMutationDispatcher({ setContent, setOverrides, setMedia: setMediaState }), [setContent, setOverrides, setMediaState]);
-  const updateContent=(k,v,forceImmediate=false)=>mutations.content(k,c=>{const next={...c,[k]:v};if(k==='topicTag'||k==='slug'){return normalizeContentTaxonomy(next).content;}return next;},forceImmediate);
+  const updateContent=(k,v,forceImmediate=false)=>mutations.content(k,c=>{const next={...c,[k]:v};if(k==='date'){const normalized=normalizeDateInput(v);if(normalized.valid)return{...next,date:normalized.displayDate};}if(k==='timelineEvents'){return{...next,timelineEvents:normalizeTimelineEvents(v)};}if(k==='topicTag'||k==='slug'){return normalizeContentTaxonomy(next).content;}return next;},forceImmediate);
   const updateStyle=(updater)=>mutations.style(updater);
   const updateMedia=(updater)=>mutations.image(updater);
   const strictWhizMode = Boolean(strictMode);
@@ -460,7 +461,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
             </div>
             {(content.timelineEvents||[]).map((ev,i)=>(
               <div key={i} style={{display:'grid',gridTemplateColumns:'80px 1fr 1fr auto',gap:4,marginBottom:4,alignItems:'center'}}>
-                <input value={ev.date||''} placeholder="Date" style={{fontSize:10,padding:'4px 6px'}} onChange={e=>{const a=[...(content.timelineEvents||[])];a[i]={...a[i],date:e.target.value};updateContent('timelineEvents',a);}}/>
+                <input value={ev.date||''} placeholder="Date" style={{fontSize:10,padding:'4px 6px'}} onChange={e=>{const raw=e.target.value;const normalized=normalizeDateInput(raw);const a=[...(content.timelineEvents||[])];a[i]={...a[i],date:normalized.valid?normalized.displayDate:raw};updateContent('timelineEvents',a);if(raw&&!normalized.valid){showToast(`Invalid timeline date. ${normalized.suggestions.join(' ')}`,'warning');}}}/>
                 <input value={ev.label||''} placeholder="Event" style={{fontSize:10,padding:'4px 6px'}} onChange={e=>{const a=[...(content.timelineEvents||[])];a[i]={...a[i],label:e.target.value};updateContent('timelineEvents',a);}}/>
                 <input value={ev.sub||''} placeholder="Note" style={{fontSize:10,padding:'4px 6px'}} onChange={e=>{const a=[...(content.timelineEvents||[])];a[i]={...a[i],sub:e.target.value};updateContent('timelineEvents',a);}}/>
                 <button className="btn btn-danger btn-sm" style={{padding:'0 6px',height:28}} onClick={()=>updateContent('timelineEvents',(content.timelineEvents||[]).filter((_,r)=>r!==i))}>✕</button>
