@@ -109,11 +109,11 @@ export const FRAME_TEMPLATES = {
     title: '$1,000 USDC IN PENDLE',
     deck: "Here's what you actually paid to deploy $1,000 in Pendle's stETH strategy.",
     tableRows: [
-      {col1:'ETH → Arbitrum bridge',col2:'LayerZero',col3:'$1.20',col4:'risk'},
-      {col1:'USDC → stETH swap',col2:'1inch, 0.1% slippage',col3:'$1.00',col4:'risk'},
-      {col1:'Pendle LP deposit',col2:'Gas: 0.003 ETH',col3:'$0.47',col4:'risk'},
-      {col1:'30-day yield',col2:'14.1% APY base',col3:'+$11.75',col4:'benefit'},
-      {col1:'PENDLE point rewards',col2:'~2000 pts est.',col3:'+$4.00',col4:'benefit'},
+      {col1:'ETH → Arbitrum bridge',col2:'LayerZero',col3:'-$1.20',col4:'risk',amount:-1.2,type:'fee',bps:12,feeUsd:1.2},
+      {col1:'USDC → stETH swap',col2:'1inch, 0.1% slippage',col3:'-$1.00',col4:'risk',amount:-1,type:'fee',bps:10,feeUsd:1},
+      {col1:'Pendle LP deposit',col2:'Gas: 0.003 ETH',col3:'-$0.47',col4:'risk',amount:-0.47,type:'fee',bps:5,feeUsd:0.47},
+      {col1:'30-day yield',col2:'14.1% APY base',col3:'+$11.75',col4:'benefit',amount:11.75,type:'benefit'},
+      {col1:'PENDLE point rewards',col2:'~2000 pts est.',col3:'+$4.00',col4:'benefit',amount:4,type:'benefit'},
     ],
   },
   // Frame 50 — Cover Story
