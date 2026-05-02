@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { FRAMES, TIER_NAMES } from '../data/frames';
 import { useLocalStorage } from '../hooks/useLocalStorage';
+import { SemanticChip } from '../components/primitives';
 const FRAME_GUIDES = {4: 'Best for weekly yield data. Use TICKER/EVENT/TIME/IMPACT columns.', 8: 'Investment memo format. Set a pull quote and 4 key stats.', 13: "3 bullet points per side. End with a WHIZ'S CALL in the deck.", 21: 'S/A/B/C/D rows. Set col2 to the tier letter for each item.', 25: 'One row: col1=what happened, col2=root cause, col3=recovery, col4=lesson.', 42: 'Long-form. Put 3 paragraphs in body, split by double newline.', 49: "col1=item, col2=method, col3=cost (use + for benefits), col4='benefit'/'risk'", 50: 'Quarterly only. Set volume number and a single powerful headline.'};
 
 
@@ -220,15 +221,15 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
               </div>
               <div className="frame-info">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                  <span className={`tier-pill tier-${frame.tier}`}>T{frame.tier}</span>
-                  <span className="layout-badge">{frame.layout}</span>
+                  <SemanticChip kind="category" value={`tier-${frame.tier}`}>T{frame.tier}</SemanticChip>
+                  <SemanticChip kind="category" value={frame.layout}>{frame.layout}</SemanticChip>
                 </div>
                 <div className="frame-name">{frame.name}</div>
                 <div className="frame-desc-text">{frame.desc}</div>
                 <div className="frame-actions">
                   <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                     {frame.tags.slice(0, 2).map(t => (
-                      <span key={t} style={{ fontFamily: 'var(--font-m)', fontSize: 9, color: 'var(--dim)', background: 'var(--bg-3)', padding: '2px 6px', borderRadius: 10, border: '1px solid var(--border)' }}>{t}</span>
+                      <SemanticChip key={t} role="topic" tone="frame">{t}</SemanticChip>
                     ))}
                   </div>
                   {/* E4: Always visible button, not hover-only */}
@@ -257,9 +258,9 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
               {filtered.map(frame => (
                 <tr key={frame.id}>
                   <td><span style={{ fontFamily: 'var(--font-m)', color: 'var(--dim)' }}>{String(frame.id).padStart(2,'0')}</span></td>
-                  <td><span className={`tier-pill tier-${frame.tier}`}>T{frame.tier}</span></td>
+                  <td><SemanticChip kind="category" value={`tier-${frame.tier}`}>T{frame.tier}</SemanticChip></td>
                   <td><strong style={{ fontSize: 13 }}>{frame.name}</strong></td>
-                  <td><span className="layout-badge">{frame.layout}</span></td>
+                  <td><SemanticChip kind="category" value={frame.layout}>{frame.layout}</SemanticChip></td>
                   <td><div style={{ display: 'flex', gap: 4 }}>{frame.tags.slice(0,2).map(t => (<span key={t} style={{ fontFamily: 'var(--font-m)', fontSize: 9, color: 'var(--dim)', background: 'var(--bg-3)', padding: '1px 5px', borderRadius: 8, border: '1px solid var(--border)' }}>{t}</span>))}</div></td>
                   <td><button className="btn btn-secondary btn-sm" onClick={() => {
                     setRecentlyUsed(prev => [frame.id, ...prev.filter(id => id !== frame.id)].slice(0, 20));
@@ -285,8 +286,8 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
             </div>
             <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>{previewFrame.desc}</div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
-              <span className={`tier-pill tier-${previewFrame.tier}`}>Tier {previewFrame.tier}</span>
-              <span style={{ fontFamily: 'var(--font-m)', fontSize: 9, color: 'var(--dim)', padding: '3px 8px', background: 'var(--bg-3)', borderRadius: 10 }}>{previewFrame.layout}</span>
+              <SemanticChip kind="category" value={`tier-${previewFrame.tier}`}>Tier {previewFrame.tier}</SemanticChip>
+              <SemanticChip kind="category" value={previewFrame.layout}>{previewFrame.layout}</SemanticChip>
               {previewFrame.tags.map(t => <span key={t} style={{ fontFamily: 'var(--font-m)', fontSize: 9, color: 'var(--dim)', padding: '2px 6px', background: 'var(--bg-3)', borderRadius: 8 }}>{t}</span>)}
             </div>
             <div className="modal-footer">

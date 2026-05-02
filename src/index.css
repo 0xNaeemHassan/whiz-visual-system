@@ -2354,3 +2354,22 @@ input[type="range"]::-moz-range-thumb {
 .font-display { font-family: 'Space Grotesk', sans-serif !important; }
 .font-body    { font-family: 'Inter', sans-serif !important; }
 .font-mono    { font-family: 'JetBrains Mono', monospace !important; }
+
+/* SemanticChip */
+.semantic-chip { font-family: var(--font-m); font-size: 9px; padding: 2px 6px; border-radius: 10px; border: 1px solid var(--border); letter-spacing: 0.05em; text-transform: uppercase; display: inline-flex; align-items: center; gap: 4px; }
+.chip-tier-A { background: rgba(60,230,166,0.12); color: #3CE6A6; }
+.chip-tier-B { background: rgba(111,168,255,0.12); color: #6FA8FF; }
+.chip-tier-C { background: rgba(229,178,58,0.12); color: #E5B23A; }
+.chip-tier-D { background: rgba(255,90,90,0.12); color: #FF5A5A; }
+.chip-tier-E { background: rgba(63,226,214,0.12); color: #3FE2D6; }
+.chip-tier-F { background: rgba(185,122,255,0.12); color: #B97AFF; }
+.chip-tier-G { background: rgba(240,61,194,0.12); color: #F03DC2; }
+.chip-tier-H { background: rgba(255,138,61,0.12); color: #FF8A3D; }
+.chip-category-layout { color: var(--dim); background: var(--bg-3); border-radius: 6px; }
+.chip-topic-frame { color: var(--dim); background: var(--bg-3); }
+.chip-status-draft { color: #FFCF70; background: rgba(229,178,58,0.12); }
+.chip-status-wip { color: #6FA8FF; background: rgba(111,168,255,0.12); }
+.chip-status-published { color: #3CE6A6; background: rgba(60,230,166,0.12); }
+.chip-risk-low { color: #3CE6A6; background: rgba(60,230,166,0.12); }
+.chip-risk-medium { color: #E5B23A; background: rgba(229,178,58,0.12); }
+.chip-risk-high { color: #FF5A5A; background: rgba(255,90,90,0.12); }
