@@ -22,11 +22,11 @@ export const FRAMES = [
   { id: 15, tier: 'B', tierName: 'Project Deep-Dives', name: 'The Audit Sheet', desc: 'Project graded across 8 axes (Team, Tokenomics, Product, TVL, Audit Status, Community, Catalysts, Risk) with letter grades.', tags: ['deep-dive', 'audit', 'grades'], layout: 'scorecard' },
 
   // TIER C — Comparative Tables (16-22)
-  { id: 16, tier: 'C', tierName: 'Comparative Tables', name: 'The Leaderboard', desc: 'Top 10 ranked, gold/silver/bronze treatment for top 3, single-line stats. Built for screenshot-and-share virality.', tags: ['comparison', 'ranking', 'table'], layout: 'table' },
+  { id: 16, tier: 'C', tierName: 'Comparative Tables', name: 'The Leaderboard', defaultSort: { column: 'TVL', direction: 'desc', mode: 'numeric' }, desc: 'Top 10 ranked, gold/silver/bronze treatment for top 3, single-line stats. Built for screenshot-and-share virality.', tags: ['comparison', 'ranking', 'table'], layout: 'table' },
   { id: 17, tier: 'C', tierName: 'Comparative Tables', name: 'The Winners & Losers', desc: 'Two stacked tables: WINNERS up top, LOSERS beneath, mirrored layout. Same metric, different sides.', tags: ['comparison', 'winners', 'losers'], layout: 'table' },
   { id: 18, tier: 'C', tierName: 'Comparative Tables', name: 'The Matrix', desc: '2×2 quadrant chart with axis labels. Plot 12-20 protocols by 2 dimensions (e.g., Yield × Risk).', tags: ['comparison', 'matrix', 'chart'], layout: 'matrix' },
   { id: 19, tier: 'C', tierName: 'Comparative Tables', name: 'The Spec Sheet', desc: 'Side-by-side feature comparison, 4-6 protocols across the top, 8-12 features down the side. Checkmarks and differentiators.', tags: ['comparison', 'features', 'specs'], layout: 'table' },
-  { id: 20, tier: 'C', tierName: 'Comparative Tables', name: 'The Yield Tape', desc: 'Pure data table, monospace throughout, designed to look exactly like a Bloomberg yield curve readout. APRs ranked.', tags: ['comparison', 'yield', 'apy'], layout: 'table' },
+  { id: 20, tier: 'C', tierName: 'Comparative Tables', name: 'The Yield Tape', defaultSort: { column: 'APY', direction: 'desc', mode: 'numeric' }, desc: 'Pure data table, monospace throughout, designed to look exactly like a Bloomberg yield curve readout. APRs ranked.', tags: ['comparison', 'yield', 'apy'], layout: 'table' },
   { id: 21, tier: 'C', tierName: 'Comparative Tables', name: 'The Tier List', desc: 'S/A/B/C/D rows of project logos, each tier color-coded. Bottom strip explains criteria. Goes viral every time.', tags: ['comparison', 'tier-list', 'viral'], layout: 'tier-list' },
   { id: 22, tier: 'C', tierName: 'Comparative Tables', name: 'The Head-to-Head', desc: 'Just 2 protocols, deeply compared across 10 dimensions, with a final VERDICT callout at the bottom.', tags: ['comparison', 'head-to-head', 'versus'], layout: 'bull-bear' },
 
@@ -48,12 +48,12 @@ export const FRAMES = [
   { id: 35, tier: 'E', tierName: 'Ecosystem Maps', name: 'The Trade Routes', desc: 'World-map style with crypto flows drawn as arcs between hubs (stablecoin flows, bridge volumes). High effort, high reward.', tags: ['ecosystem', 'flows', 'global'], layout: 'trade-routes' },
 
   // TIER F — Yield & Data Trackers (36-41)
-  { id: 36, tier: 'F', tierName: 'Yield & Data', name: 'The Yield Tape (Fresh)', desc: 'Identical to #20 but with FRESH ▸ {DATE} stamp top-right marking it as the latest weekly snapshot.', tags: ['yield', 'weekly', 'apy'], layout: 'table' },
+  { id: 36, tier: 'F', tierName: 'Yield & Data', name: 'The Yield Tape (Fresh)', defaultSort: { column: 'APY', direction: 'desc', mode: 'numeric' }, desc: 'Identical to #20 but with FRESH ▸ {DATE} stamp top-right marking it as the latest weekly snapshot.', tags: ['yield', 'weekly', 'apy'], layout: 'table' },
   { id: 37, tier: 'F', tierName: 'Yield & Data', name: 'The Sortable Grid', desc: 'Card-grid (3×3 or 4×3) of opportunities, each card showing protocol, APR, chain, asset, and a risk-dot indicator.', tags: ['yield', 'grid', 'opportunities'], layout: 'grid' },
   { id: 38, tier: 'F', tierName: 'Yield & Data', name: 'The Bracket', desc: 'Tournament-style bracket of 8/16 yield strategies. Round 1 → Round 2 → WHIZ\'S PICK final.', tags: ['yield', 'bracket', 'tournament'], layout: 'bracket' },
   { id: 39, tier: 'F', tierName: 'Yield & Data', name: 'The Curve', desc: 'A real chart (yield curve, TVL line, fee chart) takes up 60% of canvas, with annotation callouts at inflection points.', tags: ['yield', 'chart', 'analysis'], layout: 'curve' },
   { id: 40, tier: 'F', tierName: 'Yield & Data', name: 'The Flow Diagram', desc: '"$1,000 USDC starts here →" with the path traced through swaps, deposits, harvests, ending with final yield.', tags: ['yield', 'flow', 'actionable'], layout: 'flow' },
-  { id: 41, tier: 'F', tierName: 'Yield & Data', name: 'The Risk-Adjusted Top 10', desc: 'Leaderboard ranked by Sharpe-style risk-adjusted return, not raw APY. Differentiates from every other yield list.', tags: ['yield', 'ranking', 'risk-adjusted'], layout: 'scorecard' },
+  { id: 41, tier: 'F', tierName: 'Yield & Data', name: 'The Risk-Adjusted Top 10', defaultSort: { column: 'WHIZ GRADE', direction: 'desc', mode: 'text' }, desc: 'Leaderboard ranked by Sharpe-style risk-adjusted return, not raw APY. Differentiates from every other yield list.', tags: ['yield', 'ranking', 'risk-adjusted'], layout: 'scorecard' },
 
   // TIER G — Macro & Thesis (42-46)
   { id: 42, tier: 'G', tierName: 'Macro & Thesis', name: 'The Thesis Page', desc: 'Magazine cover-style. Massive headline, full-bleed background illustration, deck line, byline. One long essay-style column.', tags: ['macro', 'thesis', 'editorial'], layout: 'thesis' },

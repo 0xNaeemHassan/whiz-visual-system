@@ -1,3 +1,5 @@
+import { createDefaultContent } from './editorDefaults.js';
+
 const VALID_TIERS = new Set(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']);
 export const FOOTER_FIELD_ORDER = Object.freeze(['source', 'timestamp', 'issueId', 'status']);
 export const REQUIRED_FOOTER_FIELDS = new Set(FOOTER_FIELD_ORDER);
@@ -50,6 +52,16 @@ function validateFrame(frame, index, ids, errors) {
     frame.tags.forEach((tag, tagIndex) => {
       assert(isNonEmptyString(tag), `${prefix}: tags[${tagIndex}] must be a non-empty string`, errors);
     });
+  }
+
+  if (frame.defaultSort !== undefined) {
+    const sortPrefix = `${prefix}: defaultSort`;
+    assert(frame.defaultSort && typeof frame.defaultSort === 'object', `${sortPrefix} must be an object`, errors);
+    if (frame.defaultSort && typeof frame.defaultSort === 'object') {
+      assert(isNonEmptyString(frame.defaultSort.column), `${sortPrefix}.column must be a non-empty string`, errors);
+      assert(['asc', 'desc'].includes(frame.defaultSort.direction), `${sortPrefix}.direction must be asc or desc`, errors);
+      assert(['numeric', 'text'].includes(frame.defaultSort.mode), `${sortPrefix}.mode must be numeric or text`, errors);
+    }
   }
 }
 
@@ -136,6 +148,22 @@ export function validateFrameData({ frames, templates }) {
       }
     });
   }
+
+  const baseContent = createDefaultContent();
+  frames.forEach((frame, index) => {
+    if (!frame?.defaultSort) return;
+    const template = templates?.[frame.id] || {};
+    const tableHeaders = template.tableHeaders || baseContent.tableHeaders || [];
+    const tableRows = template.tableRows || baseContent.tableRows || [];
+    const columnIndex = tableHeaders.findIndex((header) => header === frame.defaultSort.column);
+    const prefix = `FRAMES[${index}]`;
+    assert(columnIndex >= 0, `${prefix}: defaultSort column ${frame.defaultSort.column} not found in tableHeaders`, errors);
+    if (columnIndex >= 0 && Array.isArray(tableRows) && tableRows.length > 0) {
+      const rowKey = `col${columnIndex + 1}`;
+      const hasSchema = tableRows.every((row) => row && typeof row === 'object' && rowKey in row);
+      assert(hasSchema, `${prefix}: defaultSort column ${frame.defaultSort.column} does not map to row schema key ${rowKey}`, errors);
+    }
+  });
 
   if (errors.length > 0) {
     throw new Error(`Frame schema validation failed with ${errors.length} issue(s):\n${errors.map((e) => `- ${e}`).join('\n')}`);

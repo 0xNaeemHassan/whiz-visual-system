@@ -127,12 +127,24 @@ export const FRAME_TEMPLATES = {
 };
 
 import { createDefaultContent, hasRequiredContentShape } from '../domain/editorDefaults.js';
+import { FRAMES } from './frames.js';
+import { applyDefaultSort, validateDefaultSort } from '../domain/tableSort.js';
 
 // Merge with canonical defaults for any unspecified fields
 export function getFrameTemplate(frameId) {
   const defaultContent = createDefaultContent();
   const template = FRAME_TEMPLATES[frameId];
+  const frame = FRAMES.find((candidate) => candidate.id === frameId);
   const merged = template ? { ...defaultContent, ...template } : defaultContent;
+
+  if (frame?.defaultSort && Array.isArray(merged.tableHeaders) && Array.isArray(merged.tableRows)) {
+    validateDefaultSort({
+      defaultSort: frame.defaultSort,
+      tableHeaders: merged.tableHeaders,
+      tableRows: merged.tableRows,
+    });
+    merged.tableRows = applyDefaultSort(merged.tableRows, merged.tableHeaders, frame.defaultSort);
+  }
 
   if (!hasRequiredContentShape(merged)) {
     throw new Error(`Template merge removed required content keys for frame ${frameId}`);

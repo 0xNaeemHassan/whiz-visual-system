@@ -1,4 +1,5 @@
-/** @typedef {{ id:number, tier:string, tierName:string, name:string, desc:string, tags:string[], layout:string }} FrameDefinition */
+/** @typedef {{ column:string, direction:'asc'|'desc', mode:'numeric'|'text' }} FrameDefaultSort */
+/** @typedef {{ id:number, tier:string, tierName:string, name:string, desc:string, tags:string[], layout:string, defaultSort?:FrameDefaultSort }} FrameDefinition */
 /** @typedef {{ label:string, value:string }} StatItem */
 /** @typedef {{ [key:string]: string }} TableRow */
 /** @typedef {{ issueNum:string, date:string, desk:string, volume:string, topicTag:string, title:string, deck:string, body:string, handle:string, socialX?:string, socialSub?:string, status?:string, tickerSpeed?:number, sparkData?:string, stats:StatItem[], tableRows:TableRow[], tableHeaders:string[], bullPoints:string[], bearPoints:string[], bigNumber?:string, bigLabel?:string, verdict?:string, gridItems?:unknown[], timelineEvents?:unknown[], [key:string]: unknown }} FrameContent */
