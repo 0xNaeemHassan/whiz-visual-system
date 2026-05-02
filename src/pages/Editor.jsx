@@ -11,26 +11,12 @@ import ImageUpload from '../components/ImageUpload';
 import AspectRatioSelector, { RATIOS } from '../components/AspectRatioSelector';
 import PatternSelector from '../components/PatternSelector';
 import { CONTENT_TEMPLATES } from '../data/templates';
+import { createDefaultContent, createDefaultOverrides, createDefaultEditorState } from '../domain/editorDefaults.js';
 import { nearestTypeScale, getComplianceIssues, getBrandScore } from '../utils/editorCompliance';
 
-const DEFAULT_CONTENT = {
-  issueNum:'001',date:'05.01.26',desk:'YIELD',volume:'I',topicTag:'STABLECOIN RISK',
-  title:'THE END OF MERCENARY YIELD',
-  deck:'Why the era of unsustainable APYs is finally closing \u2014 and what comes next.',
-  body:'Three years ago, triple-digit APYs were table stakes for any new DeFi protocol. Liquidity mining was the only customer acquisition strategy anyone needed.\n\nThe protocols that survived aren\'t the ones that offered the most \u2014 they\'re the ones that built real revenue.',
-  handle:'@0xWhizMiz',socialX:'@X',socialSub:'@SUBSTACK',
-  status:'PUBLISHED',
-  tickerSpeed:28,sparkData:'1.2,1.8,2.9,2.1,1.6,2.4,3.8,4.2,3.6',
-  stats:[{label:'TVL',value:'$4.2B'},{label:'24H VOL',value:'$890M'},{label:'APY',value:'18.4%'},{label:'USERS',value:'142K'},{label:'CHAINS',value:'7'}],
-  tableRows:[{col1:'Aave',col2:'USDC',col3:'5.2%',col4:'Low',col5:'A+'},{col1:'Compound',col2:'ETH',col3:'3.8%',col4:'Low',col5:'A'},{col1:'Pendle',col2:'stETH',col3:'14.1%',col4:'Med',col5:'B+'},{col1:'Morpho',col2:'USDT',col3:'7.3%',col4:'Low',col5:'A-'},{col1:'Yearn',col2:'DAI',col3:'9.6%',col4:'Med',col5:'B+'}],
-  tableHeaders:['PROTOCOL','ASSET','APY','RISK','WHIZ GRADE'],
-  bullPoints:['Real yield is sustainable','Network effects > incentives','Multi-chain reduces risk'],
-  bearPoints:['Regulatory pressure rising','TradFi rates compete','Smart contract risk persists'],
-  bigNumber:'$47B',bigLabel:'TOTAL DeFi TVL',
-  verdict:'Position in protocols with proven revenue. Avoid incentive-only models.',
-  gridItems:[],timelineEvents:[],
-};
-const DEFAULT_OVERRIDES = {frameBg:null,spineColor:null,tickerColor:null,tickerBg:null,title:{fontSize:52,fontWeight:700,color:'#F4F5F7',italic:false,lineHeight:1.05,letterSpacing:-0.02,textAlign:'left',opacity:1},deck:{fontSize:18,fontWeight:400,color:'#8B95A3',italic:true},body:{fontSize:15,fontWeight:400,color:'#8B95A3',lineHeight:1.75,textAlign:'left',opacity:1},accent:{color:null},tag:{background:null,color:null,borderColor:null},footer:{background:null},statsColor:null,bignumColor:null,avatarColor:null,ruleBg:null,handleColor:null};
+const DEFAULT_CONTENT = createDefaultContent();
+const DEFAULT_OVERRIDES = createDefaultOverrides();
+
 const ELEMENTS = [{key:'frame',label:'Background',icon:'\u25A1'},{key:'spine',label:'Spine',icon:'|'},{key:'ticker',label:'Ticker',icon:'\u2014'},{key:'title',label:'Title',icon:'T'},{key:'deck',label:'Deck',icon:'D'},{key:'tag',label:'Tag',icon:'#'},{key:'body',label:'Body',icon:'B'},{key:'stats',label:'Stats',icon:'S'},{key:'bignum',label:'Big #',icon:'N'},{key:'footer',label:'Footer',icon:'F'},{key:'accent',label:'Accent',icon:'\u25CF'}];
 function ColorRow({label,value,defaultVal,onChange}){const col=value||defaultVal;return(<div className="prop-color-row"><span className="prop-label-text">{label}</span><div className="prop-color-swatch" style={{background:col,position:'relative'}}><input type="color" value={col} onChange={e=>onChange(e.target.value)} aria-label={`${label} color`} style={{position:'absolute',inset:0,opacity:0,cursor:'pointer',width:'100%',height:'100%'}}/></div><input type="text" className="prop-hex" value={col} onChange={e=>{const v=e.target.value;if(/^#[0-9A-Fa-f]{0,6}$/.test(v)||v==='')onChange(v||null);}}/><button className="btn btn-ghost btn-sm" onClick={()=>onChange(null)} style={{padding:'4px 7px',fontSize:11,color:'var(--dim)'}} title="Reset">\u21BA</button></div>);}
 function SliderRow({label,value,min,max,step,unit,onChange}){return(<div style={{marginBottom:10}}><div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:5}}><span className="prop-label-text">{label}</span><span className="size-val">{value}{unit}</span></div><input type="range" min={min} max={max} step={step||1} value={value} onChange={e=>onChange(Number(e.target.value))} aria-label={label}/></div>);}
@@ -99,7 +85,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     // Fix #21: Pre-fill content from issue if provided
     if(editingFrame.issue){
       const iss=editingFrame.issue;
-      const base={...DEFAULT_CONTENT};
+      const base=createDefaultContent();
       if(iss.topic)base.title=iss.topic.toUpperCase();
       if(iss.caption)base.deck=iss.caption;
       if(iss.notes)base.body=iss.notes;
@@ -112,11 +98,12 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   // Fix #38/63: True "New Frame" action — reset all state
   useEffect(()=>{
     if(newFrameSignal===0)return;
-    setFrameId(4);
-    resetContent(DEFAULT_CONTENT);
+    const defaults = createDefaultEditorState();
+    setFrameId(defaults.frameId);
+    resetContent(defaults.content);
     // P3-05: Load frame-specific content template
     if(selectedFrameId){
-      const tmpl=getFrameTemplate(selectedFrameId,DEFAULT_CONTENT);
+      const tmpl=getFrameTemplate(selectedFrameId);
       setContent(tmpl);
     }
     resetOverrides(DEFAULT_OVERRIDES);
