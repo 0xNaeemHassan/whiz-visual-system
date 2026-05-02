@@ -34,6 +34,7 @@ const DEFAULT_CONTENT = {
   status:'PUBLISHED',
   sourceLinks:'',
   tickerSpeed:28,sparkData:'1.2,1.8,2.9,2.1,1.6,2.4,3.8,4.2,3.6',
+  layoutDensity:0.6,layoutSpacing:0.6,
   stats:[{label:'TVL',value:'$4.2B'},{label:'24H VOL',value:'$890M'},{label:'APY',value:'18.4%'},{label:'USERS',value:'142K'},{label:'CHAINS',value:'7'}],
   tableRows:[{col1:'Aave',col2:'USDC',col3:'5.2%',col4:'Low',col5:'A+'},{col1:'Compound',col2:'ETH',col3:'3.8%',col4:'Low',col5:'A'},{col1:'Pendle',col2:'stETH',col3:'14.1%',col4:'Med',col5:'B+'},{col1:'Morpho',col2:'USDT',col3:'7.3%',col4:'Low',col5:'A-'},{col1:'Yearn',col2:'DAI',col3:'9.6%',col4:'Med',col5:'B+'}],
   tableHeaders:['PROTOCOL','ASSET','APY','RISK','WHIZ GRADE'],
@@ -364,6 +365,21 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
           <div className="editor-panel-header"><span>Content</span><button className="btn btn-ghost btn-sm" onClick={()=>resetContent(DEFAULT_CONTENT)}>Reset</button></div>
           <div className="editor-section"><div className="editor-section-title">Quick Start</div><div className="template-list">{CONTENT_TEMPLATES.map(t=>(<div key={t.id} className="template-item" onClick={()=>applyTemplate(t)}><div className="template-item-name">{t.name}</div><div className="template-item-desc">{t.desc}</div></div>))}</div></div>
           <div className="editor-section"><div className="editor-section-title">Aspect Ratio</div><AspectRatioSelector value={aspectRatio.id} onChange={r=>{setAspectRatio(r);showToast(`${r.w}×${r.h}`);}}/></div>
+          <div className="editor-section">
+            <div className="editor-section-title">Layout Controls</div>
+            <div className="form-group">
+              <label className="form-label">Density — {(Number(content.layoutDensity ?? 0.6)).toFixed(2)}</label>
+              <input type="range" min={0.35} max={1.4} step={0.05} value={Number(content.layoutDensity ?? 0.6)}
+                onChange={e=>updateContent('layoutDensity',Number(e.target.value))}
+                style={{width:'100%',accentColor:'var(--accent)'}} />
+            </div>
+            <div className="form-group" style={{marginBottom:0}}>
+              <label className="form-label">Spacing — {(Number(content.layoutSpacing ?? 0.6)).toFixed(2)}</label>
+              <input type="range" min={0.35} max={1.4} step={0.05} value={Number(content.layoutSpacing ?? 0.6)}
+                onChange={e=>updateContent('layoutSpacing',Number(e.target.value))}
+                style={{width:'100%',accentColor:'var(--accent)'}} />
+            </div>
+          </div>
           <div className="editor-section"><div className="editor-section-title">Pattern</div>{strictWhizMode?<div style={{fontSize:10,color:'var(--dim)',marginBottom:6}}>Strict Whiz Mode hides non-essential pattern styling.</div>:<PatternSelector value={patternOverlay?.id||null} onChange={p=>updateMedia(prev=>({...prev,patternOverlay:p}))}/>}</div>
           <div className="editor-section"><div className="editor-section-title">Effects</div>
             <div style={{display:'grid',gap:6}}>

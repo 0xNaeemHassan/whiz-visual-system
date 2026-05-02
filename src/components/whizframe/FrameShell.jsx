@@ -2,6 +2,7 @@
 import { getLayoutComponent } from './LayoutRegistry';
 import { coreLayoutKeys } from './layouts/CoreLayouts';
 import { applyOverflowPolicy } from './layouts/OverflowPolicy';
+import { ensureMinEdgeSpacing, getLayoutTuning, placeNodes } from './layouts/layoutUtils';
 import { TICKER_CONTRACT, normalizeTickerSpeed } from '../../domain/tickerContract';
 import { SPINE_DESIGN_TOKENS } from '../../domain/spineDesignTokens';
 import { FrameFooter } from './FrameFooter';
@@ -1723,6 +1724,18 @@ function ConstellationLayout(props) {
     {col1:'Arbitrum',col2:'L2',col4:'55',col5:'50'},
   ];
   const nodes = rows.length >= 4 ? rows : defaultNodes;
+  const { density, spacing } = getLayoutTuning(content);
+  const placedNodes = placeNodes({
+    nodes: nodes.map((node, i) => ({
+      ...node,
+      x: parseFloat(node.col4) || (15 + (i * 12) % 80),
+      y: (parseFloat(node.col5) || (30 + (i * 17) % 55)) + 20,
+    })),
+    bounds: { left: 8, top: 28, right: 92, bottom: 90 },
+    nodeSize: { width: 34 * density, height: 34 * density },
+    edgePadding: 6 + (12 * spacing),
+    minNodeGap: 4 + (10 * spacing),
+  });
   // Group by category for connecting lines
   const cats = [...new Set(nodes.map(n => n.col2))];
   return (
@@ -1750,14 +1763,12 @@ function ConstellationLayout(props) {
         </div>
       </div>
       {/* Nodes */}
-      {nodes.map((node, i) => {
-        const x = parseFloat(node.col4) || (15 + (i * 12) % 80);
-        const y = parseFloat(node.col5) || (30 + (i * 17) % 55);
+      {placedNodes.map(({ node, x, y }, i) => {
         const color = CATEGORY_COLORS[node.col2] || accentColor;
         return (
           <div key={i} style={{
             position: 'absolute',
-            left: `${x}%`, top: `${y + 20}%`,
+            left: `${x}%`, top: `${y}%`,
             transform: 'translate(-50%, -50%)',
             textAlign: 'center', zIndex: 1,
           }}>
@@ -1834,6 +1845,7 @@ function StackLayout(props) {
 function TradeRoutesLayout(props) {
   const { content, ov, accentColor, SectionHead } = props;
   const rows = content.tableRows || [];
+  const { density, spacing } = getLayoutTuning(content);
   const HUBS = rows.length > 0
     ? rows
     : [
@@ -1853,12 +1865,12 @@ function TradeRoutesLayout(props) {
         {HUBS.map((route, i) => {
           const color = VOL_COLORS[i % VOL_COLORS.length];
           return (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', marginBottom: 10, gap: 10 }}>
+            <div key={i} style={{ display: 'flex', alignItems: 'center', marginBottom: Math.round(6 + spacing * 8), gap: Math.round(8 + spacing * 4) }}>
               {/* Source */}
               <div style={{ width: 80, fontFamily: "'Space Grotesk', sans-serif", fontSize: 11, fontWeight: 700, color: '#F4F5F7', textAlign: 'right', flexShrink: 0 }}>{route.col1}</div>
               {/* Flow arc */}
               <div style={{ flex: 1, position: 'relative', height: 24, display: 'flex', alignItems: 'center' }}>
-                <div style={{ height: 2, background: `linear-gradient(90deg, ${color}60, ${color}, ${color}60)`, flex: 1, borderRadius: 1 }} />
+                <div style={{ height: Math.max(1, Math.round(1 + (density * 1.6))), background: `linear-gradient(90deg, ${color}60, ${color}, ${color}60)`, flex: 1, borderRadius: 1 }} />
                 {/* Arrow */}
                 <div style={{ position: 'absolute', right: 0, width: 0, height: 0, borderLeft: `6px solid ${color}`, borderTop: '4px solid transparent', borderBottom: '4px solid transparent' }} />
                 {/* Volume label */}
@@ -2062,6 +2074,7 @@ function TimelineLayout(props) {
 
 function NetworkLayout(props) {
   const { content, ov, accentColor, SectionHead } = props;
+  const { density, spacing } = getLayoutTuning(content);
   // B7: Real network visualization using stats as nodes
   const nodes = content.stats || [];
   return (
@@ -2080,11 +2093,20 @@ function NetworkLayout(props) {
             {content.topicTag?.split(' ')[0] || 'HUB'}
           </div>
           {/* Orbital nodes */}
-          {nodes.slice(0, 6).map((n, i) => {
-            const angle = (i / Math.min(nodes.length, 6)) * Math.PI * 2 - Math.PI / 2;
-            const rx = 120, ry = 100;
-            const x = 50 + (rx * Math.cos(angle)) / 280 * 100;
-            const y = 50 + (ry * Math.sin(angle)) / 280 * 100;
+          {placeNodes({
+            nodes: nodes.slice(0, 6).map((n, i) => {
+              const angle = (i / Math.min(nodes.length, 6)) * Math.PI * 2 - Math.PI / 2;
+              const point = ensureMinEdgeSpacing({
+                x: 50 + ((110 * spacing * Math.cos(angle)) / 280) * 100,
+                y: 50 + ((95 * spacing * Math.sin(angle)) / 280) * 100,
+              }, { left: 12, top: 12, right: 88, bottom: 88 }, 4 + spacing * 6);
+              return { ...n, x: point.x, y: point.y };
+            }),
+            bounds: { left: 12, top: 12, right: 88, bottom: 88 },
+            nodeSize: { width: 64 * density, height: 40 * density },
+            edgePadding: 4 + (8 * spacing),
+            minNodeGap: 3 + (9 * spacing),
+          }).map(({ node: n, x, y }, i) => {
             return (
               <div key={i}>
                 {/* Connection line */}
