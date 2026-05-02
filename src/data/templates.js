@@ -1,4 +1,6 @@
+/** @typedef {import('../types/editor.js').FrameContent} FrameContent */
 // Per-frame content templates — gives users a ready-to-edit scaffold
+/** @type {Record<number, Partial<FrameContent>>} */
 export const FRAME_TEMPLATES = {
   // Frame 4 — The Watchlist
   4: {
@@ -124,11 +126,19 @@ export const FRAME_TEMPLATES = {
   },
 };
 
-// Merge with DEFAULT_CONTENT for any unspecified fields
-export function getFrameTemplate(frameId, defaultContent) {
+import { createDefaultContent, hasRequiredContentShape } from '../domain/editorDefaults.js';
+
+// Merge with canonical defaults for any unspecified fields
+export function getFrameTemplate(frameId) {
+  const defaultContent = createDefaultContent();
   const template = FRAME_TEMPLATES[frameId];
-  if (!template) return defaultContent;
-  return { ...defaultContent, ...template };
+  const merged = template ? { ...defaultContent, ...template } : defaultContent;
+
+  if (!hasRequiredContentShape(merged)) {
+    throw new Error(`Template merge removed required content keys for frame ${frameId}`);
+  }
+
+  return merged;
 }
 
 export const CONTENT_TEMPLATES = Object.entries(FRAME_TEMPLATES).map(([id, content]) => ({

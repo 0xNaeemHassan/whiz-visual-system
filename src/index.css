@@ -1277,7 +1277,7 @@ input[type="range"]::-moz-range-thumb {
 .confirm-msg { font-size: 13px; color: var(--muted); margin-bottom: 20px; line-height: 1.5; }
 .confirm-actions { display: flex; gap: 8px; justify-content: flex-end; }
 
-/* Ticker pause on hover (#46) */
+/* Ticker pause on hover */
 .ticker-bar:hover .ticker-inner { animation-play-state: paused; }
 
 /* Character count */
@@ -1456,10 +1456,10 @@ input[type="range"]::-moz-range-thumb {
 
 
 /* ============================================================
-   MISSING CLASSES FIX (Audit #31-34)
+   Library and dashboard utility class definitions
    ============================================================ */
 
-/* Filter buttons — used in Library tier/tag filters (#31) */
+/* Filter buttons — used in Library tier/tag filters */
 .filter-group {
   display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
 }
@@ -1477,7 +1477,7 @@ input[type="range"]::-moz-range-thumb {
   border-color: var(--theme-accent); color: var(--theme-accent);
 }
 
-/* Quick Actions grid — used in Dashboard (#32) */
+/* Quick Actions grid — used in Dashboard */
 .quick-actions {
   display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 16px;
 }
@@ -1488,7 +1488,7 @@ input[type="range"]::-moz-range-thumb {
 /* [DEDUPED] .saves-list/.save-item — uses premium section definition above */
 
 /* ============================================================
-   BUTTON DISABLED STATE (#17)
+   BUTTON DISABLED STATE
    ============================================================ */
 .btn:disabled, .btn[disabled] {
   opacity: 0.45; cursor: not-allowed; pointer-events: none;
@@ -1496,20 +1496,20 @@ input[type="range"]::-moz-range-thumb {
 }
 
 /* ============================================================
-   LAYOUT FIXES
+   Layout behavior refinements
    ============================================================ */
 
-/* #4 — Page centering on ultrawide */
+/* Page centering on ultrawide */
 .page { margin: 0 auto; }
 
-/* #5 — Main width constraint */
+/* Main width constraint */
 .main { width: calc(100% - var(--sidebar-w)); }
 @media (max-width: 960px) { .main { width: 100%; } }
 
-/* #6 — Bottom nav flex-shrink */
+/* Bottom nav flex-shrink */
 .bottom-nav-item { flex-shrink: 0; min-width: 0; }
 
-/* #10 — Kanban horizontal scroll with fixed column width */
+/* Kanban horizontal scroll with fixed column width */
 .kanban-board {
   grid-template-columns: repeat(5, minmax(200px, 1fr));
   overflow-x: auto; -webkit-overflow-scrolling: touch;
@@ -1517,7 +1517,7 @@ input[type="range"]::-moz-range-thumb {
 }
 .kanban-col { scroll-snap-align: start; min-width: 200px; }
 
-/* #14 — Editor section visual hierarchy */
+/* Editor section visual hierarchy */
 .editor-section { position: relative; }
 .editor-section + .editor-section { margin-top: 2px; }
 .editor-section-title {
@@ -1526,17 +1526,17 @@ input[type="range"]::-moz-range-thumb {
   border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
 }
 
-/* #15 — Frame preview scale wrapper sizing */
+/* Frame preview scale wrapper sizing */
 .frame-scale-wrap {
   transform-origin: center center;
   display: flex; align-items: center; justify-content: center;
 }
 
 /* ============================================================
-   VISUAL DESIGN FIXES
+   Visual styling refinements
    ============================================================ */
 
-/* #18 — Stronger mobile bottom nav active indicator */
+/* Stronger mobile bottom nav active indicator */
 .bottom-nav-item.active {
   position: relative;
 }
@@ -1547,7 +1547,7 @@ input[type="range"]::-moz-range-thumb {
   box-shadow: 0 0 8px color-mix(in srgb, var(--theme-accent) 40%, transparent);
 }
 
-/* #20 — Toast exit animation */
+/* Toast exit animation */
 .toast.exiting {
   animation: toastExit 0.2s ease forwards;
 }
@@ -1555,11 +1555,11 @@ input[type="range"]::-moz-range-thumb {
   to { opacity: 0; transform: translateY(8px) scale(0.95); }
 }
 
-/* #21 — Larger theme swatches */
+/* Larger theme swatches */
 .theme-swatches { gap: 10px; margin-bottom: 14px; }
 .theme-swatch-block > div:last-child { height: 40px !important; }
 
-/* #23 — Kanban cards left-border status color */
+/* Kanban cards left-border status color */
 .kanban-card { border-left: 3px solid transparent; }
 .kanban-card[data-status="draft"]     { border-left-color: var(--muted); }
 .kanban-card[data-status="planned"]   { border-left-color: #6FA8FF; }
@@ -1567,42 +1567,42 @@ input[type="range"]::-moz-range-thumb {
 .kanban-card[data-status="done"]      { border-left-color: #3CE6A6; }
 .kanban-card[data-status="published"] { border-left-color: #B97AFF; }
 
-/* #25 — Sidebar hover with accent tint */
+/* Sidebar hover with accent tint */
 .nav-item:hover {
   /* fallback for Safari < 16.4 */ background: var(--theme-accent) 5%;
   background: color-mix(in srgb, var(--theme-accent) 5%, var(--bg-3));
 }
 
-/* #26 — Editor center panel inset depth */
+/* Editor center panel inset depth */
 .editor-center {
   box-shadow: inset 0 0 40px rgba(0,0,0,0.4);
   border-left: 1px solid rgba(0,0,0,0.3);
   border-right: 1px solid rgba(0,0,0,0.3);
 }
 
-/* #28 — Alternating table rows */
+/* Alternating table rows */
 .data-table tbody tr:nth-child(even) td { background: var(--bg-3); }
 
-/* #29 — Search icon focus animation */
+/* Search icon focus animation */
 .search-wrap:focus-within svg {
   color: var(--theme-accent); transition: color var(--t);
 }
 
-/* #37 — Scrollbar thicken on hover */
+/* Scrollbar thicken on hover */
 .editor-right:hover::-webkit-scrollbar { width: 8px; }
 .editor-left:hover::-webkit-scrollbar { width: 8px; }
 .editor-right::-webkit-scrollbar,
 .editor-left::-webkit-scrollbar { transition: width 0.2s; }
 
 /* ============================================================
-   UX/INTERACTION FIXES
+   Interaction and usability refinements
    ============================================================ */
 
-/* #36 — Stronger bottom nav active state */
+/* Stronger bottom nav active state */
 .bottom-nav-item.active .bnav-icon { font-size: 20px; transition: font-size 0.15s; }
 .bottom-nav-item.active .bnav-label { font-weight: 700; color: var(--theme-accent); }
 
-/* #44 — Filter group horizontal scroll on mobile */
+/* Filter group horizontal scroll on mobile */
 @media (max-width: 640px) {
   .filter-group {
     flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch;
@@ -1613,7 +1613,7 @@ input[type="range"]::-moz-range-thumb {
   }
 }
 
-/* #47 — Frame card tooltip */
+/* Frame card tooltip */
 .frame-card { position: relative; }
 .frame-card[title]:hover::after {
   content: attr(title); position: absolute; bottom: 100%; left: 50%;
@@ -1624,44 +1624,44 @@ input[type="range"]::-moz-range-thumb {
   box-shadow: var(--shadow);
 }
 
-/* #49 — Mobile: always show frame use button */
+/* Mobile: always show frame use button */
 @media (max-width: 960px) {
   .frame-use-btn { opacity: 1 !important; }
 }
 
 /* ============================================================
-   TYPOGRAPHY & SPACING FIXES
+   Typography and spacing refinements
    ============================================================ */
 
-/* #57 — Form label readability */
+/* Form label readability */
 .form-label { font-size: 10px; letter-spacing: 0.08em; }
 
-/* #58 — Differentiate section titles from field labels */
+/* Differentiate section titles from field labels */
 .editor-section-title {
   font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
   color: var(--text); opacity: 0.7;
 }
 
-/* #61 — Kanban card spacing */
+/* Kanban card spacing */
 .kanban-card-title { margin-bottom: 10px; }
 .kanban-card-meta { gap: 6px; margin-top: 4px; }
 
-/* #62 — Editor left panel touch targets */
+/* Editor left panel touch targets */
 @media (max-width: 960px) {
   .editor-left .nav-item,
   .editor-left [style*="padding: 7px"] { min-height: 44px; display: flex; align-items: center; }
 }
 
-/* #63 — Table header mobile legibility */
+/* Table header mobile legibility */
 @media (max-width: 640px) {
   .data-table th { font-size: 10px; letter-spacing: 0.06em; }
 }
 
 /* ============================================================
-   ANIMATION & POLISH FIXES
+   Animation and motion refinements
    ============================================================ */
 
-/* #64 — Page transition animation */
+/* Page transition animation */
 .page {
   animation: pageIn 0.2s ease;
 }
@@ -1670,14 +1670,14 @@ input[type="range"]::-moz-range-thumb {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* #65 — Ticker will-change */
+/* Ticker will-change */
 .dash-ticker-scroll, .wf-ticker-scroll { will-change: transform; }
 
-/* #66 — Card will-change on hover */
+/* Card will-change on hover */
 .frame-card, .stat-card, .theme-card { will-change: auto; }
 .frame-card:hover, .stat-card:hover, .theme-card:hover { will-change: transform, box-shadow; }
 
-/* #67 — Modal overlay matched timing */
+/* Modal overlay matched timing */
 .modal-overlay.open {
   animation: overlayIn 0.2s ease;
 }
@@ -1686,11 +1686,11 @@ input[type="range"]::-moz-range-thumb {
   to { opacity: 1; }
 }
 
-/* #68 — Sidebar + overlay synced timing */
+/* Sidebar + overlay synced timing */
 .sidebar { transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
 .sidebar-overlay.open { animation: fadeIn 0.3s ease; }
 
-/* #69 — Staggered entrance for grid items */
+/* Staggered entrance for grid items */
 .frames-grid > *,
 .themes-grid > *,
 .dash-stats > *,
@@ -1711,12 +1711,12 @@ input[type="range"]::-moz-range-thumb {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* #71 — Smoother toggle pill (less overshoot) */
+/* Smoother toggle pill (less overshoot) */
 .toggle-pill::after { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
 .toggle-pill.on::after { transition: all 0.25s cubic-bezier(0.34, 1.2, 0.64, 1); }
 
 /* ============================================================
-   MOBILE MODAL BOTTOM-SHEET ANIMATION FIX (#8)
+   Mobile bottom-sheet entrance animation
    ============================================================ */
 @media (max-width: 640px) {
   .modal {
@@ -1729,7 +1729,7 @@ input[type="range"]::-moz-range-thumb {
 }
 
 /* ============================================================
-   EDITOR 1024px BREAKPOINT (#2)
+   EDITOR 1024px BREAKPOINT
    ============================================================ */
 @media (min-width: 961px) and (max-width: 1200px) {
   .editor-wrap {
@@ -1738,7 +1738,7 @@ input[type="range"]::-moz-range-thumb {
 }
 
 /* ============================================================
-   LIBRARY MINI-FRAME LAYOUT VARIANTS (#19)
+   LIBRARY MINI-FRAME LAYOUT VARIANTS
    ============================================================ */
 .mini-whiz-frame {
   width: 72px; height: 90px; border-radius: 4px; position: relative;
@@ -1787,13 +1787,13 @@ input[type="range"]::-moz-range-thumb {
    ADDITIONAL POLISH
    ============================================================ */
 
-/* Smooth theme color transitions on key elements (#38) */
+/* Smooth theme color transitions on key elements */
 .sidebar, .topbar, .stat-card, .btn-primary, .nav-item.active,
 .logo-mark, .tier-pill, .tag.active, .bottom-nav-item.active::after {
   transition: all 0.3s ease;
 }
 
-/* Empty state enhancement (#24) */
+/* Empty state enhancement */
 .empty-state {
   display: flex; flex-direction: column; align-items: center; gap: 8px;
 }
@@ -1803,7 +1803,7 @@ input[type="range"]::-moz-range-thumb {
   display: block; margin-bottom: 4px;
 }
 
-/* Stat card micro-interaction (#53) */
+/* Stat card micro-interaction */
 .stat-value {
   transition: transform 0.2s ease;
 }
@@ -1909,7 +1909,7 @@ input[type="range"]::-moz-range-thumb {
 
 
 /* ============================================================
-   MOBILE CRITICAL FIXES (Redmi 12 / 6.79" / 20:9 tested)
+   Mobile viewport resilience rules
    ============================================================ */
 @media (max-width: 640px) {
   /* Page padding: handled in main mobile block above */
@@ -1970,7 +1970,7 @@ input[type="range"]::-moz-range-thumb {
 
 
 /* ============================================================
-   MISSING CLASS DEFINITIONS (Audit Pass 2)
+   Additional shared class definitions
    ============================================================ */
 
 /* B1: Pattern selector button — used by PatternSelector component */
@@ -2060,7 +2060,7 @@ input[type="range"]::-moz-range-thumb {
 }
 
 /* ============================================================
-   v7.0 VISUAL POLISH — System-wide upgrades
+   System-wide visual polish
    ============================================================ */
 
 /* Frame card hover glow — matches theme */
@@ -2240,43 +2240,43 @@ input[type="range"]::-moz-range-thumb {
 .toggle-dot { width: 14px; height: 14px; border-radius: 50%; background: var(--dim); transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1); }
 .toggle-pill.on .toggle-dot { background: var(--theme-accent); transform: translateX(18px); }
 
-/* ═══════════════ V8.0 COMPREHENSIVE CSS FIXES ═══════════════ */
+/* ═══════════════ v8.0 CSS compatibility and accessibility updates ═══════════════ */
 
-/* J11: Improve color contrast — dim text needs to be brighter for WCAG AA */
+/* Increase dim-text contrast to improve readability. */
 
 
-/* J6: Toggle pill definition (was missing, referenced by Editor) */
+/* Define toggle pill styles used in the editor panel. */
 .edit-toggle-row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; cursor: pointer; border-bottom: 1px solid var(--border); transition: background 0.15s; }
 .edit-toggle-row:hover { background: var(--bg-3); }
 .edit-toggle-row.on { background: color-mix(in srgb, var(--theme-accent) 5%, transparent); }
 .toggle-label { font-size: 12px; font-weight: 500; }
 .toggle-hint { font-size: 10px; color: var(--dim); margin-left: auto; }
 
-/* J13: prop-color-swatch with proper dimensions */
+/* Normalize color swatch sizing in property rows. */
 .prop-color-swatch { width: 28px; height: 28px; border-radius: 5px; border: 1px solid var(--border); cursor: pointer; flex-shrink: 0; overflow: hidden; position: relative; }
 
-/* J16: Modal max-height for short screens */
+/* Constrain modal height on short viewports. */
 .modal { max-height: 90vh; overflow-y: auto; }
 
-/* J17: Kanban horizontal scroll indicator */
+/* Keep kanban columns snap-aligned during horizontal scroll. */
 .kanban-board { scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; }
 .kanban-board::after { content: ''; display: block; width: 1px; flex-shrink: 0; }
 .kanban-col { scroll-snap-align: start; }
 
-/* J19: btn position for ripple */
+/* Ensure buttons can host ripple overlays safely. */
 .btn { position: relative; overflow: hidden; }
 
-/* J20: System font fallback stack */
+/* Reserve section for font fallback stack overrides. */
 
 
-/* J4: Enhanced reduced motion — already existed but let's ensure it covers all cases */
+/* Respect reduced-motion preferences across animated UI surfaces. */
 @media (prefers-reduced-motion: reduce) {
   .wf-ticker-scroll, .ticker-inner, .dash-ticker-scroll { animation: none !important; }
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
   /* moved to prefers-reduced-motion: see below */
 }
 
-/* J22: Print styles */
+/* Print styles */
 @media print {
   .sidebar, .bottom-nav, .fab, .top-bar, .zoom-bar, .editor-left, .editor-right, .toast-wrap { display: none !important; }
   .main { margin: 0; padding: 0; }
