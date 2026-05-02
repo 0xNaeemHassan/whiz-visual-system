@@ -71,6 +71,7 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
   const [view, setView] = useState('grid');
   const [previewFrame, setPreviewFrame] = useState(null); // Fix #61: preview modal
   const [sortBy, setSortBy] = useLocalStorage('whiz-library-sort', 'id'); // Fix #36: persisted
+  const [effortSortDir, setEffortSortDir] = useState('asc');
   const [favorites, setFavorites] = useLocalStorage('whiz-favorites', []); // E7
   const [showFavOnly, setShowFavOnly] = useLocalStorage('whiz-lib-favonly', false); // Fix #59
   const [recentlyUsed, setRecentlyUsed] = useLocalStorage('whiz-recent-frames', []); // E7 — Fixed
@@ -90,6 +91,7 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
     if (sortBy === 'name') f = [...f].sort((a,b) => a.name.localeCompare(b.name));
     else if (sortBy === 'layout') f = [...f].sort((a,b) => a.layout.localeCompare(b.layout));
     else if (sortBy === 'tier') f = [...f].sort((a,b) => a.tier.localeCompare(b.tier));
+    else if (sortBy === 'effort') f = [...f].sort((a,b) => effortSortDir === 'asc' ? a.effortMinutes - b.effortMinutes : b.effortMinutes - a.effortMinutes);
     return f;
   }, [search, tierFilter, tagFilter, layoutFilter, structureFilter, sortBy, showFavOnly, favorites]);
 
@@ -163,7 +165,13 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
           <option value="name">Sort: Name</option>
           <option value="layout">Sort: Layout</option>
           <option value="tier">Sort: Tier</option>
+          <option value="effort">Sort: Effort</option>
         </select>
+        {sortBy === 'effort' && (
+          <button className="btn btn-ghost btn-sm" onClick={() => setEffortSortDir(d => d === 'asc' ? 'desc' : 'asc')}>
+            Effort: {effortSortDir === 'asc' ? 'Low → High' : 'High → Low'}
+          </button>
+        )}
         <div style={{ display: 'flex', gap: 6 }}>
           <button className={`view-btn ${view==='grid'?'active':''}`} onClick={() => setView('grid')} aria-label="Grid view">Grid</button>
           <button className={`view-btn ${view==='list'?'active':''}`} onClick={() => setView('list')} aria-label="List view">List</button>
@@ -199,6 +207,15 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
           <button key={t} className={`filter-btn ${tierFilter===t?'active':''}`} onClick={() => setTierFilter(t)}>
             {t === 'ALL' ? 'All Tiers' : `Tier ${t}`}
           </button>
+        ))}
+      </div>
+
+      {/* Difficulty filter */}
+      <div className="filter-group" style={{ marginBottom: 12 }}>
+        <span style={{ fontFamily: 'var(--font-m)', fontSize: 9, color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: '0.1em', alignSelf: 'center' }}>DIFFICULTY:</span>
+        <button className={`filter-btn ${!difficultyFilter?'active':''}`} onClick={() => setDifficultyFilter('')}>All</button>
+        {['easy', 'medium', 'hard'].map((d) => (
+          <button key={d} className={`filter-btn ${difficultyFilter===d?'active':''}`} onClick={() => setDifficultyFilter(difficultyFilter===d?'':d)} style={{ fontSize: 9 }}>{d}</button>
         ))}
       </div>
 
