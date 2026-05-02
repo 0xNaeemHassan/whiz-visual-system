@@ -107,7 +107,7 @@ function validateFooter(content, label, errors) {
   });
 }
 
-export function validateFrameData({ frames, templates }) {
+export function validateFrameData({ frames, templates, guidanceById }) {
   const errors = [];
   const ids = new Set();
   const frameById = new Map();
@@ -120,7 +120,28 @@ export function validateFrameData({ frames, templates }) {
     });
   }
 
+  assert(guidanceById && typeof guidanceById === 'object' && !Array.isArray(guidanceById), 'FRAME_GUIDANCE_BY_ID must be an object', errors);
   assert(templates && typeof templates === 'object' && !Array.isArray(templates), 'FRAME_TEMPLATES must be an object', errors);
+
+  if (guidanceById && typeof guidanceById === 'object' && !Array.isArray(guidanceById)) {
+    frameById.forEach((frame, frameId) => {
+      const prefix = `FRAME_GUIDANCE_BY_ID[${frameId}]`;
+      const guidance = guidanceById[frameId];
+      assert(guidance && typeof guidance === 'object' && !Array.isArray(guidance), `${prefix}: entry must exist and be an object`, errors);
+      if (guidance && typeof guidance === 'object' && !Array.isArray(guidance)) {
+        ['bestUseCases', 'antiPatterns', 'whenNotToUse'].forEach((key) => {
+          assert(Array.isArray(guidance[key]), `${prefix}.${key} must be an array`, errors);
+          if (Array.isArray(guidance[key])) {
+            assert(guidance[key].length > 0, `${prefix}.${key} must not be empty`, errors);
+            guidance[key].forEach((item, index) => {
+              assert(isNonEmptyString(item), `${prefix}.${key}[${index}] must be a non-empty string`, errors);
+            });
+          }
+        });
+      }
+    });
+  }
+
   if (templates && typeof templates === 'object' && !Array.isArray(templates)) {
     Object.entries(templates).forEach(([rawId, template]) => {
       const frameId = Number(rawId);
