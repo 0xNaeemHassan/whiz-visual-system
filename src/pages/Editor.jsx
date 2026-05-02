@@ -1,4 +1,4 @@
-import { getFrameTemplate } from '../data/templates.js';
+import { createTemplateForLayout, checkTemplateLayoutCompatibility, getFrameTemplate } from '../data/templates.js';
 import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
 import { FRAMES } from '../data/frames';
 import { THEMES } from '../data/themes';
@@ -139,6 +139,21 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   useEffect(()=>{try{const r=localStorage.getItem('whiz-autosave');if(r){const d=JSON.parse(r);if(d.savedAt&&Date.now()-d.savedAt<86400000){autosaveDataRef.current=d;setShowAutosavePrompt(true);}}}catch(e){}},[]);
   const restoreAutosave=()=>{const d=autosaveDataRef.current;if(d){d.frameId&&setFrameId(d.frameId);d.theme&&(setTheme(d.theme),setActiveTheme(d.theme));d.content&&resetContent(d.content);d.overrides&&setOverrides(d.overrides);d.aspectRatio&&setAspectRatio(d.aspectRatio);d.bgGradient&&setBgGradient(d.bgGradient);d.patternOverlay&&setPatternOverlay(d.patternOverlay);showToast('Restored');}setShowAutosavePrompt(false);};
   const selectedFrame=FRAMES.find(f=>f.id===frameId)||FRAMES[0];
+  useEffect(() => {
+    const layoutBase = createTemplateForLayout(selectedFrame.layout);
+    const frameTemplate = getFrameTemplate(frameId, layoutBase);
+    const compatibility = checkTemplateLayoutCompatibility(frameTemplate, selectedFrame.layout);
+
+    resetContent((prev) => ({
+      ...layoutBase,
+      ...prev,
+      ...frameTemplate,
+    }));
+
+    if (!compatibility.isCompatible) {
+      showToast(`Template missing layout fields: ${compatibility.missingFields.join(', ')}`, 'warning');
+    }
+  }, [frameId]);
   const complianceIssues = useMemo(
     () => getComplianceIssues({ overrides, content }),
     [overrides, content],
@@ -228,7 +243,17 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const updateContent=(k,v)=>setContent(c=>({...c,[k]:v}));
   useEffect(()=>{if(!isActive)return;const t=setTimeout(()=>{try{localStorage.setItem('whiz-autosave',JSON.stringify({frameId,theme,content,overrides,aspectRatio,bgGradient,patternOverlay,savedAt:Date.now()}));}catch(e){}},3000);return()=>clearTimeout(t);},[content,overrides,frameId,theme,aspectRatio,bgGradient,patternOverlay]);
   const applyTheme=t=>{setTheme(t);setActiveTheme(t);};
-  const applyTemplate=t=>{resetContent({...DEFAULT_CONTENT,...t.content});showToast(`Template: ${t.name}`);};
+  const applyTemplate=t=>{
+    const layoutBase = createTemplateForLayout(selectedFrame.layout);
+    const merged = { ...layoutBase, ...t.content };
+    const compatibility = checkTemplateLayoutCompatibility(merged, selectedFrame.layout);
+    resetContent(merged);
+    if (!compatibility.isCompatible) {
+      showToast(`Template incompatibility: missing ${compatibility.missingFields.join(', ')}`, 'warning');
+      return;
+    }
+    showToast(`Template: ${t.name}`);
+  };
   const filteredFrames=useMemo(()=>{if(!frameSearch)return FRAMES;const q=frameSearch.toLowerCase();return FRAMES.filter(f=>f.name.toLowerCase().includes(q)||f.tags.some(t=>t.includes(q))||f.layout.includes(q));},[frameSearch]);
   // Fix #33: scroll frame list to top when search changes
   useEffect(()=>{if(frameListRef.current)frameListRef.current.scrollTop=0;},[frameSearch,filteredFrames]);
