@@ -227,6 +227,7 @@ export function validateFrameData({ frames, templates }) {
         validateFooter(template, `${prefix}`, errors);
       }
     });
+    validateTemplateInheritance(templates, errors);
   }
 
   if (errors.length > 0) {
