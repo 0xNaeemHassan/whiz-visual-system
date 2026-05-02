@@ -65,9 +65,11 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
   const [tierFilter, setTierFilter] = useState('ALL');
   const [tagFilter, setTagFilter] = useState('');
   const [layoutFilter, setLayoutFilter] = useState('');
+  const [difficultyFilter, setDifficultyFilter] = useState('');
   const [view, setView] = useState('grid');
   const [previewFrame, setPreviewFrame] = useState(null); // Fix #61: preview modal
   const [sortBy, setSortBy] = useLocalStorage('whiz-library-sort', 'id'); // Fix #36: persisted
+  const [effortSortDir, setEffortSortDir] = useState('asc');
   const [favorites, setFavorites] = useLocalStorage('whiz-favorites', []); // E7
   const [showFavOnly, setShowFavOnly] = useLocalStorage('whiz-lib-favonly', false); // Fix #59
   const [recentlyUsed, setRecentlyUsed] = useLocalStorage('whiz-recent-frames', []); // E7 — Fixed
@@ -79,6 +81,7 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
     let f = FRAMES;
     if (tierFilter !== 'ALL') f = f.filter(fr => fr.tier === tierFilter);
     if (layoutFilter) f = f.filter(fr => fr.layout === layoutFilter);
+    if (difficultyFilter) f = f.filter(fr => fr.difficulty === difficultyFilter);
     if (search) { const q = search.toLowerCase(); f = f.filter(fr => fr.name.toLowerCase().includes(q) || fr.desc.toLowerCase().includes(q) || fr.tags.some(t => t.includes(q)) || fr.layout.includes(q)); }
     if (tagFilter) f = f.filter(fr => fr.tags.includes(tagFilter));
     if (showFavOnly) f = f.filter(fr => favorites.includes(fr.id)); // Fix #59
@@ -86,8 +89,9 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
     if (sortBy === 'name') f = [...f].sort((a,b) => a.name.localeCompare(b.name));
     else if (sortBy === 'layout') f = [...f].sort((a,b) => a.layout.localeCompare(b.layout));
     else if (sortBy === 'tier') f = [...f].sort((a,b) => a.tier.localeCompare(b.tier));
+    else if (sortBy === 'effort') f = [...f].sort((a,b) => effortSortDir === 'asc' ? a.effortMinutes - b.effortMinutes : b.effortMinutes - a.effortMinutes);
     return f;
-  }, [search, tierFilter, tagFilter, layoutFilter, sortBy]);
+  }, [search, tierFilter, tagFilter, layoutFilter, difficultyFilter, sortBy, effortSortDir, showFavOnly, favorites]);
 
   const allTags = useMemo(() => {
     const s = new Set(); FRAMES.forEach(f => f.tags.forEach(t => s.add(t))); return Array.from(s).sort();
@@ -114,7 +118,13 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
           <option value="name">Sort: Name</option>
           <option value="layout">Sort: Layout</option>
           <option value="tier">Sort: Tier</option>
+          <option value="effort">Sort: Effort</option>
         </select>
+        {sortBy === 'effort' && (
+          <button className="btn btn-ghost btn-sm" onClick={() => setEffortSortDir(d => d === 'asc' ? 'desc' : 'asc')}>
+            Effort: {effortSortDir === 'asc' ? 'Low → High' : 'High → Low'}
+          </button>
+        )}
         <div style={{ display: 'flex', gap: 6 }}>
           <button className={`view-btn ${view==='grid'?'active':''}`} onClick={() => setView('grid')} aria-label="Grid view">Grid</button>
           <button className={`view-btn ${view==='list'?'active':''}`} onClick={() => setView('list')} aria-label="List view">List</button>
@@ -150,6 +160,15 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
           <button key={t} className={`filter-btn ${tierFilter===t?'active':''}`} onClick={() => setTierFilter(t)}>
             {t === 'ALL' ? 'All Tiers' : `Tier ${t}`}
           </button>
+        ))}
+      </div>
+
+      {/* Difficulty filter */}
+      <div className="filter-group" style={{ marginBottom: 12 }}>
+        <span style={{ fontFamily: 'var(--font-m)', fontSize: 9, color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: '0.1em', alignSelf: 'center' }}>DIFFICULTY:</span>
+        <button className={`filter-btn ${!difficultyFilter?'active':''}`} onClick={() => setDifficultyFilter('')}>All</button>
+        {['easy', 'medium', 'hard'].map((d) => (
+          <button key={d} className={`filter-btn ${difficultyFilter===d?'active':''}`} onClick={() => setDifficultyFilter(difficultyFilter===d?'':d)} style={{ fontSize: 9 }}>{d}</button>
         ))}
       </div>
 
@@ -223,6 +242,8 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
                   <SemanticChip kind="category" value={`tier-${frame.tier}`}>T{frame.tier}</SemanticChip>
                   <SemanticChip kind="category" value={frame.layout}>{frame.layout}</SemanticChip>
+                  <SemanticChip kind="category" value={`difficulty-${frame.difficulty}`}>{frame.difficulty}</SemanticChip>
+                  <SemanticChip kind="category" value="effort">{frame.effortMinutes}m</SemanticChip>
                 </div>
                 <div className="frame-name">{frame.name}</div>
                 <div className="frame-desc-text">{frame.desc}</div>
@@ -253,7 +274,7 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
         <div className="card" style={{ padding: 0 }}>
           <div className="data-table-wrap">
           <table className="data-table">
-            <thead><tr><th>#</th><th>Tier</th><th>Name</th><th>Layout</th><th>Tags</th><th></th></tr></thead>
+            <thead><tr><th>#</th><th>Tier</th><th>Name</th><th>Layout</th><th>Difficulty</th><th>Effort</th><th>Tags</th><th></th></tr></thead>
             <tbody>
               {filtered.map(frame => (
                 <tr key={frame.id}>
@@ -261,6 +282,8 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
                   <td><SemanticChip kind="category" value={`tier-${frame.tier}`}>T{frame.tier}</SemanticChip></td>
                   <td><strong style={{ fontSize: 13 }}>{frame.name}</strong></td>
                   <td><SemanticChip kind="category" value={frame.layout}>{frame.layout}</SemanticChip></td>
+                  <td><SemanticChip kind="category" value={`difficulty-${frame.difficulty}`}>{frame.difficulty}</SemanticChip></td>
+                  <td><SemanticChip kind="category" value="effort">{frame.effortMinutes}m</SemanticChip></td>
                   <td><div style={{ display: 'flex', gap: 4 }}>{frame.tags.slice(0,2).map(t => (<span key={t} style={{ fontFamily: 'var(--font-m)', fontSize: 9, color: 'var(--dim)', background: 'var(--bg-3)', padding: '1px 5px', borderRadius: 8, border: '1px solid var(--border)' }}>{t}</span>))}</div></td>
                   <td><button className="btn btn-secondary btn-sm" onClick={() => {
                     setRecentlyUsed(prev => [frame.id, ...prev.filter(id => id !== frame.id)].slice(0, 20));

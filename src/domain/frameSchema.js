@@ -1,4 +1,5 @@
 const VALID_TIERS = new Set(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']);
+const VALID_DIFFICULTIES = new Set(['easy', 'medium', 'hard']);
 export const FOOTER_FIELD_ORDER = Object.freeze(['source', 'timestamp', 'issueId', 'status']);
 export const REQUIRED_FOOTER_FIELDS = new Set(FOOTER_FIELD_ORDER);
 
@@ -42,6 +43,16 @@ function validateFrame(frame, index, ids, errors) {
 
   if (isNonEmptyString(frame.tier)) {
     assert(VALID_TIERS.has(frame.tier), `${prefix}: tier must be one of ${Array.from(VALID_TIERS).join(', ')}`, errors);
+  }
+
+  assert(isNonEmptyString(frame.difficulty), `${prefix}: difficulty must be a non-empty string`, errors);
+  if (isNonEmptyString(frame.difficulty)) {
+    assert(VALID_DIFFICULTIES.has(frame.difficulty), `${prefix}: difficulty must be one of ${Array.from(VALID_DIFFICULTIES).join(', ')}`, errors);
+  }
+
+  assert(Number.isFinite(frame.effortMinutes), `${prefix}: effortMinutes must be a number`, errors);
+  if (Number.isFinite(frame.effortMinutes)) {
+    assert(frame.effortMinutes > 0, `${prefix}: effortMinutes must be greater than 0`, errors);
   }
 
   assert(Array.isArray(frame.tags), `${prefix}: tags must be an array`, errors);
