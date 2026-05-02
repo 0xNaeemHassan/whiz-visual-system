@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { FRAMES, TIER_NAMES } from '../data/frames';
 import { useLocalStorage } from '../hooks/useLocalStorage';
+import { TICKER_CONTRACT } from '../domain/tickerContract';
 
 export default function Dashboard({ navigateTo, showToast, activeTheme }) {
   const [saves] = useLocalStorage('whiz-saves', []);
@@ -17,7 +18,8 @@ export default function Dashboard({ navigateTo, showToast, activeTheme }) {
   const lastEdited = saves.length > 0 ? new Date(saves.reduce((mx, s) => Math.max(mx, s.savedAt || 0), 0)).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : null;
   const lastPublished = issues.filter(i => i.status === 'published').length > 0 ? 'Yes' : 'No';
 
-  const tickerText = `WHIZ.DEFI \u25B8 BRAND OS v8.0 \u25B8 50 FRAMES \u25B8 10 THEMES \u25B8 ALPHA UNLOCKED \u25B8 TERMINAL MODE \u25B8 RESEARCH NOTE MODE \u25B8 DASHBOARD MODE \u25B8 `;
+  const sep = TICKER_CONTRACT.separator;
+  const tickerText = `WHIZ.DEFI${sep}BRAND OS v8.0${sep}50 FRAMES${sep}10 THEMES${sep}ALPHA UNLOCKED${sep}TERMINAL MODE${sep}RESEARCH NOTE MODE${sep}DASHBOARD MODE${sep}`;
 
   const dismissOnboarding = () => {
     setShowOnboarding(false);
@@ -47,7 +49,7 @@ export default function Dashboard({ navigateTo, showToast, activeTheme }) {
 
       {/* Ticker — D5: animated with CSS */}
       <div className="ticker-bar" aria-hidden="true">
-        <div className="ticker-inner" style={{ color: activeTheme.accent }}>{tickerText}{tickerText}</div>
+        <div className="ticker-inner" style={{ color: activeTheme.accent, fontFamily: TICKER_CONTRACT.typography.fontFamily, fontSize: `${TICKER_CONTRACT.typography.fontSizePx}px`, fontWeight: TICKER_CONTRACT.typography.fontWeight, letterSpacing: `${TICKER_CONTRACT.typography.letterSpacingEm}em`, textTransform: TICKER_CONTRACT.typography.textTransform, paddingLeft: `${TICKER_CONTRACT.padding.textInlineStartPct}%`, animationDuration: `${TICKER_CONTRACT.speed.default}s` }}>{tickerText}{tickerText}</div>
       </div>
 
       {/* Stats — D1: meaningful values */}

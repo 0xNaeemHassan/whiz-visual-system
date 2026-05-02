@@ -2,6 +2,7 @@
 import { getLayoutComponent } from './layoutRegistry';
 import { coreLayoutKeys } from './layouts/coreLayouts';
 import { applyOverflowPolicy } from './layouts/OverflowPolicy';
+import { TICKER_CONTRACT, normalizeTickerSpeed } from '../../domain/tickerContract';
 
 export function FrameShell({ frameRef, frame, theme, content, editMode, selectedEl, onSelectEl, styleOverrides, showGrid, aspectRatio, uploadedImages, bgGradient, patternOverlay }) {
   const ov = styleOverrides || {};
@@ -88,7 +89,8 @@ export function FrameShell({ frameRef, frame, theme, content, editMode, selected
   });
   const resolvedContent = overflowResult.content;
   const resolvedOv = overflowResult.ov;
-  const tickerText = `WHIZ.DEFI ▸ ${resolvedContent.date} ▸ ISSUE ${resolvedContent.issueNum} ▸ ${resolvedContent.topicTag} ▸ ALPHA UNLOCKED ▸ `;
+  const sep = TICKER_CONTRACT.separator;
+  const tickerText = `WHIZ.DEFI${sep}${resolvedContent.date}${sep}ISSUE ${resolvedContent.issueNum}${sep}${resolvedContent.topicTag}${sep}ALPHA UNLOCKED${sep}`;
   const layoutProps = { theme, content: resolvedContent, SectionHead, ov: resolvedOv, editMode, selectedEl, sel, ec, accentColor };
   const LayoutComponent = getLayoutComponent(frame?.layout);
 
@@ -134,9 +136,24 @@ export function FrameShell({ frameRef, frame, theme, content, editMode, selected
 
       {/* Ticker */}
       <div className={`wf-ticker ${ec('ticker')}`}
-        style={{ background: ov.tickerBg || 'rgba(0,0,0,0.5)', borderBottom: `1px solid ${accentColor}20`, backdropFilter: 'blur(12px)' }}
+        style={{
+          background: ov.tickerBg || TICKER_CONTRACT.background.default,
+          borderBottom: `1px solid ${accentColor}20`,
+          backdropFilter: 'blur(12px)',
+          height: `${TICKER_CONTRACT.heightPx}px`,
+        }}
         onClick={e => sel('ticker', e)}>
-        <span className="wf-ticker-scroll" style={{ color: ov.tickerColor || accentColor, opacity: 0.7 , animationDuration: `${content.tickerSpeed || 28}s` }}>{tickerText}{tickerText}</span>
+        <span className="wf-ticker-scroll" style={{
+          color: ov.tickerColor || accentColor,
+          opacity: 0.7,
+          animationDuration: `${normalizeTickerSpeed(content.tickerSpeed)}s`,
+          fontFamily: TICKER_CONTRACT.typography.fontFamily,
+          fontSize: `${TICKER_CONTRACT.typography.fontSizePx}px`,
+          fontWeight: TICKER_CONTRACT.typography.fontWeight,
+          letterSpacing: `${TICKER_CONTRACT.typography.letterSpacingEm}em`,
+          textTransform: TICKER_CONTRACT.typography.textTransform,
+          paddingLeft: `${TICKER_CONTRACT.padding.textInlineStartPct}%`,
+        }}>{tickerText}{tickerText}</span>
       </div>
 
       {/* Spine — 5px color bar + rotated label that sits beside it */}

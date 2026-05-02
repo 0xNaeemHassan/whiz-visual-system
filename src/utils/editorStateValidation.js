@@ -1,3 +1,5 @@
+import { TICKER_CONTRACT } from '../domain/tickerContract';
+
 const CODES = {
   ROOT_INVALID: 'ROOT_INVALID',
   CONTENT_MISSING: 'CONTENT_MISSING',
@@ -50,8 +52,8 @@ export function validateEditorState(state) {
       push(errors, CODES.DATE_INVALID, 'content.date', 'Date must use MM.DD.YY format.');
     }
 
-    if (content.tickerSpeed != null && !inRange(Number(content.tickerSpeed), 10, 60)) {
-      push(errors, CODES.TICKER_SPEED_OOB, 'content.tickerSpeed', 'Ticker speed must be between 10 and 60 seconds.');
+    if (content.tickerSpeed != null && !inRange(Number(content.tickerSpeed), TICKER_CONTRACT.speed.min, TICKER_CONTRACT.speed.max)) {
+      push(errors, CODES.TICKER_SPEED_OOB, 'content.tickerSpeed', `Ticker speed must be between ${TICKER_CONTRACT.speed.min} and ${TICKER_CONTRACT.speed.max} seconds.`);
     }
   }
 
