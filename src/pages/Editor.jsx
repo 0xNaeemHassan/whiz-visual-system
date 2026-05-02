@@ -11,6 +11,7 @@ import ImageUpload from '../components/ImageUpload';
 import AspectRatioSelector, { RATIOS } from '../components/AspectRatioSelector';
 import PatternSelector from '../components/PatternSelector';
 import { CONTENT_TEMPLATES } from '../data/templates';
+import { createDefaultContent, createDefaultOverrides, createDefaultEditorState } from '../domain/editorDefaults.js';
 import { nearestTypeScale, getComplianceIssues, getBrandScore } from '../utils/editorCompliance';
 
 /** @typedef {import('../types/editor.js').FrameContent} FrameContent */
@@ -109,7 +110,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     // Fix #21: Pre-fill content from issue if provided
     if(editingFrame.issue){
       const iss=editingFrame.issue;
-      const base={...DEFAULT_CONTENT};
+      const base=createDefaultContent();
       if(iss.topic)base.title=iss.topic.toUpperCase();
       if(iss.caption)base.deck=iss.caption;
       if(iss.notes)base.body=iss.notes;
