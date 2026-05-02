@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { FRAMES, TIER_NAMES } from '../data/frames';
+import { CADENCE_PACKS, getCadenceRotation } from '../data/cadencePacks';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { SemanticChip } from '../components/primitives';
 const FRAME_GUIDES = {4: 'Best for weekly yield data. Use TICKER/EVENT/TIME/IMPACT columns.', 8: 'Investment memo format. Set a pull quote and 4 key stats.', 13: "3 bullet points per side. End with a WHIZ'S CALL in the deck.", 21: 'S/A/B/C/D rows. Set col2 to the tier letter for each item.', 25: 'One row: col1=what happened, col2=root cause, col3=recovery, col4=lesson.', 42: 'Long-form. Put 3 paragraphs in body, split by double newline.', 49: "col1=item, col2=method, col3=cost (use + for benefits), col4='benefit'/'risk'", 50: 'Quarterly only. Set volume number and a single powerful headline.'};
@@ -71,6 +72,7 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
   const [favorites, setFavorites] = useLocalStorage('whiz-favorites', []); // E7
   const [showFavOnly, setShowFavOnly] = useLocalStorage('whiz-lib-favonly', false); // Fix #59
   const [recentlyUsed, setRecentlyUsed] = useLocalStorage('whiz-recent-frames', []); // E7 — Fixed
+  const [cadencePackId, setCadencePackId] = useLocalStorage('whiz-cadence-pack', 'mwf');
 
   const tiers = ['ALL', ...Object.keys(TIER_NAMES)];
   const layouts = useMemo(() => [...new Set(FRAMES.map(f => f.layout))].sort(), []);
@@ -95,11 +97,61 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
 
   const toggleFav = (id) => setFavorites(prev => prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id]);
 
+
+  const cadenceRotation = useMemo(() => getCadenceRotation(cadencePackId), [cadencePackId]);
+
+  const startWeeklyRotation = () => {
+    const { ordered, pack, weekDay } = cadenceRotation;
+    const first = ordered[0];
+    if (!first) return;
+    setRecentlyUsed(prev => [first.frameId, ...prev.filter(id => id !== first.frameId)].slice(0, 20));
+    navigateTo('editor', first.frameId);
+    showToast(`Started ${pack.name} (${weekDay})`);
+  };
+
   return (
     <>
       <div className="page-header">
         <div className="page-title">Frame Library</div>
         <div className="page-desc">50 templates across 8 tiers — your complete DeFi infographic system.</div>
+      </div>
+
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ fontFamily: 'var(--font-m)', fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--dim)' }}>Cadence Wizard</div>
+            <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>Pick a cadence preset and launch today's planned frame in one click.</div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <select value={cadencePackId} onChange={e => setCadencePackId(e.target.value)} style={{ width: 'auto', minWidth: 220 }} aria-label="Cadence preset">
+              {Object.values(CADENCE_PACKS).map(pack => (
+                <option key={pack.id} value={pack.id}>{pack.name}</option>
+              ))}
+            </select>
+            <button className="btn btn-primary" onClick={startWeeklyRotation}>Start this week's rotation</button>
+          </div>
+        </div>
+        <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {cadenceRotation.ordered.map((slot, idx) => {
+            const frame = FRAMES.find(fr => fr.id === slot.frameId);
+            if (!frame) return null;
+            return (
+              <button
+                key={`${slot.day}-${slot.frameId}`}
+                className="filter-btn"
+                style={{ textAlign: 'left', minWidth: 180, borderColor: idx === 0 ? 'var(--accent)' : undefined }}
+                onClick={() => {
+                  setRecentlyUsed(prev => [slot.frameId, ...prev.filter(id => id !== slot.frameId)].slice(0, 20));
+                  navigateTo('editor', slot.frameId);
+                }}
+                title={slot.focus}
+              >
+                <strong>{slot.day}</strong> · #{slot.frameId} {frame.name}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className="lib-toolbar">
