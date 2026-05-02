@@ -132,10 +132,10 @@ export function getComplianceIssues({ overrides, content }) {
   const frameBg = overrides?.frameBg || null;
   const spineBar = overrides?.spineColor || overrides?.accent?.color || null;
   const textToBgContrast = contrastRatio(spineTextColor, frameBg);
-  const textToSpineContrast = contrastRatio(spineTextColor, spineBar);
+  const spineToBgContrast = contrastRatio(spineBar, frameBg);
   const lowContrastAgainstBg = textToBgContrast !== null && textToBgContrast < SPINE_DESIGN_TOKENS.contrast.minRatio;
-  const lowContrastAgainstSpine = textToSpineContrast !== null && textToSpineContrast < SPINE_DESIGN_TOKENS.contrast.minRatio;
-  if (lowContrastAgainstBg || lowContrastAgainstSpine) {
+  const lowContrastForBar = spineToBgContrast !== null && spineToBgContrast < SPINE_DESIGN_TOKENS.contrast.minRatio;
+  if (lowContrastAgainstBg || lowContrastForBar) {
     issues.push(`Rotated-spine contrast checks: minimum ${SPINE_DESIGN_TOKENS.contrast.minRatio}:1 required against spine/background combinations.`);
   }
 
