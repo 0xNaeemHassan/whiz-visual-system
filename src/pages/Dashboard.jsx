@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { FRAMES, TIER_NAMES } from '../data/frames';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { TICKER_CONTRACT } from '../domain/tickerContract';
-import SemanticChip from '../components/SemanticChip';
+import { SemanticChip } from '../components/primitives';
 
 export default function Dashboard({ navigateTo, showToast, activeTheme }) {
   const [saves] = useLocalStorage('whiz-saves', []);
@@ -118,7 +118,7 @@ export default function Dashboard({ navigateTo, showToast, activeTheme }) {
                 onClick={() => navigateTo('library')}
                 onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--border-2)'}
                 onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}>
-                <SemanticChip role="tier" tone={tier}>Tier {tier}</SemanticChip>
+                <SemanticChip kind="category" value={`tier-${tier}`}>TIER {tier}</SemanticChip>
                 <span style={{ flex: 1, fontSize: 13 }}>{name}</span>
                 <span style={{ fontFamily: 'var(--font-m)', fontSize: 10, color: 'var(--dim)' }}>{count} frames</span>
               </div>
@@ -188,7 +188,7 @@ export default function Dashboard({ navigateTo, showToast, activeTheme }) {
               <div key={issue.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', background: 'var(--bg-3)', borderRadius: 'var(--r)', border: '1px solid var(--border)', marginBottom: 6, cursor: 'pointer' }} onClick={() => navigateTo('planner')}>
                 <span style={{ fontFamily: 'var(--font-m)', fontSize: 10, color: 'var(--dim)', width: 32 }}>#{issue.issueNum}</span>
                 <span style={{ flex: 1, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{issue.topic || 'Untitled'}</span>
-                <span className={`status status-${issue.status}`}>{issue.status}</span>
+                <SemanticChip kind="status" value={issue.status}>{issue.status}</SemanticChip>
               </div>
             ))
           )}

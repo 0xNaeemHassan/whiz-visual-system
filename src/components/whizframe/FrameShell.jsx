@@ -84,8 +84,9 @@ export function FrameShell({ frameRef, frame, theme, content, editMode, selected
     ov,
     baseTitleSize: getTitleFontSize(),
   });
-  const resolvedContent = overflowResult.content;
+  const resolvedContent = { ...overflowResult.content, overflowPolicy: { actions: overflowResult.actions, budget: overflowResult.budget, primitiveBudgets: overflowResult.primitiveBudgets } };
   const resolvedOv = overflowResult.ov;
+  const resolvedTagText = resolvedContent?.chips?.[0] || resolvedContent.topicTag;
   const sep = TICKER_CONTRACT.separator;
   const tickerText = `WHIZ.DEFI${sep}${resolvedContent.date}${sep}ISSUE ${resolvedContent.issueNum}${sep}${resolvedContent.topicTag}${sep}ALPHA UNLOCKED${sep}`;
   const layoutProps = { theme, content: resolvedContent, SectionHead, ov: resolvedOv, editMode, selectedEl, sel, ec, accentColor };
@@ -181,10 +182,8 @@ export function FrameShell({ frameRef, frame, theme, content, editMode, selected
           <span className="wf-slug-line"><span style={{ color: '#5A6478' }}>FILED /</span> {content.date}</span>
           <span className="wf-slug-line"><span style={{ color: '#5A6478' }}>DESK /</span> {content.desk}</span>
         </div>
-        <div className={ec('tag')} onClick={e => sel('tag', e)}>
-          <SemanticChip role="topic" tone="frame" className="wf-topic-tag" style={tagStyle}>
-            <span style={{ fontSize: '10px', marginRight: '4px' }}>&#9654;</span> {resolvedContent.topicTag}
-          </SemanticChip>
+        <div className={`wf-topic-tag ${ec('tag')}`} style={tagStyle} onClick={e => sel('tag', e)}>
+          <span style={{ fontSize: '10px', marginRight: '4px' }}>&#9654;</span> {resolvedTagText}
         </div>
       </div>
 
@@ -224,8 +223,8 @@ export function FrameShell({ frameRef, frame, theme, content, editMode, selected
       {renderUploadedImages()}
 
       <FrameFooter
-        content={content}
-        ov={ov}
+        content={resolvedContent}
+        ov={resolvedOv}
         accentColor={accentColor}
         resolvedContent={resolvedContent}
         ec={ec}
@@ -255,37 +254,6 @@ function CornerTrims({ accentColor }) {
 
 /* ─── SHARED COMPONENTS ─── */
 
-
-// P2-04: Sparkline — 60px tall, single color, no grid, no labels — shape only
-function Sparkline({ values = [], color, width = 80, height = 36 }) {
-  if (!values.length) return null;
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = max - min || 1;
-  const pad = 2;
-  const pts = values.map((v, i) => {
-    const x = pad + (i / (values.length - 1)) * (width - pad * 2);
-    const y = pad + (1 - (v - min) / range) * (height - pad * 2);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(' ');
-  const lastPt = pts.split(' ').pop().split(',');
-  return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ overflow: 'visible', display: 'block' }}>
-      <polyline
-        points={pts}
-        fill="none"
-        stroke={color}
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      />
-      <circle
-        cx={lastPt[0]} cy={lastPt[1]} r="2.5"
-        fill={color} stroke="none"
-      />
-    </svg>
-  );
-}
 
 // P2-04b: Parse sparkline data from a comma-separated string like "4.2,3.8,5.1,4.9,6.2"
 function parseSparkData(str) {
@@ -1983,7 +1951,7 @@ function TableLayout(props) {
                   }}>{v}</td>
                 ))}
               
-                {row.sparkData && <td style={{padding:'4px 8px',verticalAlign:'middle'}}><Sparkline values={parseSparkData(row.sparkData)} color={accentColor} width={56} height={22}/></td>}</tr>
+                {row.sparkData && <td style={{padding:'4px 8px',verticalAlign:'middle'}}><Sparkline values={parseSparkData(row.sparkData)} accentColor={accentColor} colorRole="accent" strokeWidth="thin" baseline="none" marker="last" width={56} height={22}/></td>}</tr>
             ))}
           </tbody>
         </table>

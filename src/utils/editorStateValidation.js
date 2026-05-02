@@ -1,4 +1,5 @@
 import { TICKER_CONTRACT } from '../domain/tickerContract';
+import { collectStrictStyleViolations, sanitizeStrictStyleOverrides } from '../domain/strictStylePolicy';
 
 const CODES = {
   ROOT_INVALID: 'ROOT_INVALID',
@@ -21,23 +22,30 @@ const CODES = {
   IMAGE_WIDTH_OOB: 'IMAGE_WIDTH_OOB',
   IMAGE_OPACITY_OOB: 'IMAGE_OPACITY_OOB',
   IMAGE_ROTATION_OOB: 'IMAGE_ROTATION_OOB',
+  STRICT_STYLE_OVERRIDE_BLOCKED: 'STRICT_STYLE_OVERRIDE_BLOCKED',
 };
 
 const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 const push = (errors, code, path, message, meta) => errors.push({ code, path, message, ...(meta ? { meta } : {}) });
 const inRange = (v, min, max) => typeof v === 'number' && v >= min && v <= max;
 
-export function validateEditorState(state) {
+export function validateEditorState(state, options = {}) {
+  const { strictMode = false, sanitizeStrictStyle = false } = options;
   const errors = [];
   if (!isObj(state)) {
     push(errors, CODES.ROOT_INVALID, 'state', 'State must be an object.');
     return { valid: false, errors, codes: errors.map((e) => e.code) };
   }
 
-  const { content, overrides, uploadedImages } = state;
+  const { content, uploadedImages } = state;
+  let overrides = state.overrides;
   if (!isObj(content)) push(errors, CODES.CONTENT_MISSING, 'content', 'Content is required.');
   if (!isObj(overrides)) push(errors, CODES.OVERRIDES_MISSING, 'overrides', 'Overrides must be an object.');
 
+
+  if (strictMode && isObj(overrides) && sanitizeStrictStyle) {
+    overrides = sanitizeStrictStyleOverrides(overrides);
+  }
   if (content) {
     if ('stats' in content && !Array.isArray(content.stats)) push(errors, CODES.STATS_INVALID, 'content.stats', 'Stats must be an array when provided.');
     if ('tableRows' in content && !Array.isArray(content.tableRows)) push(errors, CODES.TABLE_ROWS_INVALID, 'content.tableRows', 'Table rows must be an array when provided.');
@@ -66,6 +74,13 @@ export function validateEditorState(state) {
     if (!Number.isNaN(bodySize) && !inRange(bodySize, 11, 22)) push(errors, CODES.BODY_FONT_SIZE_OOB, 'overrides.body.fontSize', 'Body font size out of bounds.');
   }
 
+
+    if (strictMode) {
+      const strictViolations = collectStrictStyleViolations(overrides);
+      strictViolations.forEach((violation) => {
+        push(errors, CODES.STRICT_STYLE_OVERRIDE_BLOCKED, `overrides.${violation.path}`, violation.message, { strictPath: violation.path });
+      });
+    }
   if (uploadedImages != null) {
     if (!isObj(uploadedImages)) {
       push(errors, CODES.IMAGES_INVALID, 'uploadedImages', 'Uploaded images must be an object.');
@@ -82,7 +97,7 @@ export function validateEditorState(state) {
     }
   }
 
-  return { valid: errors.length === 0, errors, codes: [...new Set(errors.map((e) => e.code))] };
+  return { valid: errors.length === 0, errors, codes: [...new Set(errors.map((e) => e.code))], sanitizedOverrides: strictMode && sanitizeStrictStyle ? overrides : undefined };
 }
 
 export { CODES as editorStateValidationCodes };
