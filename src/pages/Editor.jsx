@@ -1,7 +1,7 @@
 import { getFrameTemplate } from '../data/templates.js';
 import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
-import { FRAMES } from '../data/frames';
-import { THEMES } from '../data/themes';
+import { FRAMES } from '../data/frames.js';
+import { THEMES } from '../data/themes.js';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { useUndoRedo } from '../hooks/useUndoRedo';
 import WhizFrame from '../components/WhizFrame';
@@ -10,7 +10,7 @@ import GradientEditor from '../components/GradientEditor';
 import ImageUpload from '../components/ImageUpload';
 import AspectRatioSelector, { RATIOS } from '../components/AspectRatioSelector';
 import PatternSelector from '../components/PatternSelector';
-import { CONTENT_TEMPLATES } from '../data/templates';
+import { CONTENT_TEMPLATES } from '../data/templates.js';
 import { nearestTypeScale, getComplianceIssues, getBrandScore } from '../utils/editorCompliance';
 
 const DEFAULT_CONTENT = {
@@ -115,10 +115,9 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     setFrameId(4);
     resetContent(DEFAULT_CONTENT);
     // P3-05: Load frame-specific content template
-    if(selectedFrameId){
-      const tmpl=getFrameTemplate(selectedFrameId,DEFAULT_CONTENT);
+    const nextFrameId = editingFrame?.frameId ?? 4;
+    const tmpl=getFrameTemplate(nextFrameId,DEFAULT_CONTENT);
       setContent(tmpl);
-    }
     resetOverrides(DEFAULT_OVERRIDES);
     setBgGradient(null);setPatternOverlay(null);
     setTheme(activeTheme);

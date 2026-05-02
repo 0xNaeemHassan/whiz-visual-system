@@ -1,7 +1,7 @@
 // WhizFrame v8.0 — Complete visual overhaul with unique layouts for all frame types
 import { memo } from 'react';
 
-function WhizFrameInner({ frameRef, frame, theme, content, editMode, selectedEl, onSelectEl, styleOverrides, showGrid, aspectRatio, uploadedImages, bgGradient, patternOverlay }) {
+function WhizFrameInner({ frameRef, frame, theme, content, editMode, selectedEl, onSelectEl, styleOverrides, showGrid, aspectRatio, uploadedImages, bgGradient, patternOverlay, fontPairing }) {
   const ov = styleOverrides || {};
   const tickerText = `WHIZ.DEFI ▸ ${content.date} ▸ ISSUE ${content.issueNum} ▸ ${content.topicTag} ▸ ALPHA UNLOCKED ▸ `;
   const sel = (key, e) => { if (editMode) { e?.stopPropagation(); onSelectEl?.(selectedEl === key ? null : key); } };
