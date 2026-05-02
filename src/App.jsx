@@ -217,6 +217,15 @@ export default function App() {
     return () => window.removeEventListener('keydown', handler);
   }, [page]);
 
+
+  useEffect(() => {
+    const handler = (e) => {
+      const key = e?.detail?.key || 'saved data';
+      showToast(`Recovered from invalid ${key} storage data. Defaults restored for safety.`, 'warning');
+    };
+    window.addEventListener('whiz-storage-recovery', handler);
+    return () => window.removeEventListener('whiz-storage-recovery', handler);
+  }, [showToast]);
   const pageProps = {
     showToast, activeTheme, setActiveTheme, navigateTo,
     editingFrame, clearEditingFrame, newFrameSignal,

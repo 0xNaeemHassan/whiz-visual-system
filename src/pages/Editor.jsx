@@ -3,6 +3,7 @@ import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } fr
 import { FRAMES } from '../data/frames';
 import { THEMES } from '../data/themes';
 import { useLocalStorage } from '../hooks/useLocalStorage';
+import { applyStorageMigrations, isEnvelope, toEnvelope } from '../storage/migrations';
 import { useUndoRedo } from '../hooks/useUndoRedo';
 import WhizFrame from '../components/WhizFrame';
 import DragItem from '../components/DragItem';
@@ -126,7 +127,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     showToast('New frame started');
   },[newFrameSignal]);
 
-  useEffect(()=>{try{const r=localStorage.getItem('whiz-autosave');if(r){const d=JSON.parse(r);if(d.savedAt&&Date.now()-d.savedAt<86400000){autosaveDataRef.current=d;setShowAutosavePrompt(true);}}}catch(e){}},[]);
+  useEffect(()=>{try{const r=localStorage.getItem('whiz-autosave');if(r){const parsed=JSON.parse(r);const migration=applyStorageMigrations('whiz-autosave',parsed);if(!migration.ok){window.dispatchEvent(new CustomEvent('whiz-storage-recovery',{detail:{key:'whiz-autosave'}}));return;}const d=isEnvelope(migration.value)?migration.value.data:migration.value;if(d.savedAt&&Date.now()-d.savedAt<86400000){autosaveDataRef.current=d;setShowAutosavePrompt(true);}if(migration.migrated||!isEnvelope(parsed)){localStorage.setItem('whiz-autosave',JSON.stringify(migration.value));}}}catch(e){}},[]);
   const restoreAutosave=()=>{const d=autosaveDataRef.current;if(d){d.frameId&&setFrameId(d.frameId);d.theme&&(setTheme(d.theme),setActiveTheme(d.theme));d.content&&resetContent(d.content);d.overrides&&setOverrides(d.overrides);d.aspectRatio&&setAspectRatio(d.aspectRatio);d.bgGradient&&setBgGradient(d.bgGradient);d.patternOverlay&&setPatternOverlay(d.patternOverlay);showToast('Restored');}setShowAutosavePrompt(false);};
   const selectedFrame=FRAMES.find(f=>f.id===frameId)||FRAMES[0];
   const complianceIssues = useMemo(
@@ -216,7 +217,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     setExporting(false);
   };
   const updateContent=(k,v)=>setContent(c=>({...c,[k]:v}));
-  useEffect(()=>{if(!isActive)return;const t=setTimeout(()=>{try{localStorage.setItem('whiz-autosave',JSON.stringify({frameId,theme,content,overrides,aspectRatio,bgGradient,patternOverlay,savedAt:Date.now()}));}catch(e){}},3000);return()=>clearTimeout(t);},[content,overrides,frameId,theme,aspectRatio,bgGradient,patternOverlay]);
+  useEffect(()=>{if(!isActive)return;const t=setTimeout(()=>{try{const autosave={frameId,theme,content,overrides,aspectRatio,bgGradient,patternOverlay,savedAt:Date.now()};localStorage.setItem('whiz-autosave',JSON.stringify(toEnvelope(autosave)));}catch(e){}},3000);return()=>clearTimeout(t);},[content,overrides,frameId,theme,aspectRatio,bgGradient,patternOverlay]);
   const applyTheme=t=>{setTheme(t);setActiveTheme(t);};
   const applyTemplate=t=>{resetContent({...DEFAULT_CONTENT,...t.content});showToast(`Template: ${t.name}`);};
   const filteredFrames=useMemo(()=>{if(!frameSearch)return FRAMES;const q=frameSearch.toLowerCase();return FRAMES.filter(f=>f.name.toLowerCase().includes(q)||f.tags.some(t=>t.includes(q))||f.layout.includes(q));},[frameSearch]);
