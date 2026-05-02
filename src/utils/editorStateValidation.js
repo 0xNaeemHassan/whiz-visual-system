@@ -39,11 +39,11 @@ export function validateEditorState(state) {
   if (!isObj(overrides)) push(errors, CODES.OVERRIDES_MISSING, 'overrides', 'Overrides must be an object.');
 
   if (content) {
-    if (!Array.isArray(content.stats)) push(errors, CODES.STATS_INVALID, 'content.stats', 'Stats must be an array.');
-    if (!Array.isArray(content.tableRows)) push(errors, CODES.TABLE_ROWS_INVALID, 'content.tableRows', 'Table rows must be an array.');
-    if (!Array.isArray(content.tableHeaders)) push(errors, CODES.TABLE_HEADERS_INVALID, 'content.tableHeaders', 'Table headers must be an array.');
-    if (!Array.isArray(content.bullPoints)) push(errors, CODES.BULL_POINTS_INVALID, 'content.bullPoints', 'Bull points must be an array.');
-    if (!Array.isArray(content.bearPoints)) push(errors, CODES.BEAR_POINTS_INVALID, 'content.bearPoints', 'Bear points must be an array.');
+    if ('stats' in content && !Array.isArray(content.stats)) push(errors, CODES.STATS_INVALID, 'content.stats', 'Stats must be an array when provided.');
+    if ('tableRows' in content && !Array.isArray(content.tableRows)) push(errors, CODES.TABLE_ROWS_INVALID, 'content.tableRows', 'Table rows must be an array when provided.');
+    if ('tableHeaders' in content && !Array.isArray(content.tableHeaders)) push(errors, CODES.TABLE_HEADERS_INVALID, 'content.tableHeaders', 'Table headers must be an array when provided.');
+    if ('bullPoints' in content && !Array.isArray(content.bullPoints)) push(errors, CODES.BULL_POINTS_INVALID, 'content.bullPoints', 'Bull points must be an array when provided.');
+    if ('bearPoints' in content && !Array.isArray(content.bearPoints)) push(errors, CODES.BEAR_POINTS_INVALID, 'content.bearPoints', 'Bear points must be an array when provided.');
 
     if (content.issueNum && !/^\d{3}$/.test(String(content.issueNum))) {
       push(errors, CODES.ISSUE_NUM_INVALID, 'content.issueNum', 'Issue number must be 3 digits.');
