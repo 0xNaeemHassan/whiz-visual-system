@@ -268,6 +268,27 @@ export function getComplianceIssues({ overrides, content }) {
     issues.push('Footer schema integrity: required footer field set is out of sync.');
   }
 
+  const overflowMeta = content?.overflowPolicy || content?.overflowMeta;
+  const hasAction = (actionSet, token) => Array.isArray(actionSet) && actionSet.includes(token);
+  if (overflowMeta?.actions) {
+    const { actions } = overflowMeta;
+    const statTruncated = (actions.stats || []).some((entry) => hasAction(entry?.label, 'ellipsis') || hasAction(entry?.value, 'ellipsis'));
+    if (statTruncated) issues.push('Stats-card fallback reached truncation: reduce label/value length to preserve scan hierarchy.');
+
+    const tableTruncated = (actions.tableRows || []).some((row) => (row || []).some((cellActions) => hasAction(cellActions, 'ellipsis')));
+    if (tableTruncated) issues.push('Table-cell fallback reached truncation: shorten row copy to preserve column hierarchy.');
+
+    if (hasAction(actions.footerStream, 'ellipsis')) {
+      issues.push('Footer-stream fallback reached truncation: compress metadata tokens before export.');
+    }
+
+    const chipTruncated = (actions.chips || []).some((chipActions) => hasAction(chipActions, 'ellipsis'));
+    if (chipTruncated) issues.push('Chip/tag fallback reached truncation: simplify taxonomy labels.');
+
+    const hierarchyLost = (actions.stats || []).some((entry) => hasAction(entry?.label, 'reduce-font') && hasAction(entry?.value, 'reduce-font'));
+    if (hierarchyLost) issues.push('Stats-card hierarchy risk: fallback cannot preserve value-over-label contrast.');
+  }
+
   return issues;
 }
 

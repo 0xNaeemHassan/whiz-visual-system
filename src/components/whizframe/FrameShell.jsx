@@ -83,8 +83,9 @@ export function FrameShell({ frameRef, frame, theme, content, editMode, selected
     ov,
     baseTitleSize: getTitleFontSize(),
   });
-  const resolvedContent = overflowResult.content;
+  const resolvedContent = { ...overflowResult.content, overflowPolicy: { actions: overflowResult.actions, budget: overflowResult.budget, primitiveBudgets: overflowResult.primitiveBudgets } };
   const resolvedOv = overflowResult.ov;
+  const resolvedTagText = resolvedContent?.chips?.[0] || resolvedContent.topicTag;
   const sep = TICKER_CONTRACT.separator;
   const tickerText = `WHIZ.DEFI${sep}${resolvedContent.date}${sep}ISSUE ${resolvedContent.issueNum}${sep}${resolvedContent.topicTag}${sep}ALPHA UNLOCKED${sep}`;
   const layoutProps = { theme, content: resolvedContent, SectionHead, ov: resolvedOv, editMode, selectedEl, sel, ec, accentColor };
@@ -181,7 +182,7 @@ export function FrameShell({ frameRef, frame, theme, content, editMode, selected
           <span className="wf-slug-line"><span style={{ color: '#5A6478' }}>DESK /</span> {content.desk}</span>
         </div>
         <div className={`wf-topic-tag ${ec('tag')}`} style={tagStyle} onClick={e => sel('tag', e)}>
-          <span style={{ fontSize: '10px', marginRight: '4px' }}>&#9654;</span> {resolvedContent.topicTag}
+          <span style={{ fontSize: '10px', marginRight: '4px' }}>&#9654;</span> {resolvedTagText}
         </div>
       </div>
 
@@ -221,8 +222,8 @@ export function FrameShell({ frameRef, frame, theme, content, editMode, selected
       {renderUploadedImages()}
 
       <FrameFooter
-        content={content}
-        ov={ov}
+        content={resolvedContent}
+        ov={resolvedOv}
         accentColor={accentColor}
         resolvedContent={resolvedContent}
         ec={ec}
