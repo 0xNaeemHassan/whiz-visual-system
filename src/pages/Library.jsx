@@ -4,8 +4,7 @@ import { FRAME_TEMPLATES } from '../data/templates';
 import { computeTierCoverageMetrics } from '../domain/services/tierCoverageService';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { SemanticChip } from '../components/primitives';
-const FRAME_GUIDES = {4: 'Best for weekly yield data. Use TICKER/EVENT/TIME/IMPACT columns.', 8: 'Investment memo format. Set a pull quote and 4 key stats.', 13: "3 bullet points per side. End with a WHIZ'S CALL in the deck.", 21: 'S/A/B/C/D rows. Set col2 to the tier letter for each item.', 25: 'One row: col1=what happened, col2=root cause, col3=recovery, col4=lesson.', 42: 'Long-form. Put 3 paragraphs in body, split by double newline.', 49: "col1=item, col2=method, col3=cost (use + for benefits), col4='benefit'/'risk'", 50: 'Quarterly only. Set volume number and a single powerful headline.'};
-
+import { FRAME_GUIDANCE_BY_ID } from '../data/frameGuidance';
 
 
 // M-05: LazyCard — only render frame card when visible in viewport
@@ -269,7 +268,7 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
         <div className="frames-grid">
           {filtered.map(frame => (
             <LazyCard key={frame.id}>
-            <div className="frame-card" title={FRAME_GUIDES[frame.id] || frame.desc} onClick={() => {
+            <div className="frame-card" title={FRAME_GUIDANCE_BY_ID[frame.id]?.bestUseCases?.join(' • ') || frame.desc} onClick={() => {
                 setRecentlyUsed(prev => {
                   const next = [frame.id, ...prev.filter(id => id !== frame.id)].slice(0, 20);
                   return next;
@@ -302,6 +301,12 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
                 </div>
                 <div className="frame-name">{frame.name}</div>
                 <div className="frame-desc-text">{frame.desc}</div>
+
+                {FRAME_GUIDANCE_BY_ID[frame.id] && (
+                  <div style={{ marginTop: 8, fontSize: 10, color: 'var(--muted)' }}>
+                    <strong style={{ color: 'var(--text)' }}>Best for:</strong> {FRAME_GUIDANCE_BY_ID[frame.id].bestUseCases[0]}
+                  </div>
+                )}
                 <div className="frame-actions">
                   <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                     {frame.tags.slice(0, 2).map(t => (
@@ -367,6 +372,29 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
               <SemanticChip kind="category" value={previewFrame.layout}>{previewFrame.layout}</SemanticChip>
               {previewFrame.tags.map(t => <span key={t} style={{ fontFamily: 'var(--font-m)', fontSize: 9, color: 'var(--dim)', padding: '2px 6px', background: 'var(--bg-3)', borderRadius: 8 }}>{t}</span>)}
             </div>
+
+            {FRAME_GUIDANCE_BY_ID[previewFrame.id] && (
+              <div style={{ display: 'grid', gap: 10, marginBottom: 16 }}>
+                <div>
+                  <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--dim)', marginBottom: 4 }}>Best Use Cases</div>
+                  <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: 'var(--muted)' }}>
+                    {FRAME_GUIDANCE_BY_ID[previewFrame.id].bestUseCases.map((item) => <li key={`best-${item}`}>{item}</li>)}
+                  </ul>
+                </div>
+                <div>
+                  <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--dim)', marginBottom: 4 }}>Anti-Patterns</div>
+                  <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: 'var(--muted)' }}>
+                    {FRAME_GUIDANCE_BY_ID[previewFrame.id].antiPatterns.map((item) => <li key={`anti-${item}`}>{item}</li>)}
+                  </ul>
+                </div>
+                <div>
+                  <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--dim)', marginBottom: 4 }}>When Not to Use</div>
+                  <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: 'var(--muted)' }}>
+                    {FRAME_GUIDANCE_BY_ID[previewFrame.id].whenNotToUse.map((item) => <li key={`avoid-${item}`}>{item}</li>)}
+                  </ul>
+                </div>
+              </div>
+            )}
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setPreviewFrame(null)}>Close</button>
               <button className="btn btn-primary" onClick={() => {
