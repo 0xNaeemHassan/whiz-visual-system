@@ -1,5 +1,6 @@
-import { TICKER_CONTRACT } from '../domain/tickerContract';
-import { SPINE_DESIGN_TOKENS } from '../domain/spineDesignTokens';
+import { TICKER_CONTRACT } from '../domain/tickerContract.js';
+import { SPINE_DESIGN_TOKENS } from '../domain/spineDesignTokens.js';
+import { FOOTER_FIELD_ORDER, REQUIRED_FOOTER_FIELDS, resolveFooterData } from '../domain/frameSchema.js';
 
 export const TYPE_SCALE = [10, 12, 14, 18, 24, 36, 56, 84];
 export const SPACING_TOKENS = Object.freeze({
@@ -190,6 +191,19 @@ export function getComplianceIssues({ overrides, content }) {
 
   if ((overrides?.footer?.background || '').toLowerCase() === '#00000000') {
     issues.push('Footer semantics: transparent footer background is not publish-safe.');
+  }
+
+  const footer = resolveFooterData(content || {});
+  const footerKeys = Object.keys(footer);
+  const missingFooterFields = FOOTER_FIELD_ORDER.filter((field) => !String(footer[field] || '').trim());
+  if (missingFooterFields.length > 0) {
+    issues.push(`Footer completeness: missing required field(s): ${missingFooterFields.join(', ')}.`);
+  }
+  if (footerKeys.length !== FOOTER_FIELD_ORDER.length || footerKeys.some((key, idx) => key !== FOOTER_FIELD_ORDER[idx])) {
+    issues.push(`Footer canonical-order drift: expected ${FOOTER_FIELD_ORDER.join(' → ')}.`);
+  }
+  if (FOOTER_FIELD_ORDER.some((field) => !REQUIRED_FOOTER_FIELDS.has(field))) {
+    issues.push('Footer schema integrity: required footer field set is out of sync.');
   }
 
   return issues;
