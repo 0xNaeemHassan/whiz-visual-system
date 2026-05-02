@@ -1,7 +1,7 @@
 import { createTemplateForLayout, checkTemplateLayoutCompatibility, getFrameTemplate } from '../data/templates.js';
 import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
-import { FRAMES } from '../data/frames';
-import { THEMES } from '../data/themes';
+import { FRAMES } from '../data/frames.js';
+import { THEMES } from '../data/themes.js';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { useUIEventContext } from '../state/UIEventContext';
 import { useUndoRedo } from '../hooks/useUndoRedo';
