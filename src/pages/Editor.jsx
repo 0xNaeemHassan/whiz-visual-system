@@ -144,11 +144,13 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     const frameTemplate = getFrameTemplate(frameId, layoutBase);
     const compatibility = checkTemplateLayoutCompatibility(frameTemplate, selectedFrame.layout);
 
-    resetContent((prev) => ({
+    const nextContent = {
       ...layoutBase,
-      ...prev,
+      ...content,
       ...frameTemplate,
-    }));
+    };
+
+    resetContent(nextContent);
 
     if (!compatibility.isCompatible) {
       showToast(`Template missing layout fields: ${compatibility.missingFields.join(', ')}`, 'warning');
