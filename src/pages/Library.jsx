@@ -229,7 +229,7 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
                 <div className="frame-actions">
                   <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                     {frame.tags.slice(0, 2).map(t => (
-                      <span key={t} style={{ fontFamily: 'var(--font-m)', fontSize: 9, color: 'var(--dim)', background: 'var(--bg-3)', padding: '2px 6px', borderRadius: 10, border: '1px solid var(--border)' }}>{t}</span>
+                      <SemanticChip key={t} role="topic" tone="frame">{t}</SemanticChip>
                     ))}
                   </div>
                   {/* E4: Always visible button, not hover-only */}
