@@ -19,6 +19,10 @@ const HEX_RE = /^#([0-9a-f]{6}|[0-9a-f]{8})$/i;
 const TOPIC_TAG_RE = /^[A-Z0-9]+(?: [A-Z0-9]+){0,3}$/;
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
+const ALLOWED_TICKER_OVERRIDE_FIELDS = new Set(['tickerColor', 'tickerBg']);
+const NON_CONTRACT_TICKER_OVERRIDE_PATTERNS = [/^ticker[A-Z]/, /^ticker_/i, /^ticker$/i];
+
+
 export function nearestTypeScale(value) {
   return TYPE_SCALE.reduce((prev, curr) => (
     Math.abs(curr - value) < Math.abs(prev - value) ? curr : prev
@@ -199,6 +203,20 @@ export function getComplianceIssues({ overrides, content }) {
   if (content?.tickerSpeed && content.tickerSpeed % TICKER_CONTRACT.speed.step !== 0) {
     issues.push('Ticker fidelity variance: use even-numbered ticker speed for normalized cadence.');
   }
+  if (strictMode && overrides && typeof overrides === 'object') {
+    const nonContractTickerFields = Object.keys(overrides).filter((key) => (
+      NON_CONTRACT_TICKER_OVERRIDE_PATTERNS.some((pattern) => pattern.test(key))
+      && !ALLOWED_TICKER_OVERRIDE_FIELDS.has(key)
+      && overrides[key] != null
+    ));
+    if (nonContractTickerFields.length > 0) {
+      addActionableIssue(
+        `Ticker contract override violation: unsupported ticker override field(s): ${nonContractTickerFields.join(', ')}.`,
+        `Remove unsupported ticker overrides and rely on TICKER_CONTRACT tokens (${Array.from(ALLOWED_TICKER_OVERRIDE_FIELDS).join(', ')}).`,
+      );
+    }
+  }
+
 
   if (!content?.title?.trim()) issues.push('Title is required.');
   if (!content?.topicTag?.trim()) issues.push('Topic tag is required.');
