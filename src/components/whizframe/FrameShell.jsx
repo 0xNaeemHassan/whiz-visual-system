@@ -6,6 +6,7 @@ import { TICKER_CONTRACT, normalizeTickerSpeed } from '../../domain/tickerContra
 import { SPINE_DESIGN_TOKENS } from '../../domain/spineDesignTokens';
 import { FrameFooter } from './FrameFooter';
 import SemanticChip from '../SemanticChip';
+import { FRAME_CONSTRAINTS } from '../../data/frames';
 
 export function FrameShell({ frameRef, frame, theme, content, editMode, selectedEl, onSelectEl, styleOverrides, showGrid, aspectRatio, uploadedImages, bgGradient, patternOverlay, strictWhizMode = false, whizEffects = { glow: true, noise: true, intenseAccent: false } }) {
   const ov = styleOverrides || {};
@@ -124,7 +125,7 @@ export function FrameShell({ frameRef, frame, theme, content, editMode, selected
       {showGrid && <div className="grid-overlay visible" aria-hidden="true" />}
 
       {patternOverlay && (
-        <div style={{
+        <div className="wf-cover-safe-zone" style={{
           position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 2,
           background: patternOverlay.css,
           backgroundSize: patternOverlay.size || 'auto',
@@ -317,7 +318,7 @@ function BigNumber({ content, ov, accentColor }) {
         }}>{content.bigLabel}</div>
       )}
       <div style={{ display: 'inline-flex', alignItems: 'flex-end', gap: hierarchy.spacingBigToUnit }}>
-        <div style={{
+        <div className="wf-cover-title" style={{
           fontFamily: "'Space Grotesk', sans-serif",
           fontSize: `${bigSize}px`,
           fontWeight: 700,
@@ -473,7 +474,7 @@ function QuoteLayout(props) {
       <SectionHead>{content.topicTag || 'INSIGHT'}</SectionHead>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
         <div style={{ color: accentColor, fontSize: 64, lineHeight: 0.8, fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, marginBottom: 8, opacity: 0.6 }}>"</div>
-        <div style={{
+        <div className="wf-cover-title" style={{
           fontFamily: "'Space Grotesk', sans-serif",
           fontSize: Math.min(resolvedOv.title?.fontSize || 40, 40),
           fontWeight: 700,
@@ -799,7 +800,7 @@ function ThesisLayout(props) {
           fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
           letterSpacing: '0.18em', color: accentColor, textTransform: 'uppercase', marginBottom: 14,
         }}>▸ THESIS</div>
-        <div style={{
+        <div className="wf-cover-title" style={{
           fontFamily: "'Space Grotesk', sans-serif",
           fontSize: getTitleFontSizeForLayout(content.title, 56),
           fontWeight: 700, lineHeight: 1, letterSpacing: '-0.02em',
@@ -834,6 +835,7 @@ function ThesisLayout(props) {
 // Quarterly flagship: full-bleed treatment, volume badge, single massive headline
 function CoverStoryLayout(props) {
   const { content, ov, accentColor, SectionHead } = props;
+  const safeZone = FRAME_CONSTRAINTS[50]?.safeZone;
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative' }}>
       {/* Hero image or gradient fill */}
@@ -845,6 +847,19 @@ function CoverStoryLayout(props) {
           background: `radial-gradient(ellipse at 30% 40%, ${accentColor}20 0%, transparent 70%)`,
         }} />
       )}
+      {props.editMode && safeZone && (
+        <div style={{
+          position: 'absolute',
+          left: `${safeZone.xPct}%`,
+          top: `${safeZone.yPct}%`,
+          width: `${safeZone.widthPct}%`,
+          height: `${safeZone.heightPct}%`,
+          border: '1px dashed rgba(244,245,247,0.6)',
+          background: 'rgba(15,19,24,0.08)',
+          zIndex: 2,
+          pointerEvents: 'none',
+        }} />
+      )}
       {/* Volume badge */}
       <div style={{
         position: 'relative', zIndex: 1,
@@ -854,14 +869,14 @@ function CoverStoryLayout(props) {
       }}>VOL.{content.volume || 'I'} ISSUE {content.issueNum || '001'}</div>
       {/* Main headline — takes most vertical space */}
       <div style={{ position: 'relative', zIndex: 1, flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-        <div style={{
+        <div className="wf-cover-title" style={{
           fontFamily: "'Space Grotesk', sans-serif",
           fontSize: getTitleFontSizeForLayout(content.title, 84),
           fontWeight: 700, lineHeight: 0.95, letterSpacing: '-0.03em',
           color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 16,
         }}>{resolvedContent.title}</div>
         <div style={{ height: 2, background: accentColor, width: '40%', marginBottom: 16 }} />
-        <div style={{
+        <div className="wf-cover-deck" style={{
           fontFamily: "'Inter', sans-serif", fontSize: 18,
           color: '#8B95A3', fontStyle: 'italic', lineHeight: 1.45, maxWidth: '80%',
         }}>{resolvedContent.deck}</div>

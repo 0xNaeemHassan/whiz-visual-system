@@ -69,6 +69,13 @@ export const FRAMES = [
   { id: 50, tier: 'H', tierName: 'Specialty', name: 'The Cover Story', desc: 'Once a quarter. Magazine-cover treatment: full-bleed hero illustration, single massive headline, VOL.III ISSUE badge.', tags: ['specialty', 'quarterly', 'flagship'], layout: 'cover-story' },
 ];
 
+export const FRAME_CONSTRAINTS = Object.freeze({
+  50: Object.freeze({
+    safeZone: Object.freeze({ xPct: 9, yPct: 20, widthPct: 82, heightPct: 68 }),
+    contrast: Object.freeze({ headlineMin: 4.5, deckMin: 3 }),
+  }),
+});
+
 export const TIER_NAMES = {
   A: 'Weekly Recaps', B: 'Project Deep-Dives', C: 'Comparative Tables',
   D: 'Risk & Explainers', E: 'Ecosystem Maps', F: 'Yield & Data',

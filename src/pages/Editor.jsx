@@ -1,7 +1,7 @@
 import { TICKER_CONTRACT, normalizeTickerSpeed } from '../domain/tickerContract';
 import { createTemplateForLayout, checkTemplateLayoutCompatibility, getFrameTemplate } from '../data/templates.js';
 import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
-import { FRAMES } from '../data/frames.js';
+import { FRAMES, FRAME_CONSTRAINTS } from '../data/frames.js';
 import { THEMES } from '../data/themes.js';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { useUIEventContext } from '../state/UIEventContext';
