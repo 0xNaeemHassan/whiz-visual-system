@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint src --ext .js,.jsx",
-    "test": "node scripts/test-smoke.mjs"
+    "test": "node scripts/test-smoke.mjs && node scripts/test-analytics-quality.mjs"
   },
   "dependencies": {
     "html2canvas": "^1.4.1",
