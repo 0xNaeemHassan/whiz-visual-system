@@ -1,0 +1,115 @@
+const VALID_TIERS = new Set(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']);
+
+function isNonEmptyString(value) {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function assert(condition, message, errors) {
+  if (!condition) errors.push(message);
+}
+
+function validateFrame(frame, index, ids, errors) {
+  const prefix = `FRAMES[${index}]`;
+  assert(Number.isInteger(frame.id) && frame.id > 0, `${prefix}: id must be a positive integer`, errors);
+  if (Number.isInteger(frame.id)) {
+    assert(!ids.has(frame.id), `${prefix}: duplicate id ${frame.id}`, errors);
+    ids.add(frame.id);
+  }
+
+  assert(isNonEmptyString(frame.name), `${prefix}: name must be a non-empty string`, errors);
+  assert(isNonEmptyString(frame.desc), `${prefix}: desc must be a non-empty string`, errors);
+  assert(isNonEmptyString(frame.layout), `${prefix}: layout must be a non-empty string`, errors);
+  assert(isNonEmptyString(frame.tier), `${prefix}: tier must be a non-empty string`, errors);
+
+  if (isNonEmptyString(frame.tier)) {
+    assert(VALID_TIERS.has(frame.tier), `${prefix}: tier must be one of ${Array.from(VALID_TIERS).join(', ')}`, errors);
+  }
+
+  assert(Array.isArray(frame.tags), `${prefix}: tags must be an array`, errors);
+  if (Array.isArray(frame.tags)) {
+    assert(frame.tags.length > 0, `${prefix}: tags must not be empty`, errors);
+    frame.tags.forEach((tag, tagIndex) => {
+      assert(isNonEmptyString(tag), `${prefix}: tags[${tagIndex}] must be a non-empty string`, errors);
+    });
+  }
+}
+
+function validateTemplateEntry(frameId, template, frameById, errors) {
+  const frame = frameById.get(frameId);
+  const frameLabel = frame ? `Frame ${frame.id} (${frame.layout})` : `Frame ${frameId} (unknown layout)`;
+  const prefix = `FRAME_TEMPLATES[${frameId}] ${frameLabel}`;
+
+  ['topicTag', 'title', 'deck'].forEach((key) => {
+    assert(isNonEmptyString(template[key]), `${prefix}: required text field "${key}" must be a non-empty string`, errors);
+  });
+
+  if (template.body !== undefined) {
+    assert(isNonEmptyString(template.body), `${prefix}: body must be a non-empty string when provided`, errors);
+  }
+
+  if (template.stats !== undefined) {
+    assert(Array.isArray(template.stats), `${prefix}: stats must be an array when provided`, errors);
+    if (Array.isArray(template.stats)) {
+      template.stats.forEach((stat, statIndex) => {
+        const statPrefix = `${prefix}: stats[${statIndex}]`;
+        assert(stat && typeof stat === 'object', `${statPrefix} must be an object`, errors);
+        if (stat && typeof stat === 'object') {
+          assert(isNonEmptyString(stat.label), `${statPrefix}.label must be a non-empty string`, errors);
+          assert(isNonEmptyString(stat.value), `${statPrefix}.value must be a non-empty string`, errors);
+        }
+      });
+    }
+  }
+
+  if (template.tableRows !== undefined) {
+    assert(Array.isArray(template.tableRows), `${prefix}: tableRows must be an array when provided`, errors);
+    if (Array.isArray(template.tableRows)) {
+      assert(template.tableRows.length > 0, `${prefix}: tableRows must not be empty`, errors);
+      template.tableRows.forEach((row, rowIndex) => {
+        const rowPrefix = `${prefix}: tableRows[${rowIndex}]`;
+        assert(row && typeof row === 'object' && !Array.isArray(row), `${rowPrefix} must be an object`, errors);
+        if (row && typeof row === 'object' && !Array.isArray(row)) {
+          const colKeys = Object.keys(row).filter((key) => /^col\d+$/.test(key));
+          assert(colKeys.length > 0, `${rowPrefix} must include at least one colN field`, errors);
+          colKeys.forEach((colKey) => {
+            assert(isNonEmptyString(row[colKey]), `${rowPrefix}.${colKey} must be a non-empty string`, errors);
+          });
+        }
+      });
+    }
+  }
+}
+
+export function validateFrameData({ frames, templates }) {
+  const errors = [];
+  const ids = new Set();
+  const frameById = new Map();
+
+  assert(Array.isArray(frames), 'FRAMES must be an array', errors);
+  if (Array.isArray(frames)) {
+    frames.forEach((frame, index) => {
+      validateFrame(frame, index, ids, errors);
+      if (Number.isInteger(frame.id) && !frameById.has(frame.id)) frameById.set(frame.id, frame);
+    });
+  }
+
+  assert(templates && typeof templates === 'object' && !Array.isArray(templates), 'FRAME_TEMPLATES must be an object', errors);
+  if (templates && typeof templates === 'object' && !Array.isArray(templates)) {
+    Object.entries(templates).forEach(([rawId, template]) => {
+      const frameId = Number(rawId);
+      const prefix = `FRAME_TEMPLATES[${rawId}]`;
+      assert(Number.isInteger(frameId), `${prefix}: key must be numeric frame id`, errors);
+      assert(template && typeof template === 'object' && !Array.isArray(template), `${prefix}: entry must be an object`, errors);
+      if (Number.isInteger(frameId)) {
+        assert(frameById.has(frameId), `${prefix}: no matching frame id found in FRAMES`, errors);
+      }
+      if (template && typeof template === 'object' && !Array.isArray(template)) {
+        validateTemplateEntry(frameId, template, frameById, errors);
+      }
+    });
+  }
+
+  if (errors.length > 0) {
+    throw new Error(`Frame schema validation failed with ${errors.length} issue(s):\n${errors.map((e) => `- ${e}`).join('\n')}`);
+  }
+}
