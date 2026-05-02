@@ -33,9 +33,15 @@ export function createDefaultEditorState() {
     frameId: 4,
     content: createDefaultContent(),
     overrides: createDefaultOverrides(),
+    strictWhizMode: true,
     aspectRatioIndex: 0,
     bgGradient: null,
     patternOverlay: null,
+    effects: {
+      glow: true,
+      noise: true,
+      intenseAccent: false,
+    },
   };
 }
 
