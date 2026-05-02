@@ -72,10 +72,13 @@ function DesignPanel({selectedEl,setSelectedEl,overrides,setOverrides,theme,bgGr
     </div>
     <button className="btn btn-danger w-full btn-sm" onClick={()=>{
       if(window.confirm('Reset all design overrides? This cannot be undone.')){
-        resetOverrides(DEFAULT_OVERRIDES);
-        setBgGradient(null);
-        setPatternOverlay(null);
-        showToast('Design reset to defaults');
+        resetDesignState({
+          resetOverrides,
+          defaultOverrides: DEFAULT_OVERRIDES,
+          setBgGradient,
+          setPatternOverlay,
+          showToast,
+        });
       }
     }}>Reset All</button></div></div>);
 }
@@ -165,11 +168,11 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     }
   }, [frameId]);
   const complianceIssues = useMemo(
-    () => getComplianceIssues({ overrides, content }),
+    () => computeCompliance({ overrides, content }),
     [overrides, content],
   );
   const brandScore = useMemo(
-    () => getBrandScore({ overrides, content }),
+    () => computeBrandScore({ overrides, content }),
     [overrides, content],
   );
 
@@ -230,7 +233,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     });
   }, [isActive, registerHandlers]);
   useEffect(()=>{if(editMode||selectedEl)setRightTab('design');},[editMode,selectedEl]);
-  const buildSave=()=>({frameId,theme,content,overrides,aspectRatio,bgGradient,patternOverlay,savedAt:Date.now()});
+  const buildSave=()=>buildFrameSave({frameId,theme,content,overrides,aspectRatio,bgGradient,patternOverlay});
   const doSave=()=>{const n=saveName.trim()||`${content.topicTag} \u2014 ${new Date().toLocaleDateString()}`;setSaves(p=>[...p,{id:`s_${Date.now()}`,title:n,...buildSave()}]);setShowSaveModal(false);setSaveName('');showToast(`Saved "${n}"`);};
   const loadSave=s=>{setFrameId(s.frameId);setTheme(s.theme);resetContent(s.content);s.overrides&&setOverrides(s.overrides);s.aspectRatio&&setAspectRatio(s.aspectRatio);s.bgGradient&&updateMedia(prev=>({...prev,bgGradient:s.bgGradient}));s.patternOverlay&&updateMedia(prev=>({...prev,patternOverlay:s.patternOverlay}));setShowLoadModal(false);showToast(`Loaded`);};
   const confirmDel=()=>{if(showDeleteConfirm){setSaves(p=>p.filter(s=>s.id!==showDeleteConfirm));showToast('Deleted','info');setShowDeleteConfirm(null);}};
