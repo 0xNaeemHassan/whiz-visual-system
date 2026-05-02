@@ -1,4 +1,6 @@
+/** @typedef {import('../types/editor.js').FrameDefinition} FrameDefinition */
 // All 50 frames data
+/** @type {FrameDefinition[]} */
 export const FRAMES = [
   // TIER A — Weekly Recaps (1-7)
   { id: 1, tier: 'A', tierName: 'Weekly Recaps', name: 'The Ticker Tape', desc: 'Full-width scrolling-style header listing every event of the week as ticker symbols. Below, 6-9 mini cards in a 3×3 grid expanding each tag.', tags: ['weekly', 'recap', 'events'], layout: 'grid' },
@@ -72,3 +74,12 @@ export const TIER_NAMES = {
   D: 'Risk & Explainers', E: 'Ecosystem Maps', F: 'Yield & Data',
   G: 'Macro & Thesis', H: 'Specialty'
 };
+
+
+export const LAYOUTS = getRegisteredLayouts();
+const LAYOUT_IDS = new Set(LAYOUTS.map((layout) => layout.id));
+const unknownLayouts = FRAMES.filter((frame) => !LAYOUT_IDS.has(frame.layout));
+if (unknownLayouts.length > 0) {
+  const ids = unknownLayouts.map((frame) => frame.layout).join(', ');
+  throw new Error(`Unregistered layouts detected: ${ids}`);
+}
