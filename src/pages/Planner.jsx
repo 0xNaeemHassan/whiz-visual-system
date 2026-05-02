@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { useUIEventContext } from '../state/UIEventContext';
 import { FRAMES } from '../data/frames';
 import { THEMES } from '../data/themes';
 import { useLocalStorage } from '../hooks/useLocalStorage';
@@ -86,13 +87,18 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
   const normalizeIssueNum = (v) => String(v || '').replace(/\D/g, '').slice(-3).padStart(3, '0');
   const existingIssueNums = new Set(issues.map(i => String(i.issueNum || '').padStart(3, '0')));
 
-  // Escape handler
+  const { registerHandlers } = useUIEventContext();
+
+  // Escape handler routed via UI event context
   useEffect(() => {
-    const handler = () => { setShowModal(false); setDeleteConfirmId(null); };
-    if (!isActive) return;
-    window.addEventListener('whiz-escape', handler);
-    return () => window.removeEventListener('whiz-escape', handler);
-  }, []);
+    if (!isActive) return undefined;
+    return registerHandlers({
+      onEscape: () => {
+        setShowModal(false);
+        setDeleteConfirmId(null);
+      },
+    });
+  }, [isActive, registerHandlers]);
 
   const openNewIssue = (presetStatus) => {
     const nextN = issues.length > 0 ? Math.max(...issues.map(i => Number(i.issueNum) || 0)) + 1 : 1;
