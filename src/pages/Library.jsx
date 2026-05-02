@@ -1,10 +1,10 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { FRAMES, TIER_NAMES } from '../data/frames';
-import { getFramePitfalls } from '../data/framePitfalls';
+import { FRAME_TEMPLATES } from '../data/templates';
+import { computeTierCoverageMetrics } from '../domain/services/tierCoverageService';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { SemanticChip } from '../components/primitives';
-const FRAME_GUIDES = {4: 'Best for weekly yield data. Use TICKER/EVENT/TIME/IMPACT columns.', 8: 'Investment memo format. Set a pull quote and 4 key stats.', 13: "3 bullet points per side. End with a WHIZ'S CALL in the deck.", 21: 'S/A/B/C/D rows. Set col2 to the tier letter for each item.', 25: 'One row: col1=what happened, col2=root cause, col3=recovery, col4=lesson.', 42: 'Long-form. Put 3 paragraphs in body, split by double newline.', 49: "col1=item, col2=method, col3=cost (use + for benefits), col4='benefit'/'risk'", 50: 'Quarterly only. Set volume number and a single powerful headline.'};
-
+import { FRAME_GUIDANCE_BY_ID } from '../data/frameGuidance';
 
 
 // M-05: LazyCard — only render frame card when visible in viewport
@@ -66,9 +66,11 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
   const [tierFilter, setTierFilter] = useState('ALL');
   const [tagFilter, setTagFilter] = useState('');
   const [layoutFilter, setLayoutFilter] = useState('');
+  const [structureFilter, setStructureFilter] = useState('all');
   const [view, setView] = useState('grid');
   const [previewFrame, setPreviewFrame] = useState(null); // Fix #61: preview modal
   const [sortBy, setSortBy] = useLocalStorage('whiz-library-sort', 'id'); // Fix #36: persisted
+  const [effortSortDir, setEffortSortDir] = useState('asc');
   const [favorites, setFavorites] = useLocalStorage('whiz-favorites', []); // E7
   const [showFavOnly, setShowFavOnly] = useLocalStorage('whiz-lib-favonly', false); // Fix #59
   const [recentlyUsed, setRecentlyUsed] = useLocalStorage('whiz-recent-frames', []); // E7 — Fixed
@@ -80,6 +82,7 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
     let f = FRAMES;
     if (tierFilter !== 'ALL') f = f.filter(fr => fr.tier === tierFilter);
     if (layoutFilter) f = f.filter(fr => fr.layout === layoutFilter);
+    if (structureFilter !== 'all') f = f.filter(fr => fr.structureClass === structureFilter);
     if (search) { const q = search.toLowerCase(); f = f.filter(fr => fr.name.toLowerCase().includes(q) || fr.desc.toLowerCase().includes(q) || fr.tags.some(t => t.includes(q)) || fr.layout.includes(q)); }
     if (tagFilter) f = f.filter(fr => fr.tags.includes(tagFilter));
     if (showFavOnly) f = f.filter(fr => favorites.includes(fr.id)); // Fix #59
@@ -87,8 +90,9 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
     if (sortBy === 'name') f = [...f].sort((a,b) => a.name.localeCompare(b.name));
     else if (sortBy === 'layout') f = [...f].sort((a,b) => a.layout.localeCompare(b.layout));
     else if (sortBy === 'tier') f = [...f].sort((a,b) => a.tier.localeCompare(b.tier));
+    else if (sortBy === 'effort') f = [...f].sort((a,b) => effortSortDir === 'asc' ? a.effortMinutes - b.effortMinutes : b.effortMinutes - a.effortMinutes);
     return f;
-  }, [search, tierFilter, tagFilter, layoutFilter, sortBy]);
+  }, [search, tierFilter, tagFilter, layoutFilter, structureFilter, sortBy, showFavOnly, favorites]);
 
   const allTags = useMemo(() => {
     const s = new Set(); FRAMES.forEach(f => f.tags.forEach(t => s.add(t))); return Array.from(s).sort();
@@ -96,11 +100,56 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
 
   const toggleFav = (id) => setFavorites(prev => prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id]);
 
+  const tierCoverage = useMemo(() => computeTierCoverageMetrics({
+    frames: FRAMES,
+    frameTemplates: FRAME_TEMPLATES,
+    tierNames: TIER_NAMES,
+    minTemplateCoverage: 0.5,
+  }), []);
+
   return (
     <>
       <div className="page-header">
         <div className="page-title">Frame Library</div>
         <div className="page-desc">50 templates across 8 tiers — your complete DeFi infographic system.</div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div style={{ fontFamily: 'var(--font-m)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--dim)', marginBottom: 10 }}>
+          Tier Coverage Summary
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginBottom: 12 }}>
+          {tierCoverage.byTier.map((tierRow) => (
+            <div
+              key={tierRow.tier}
+              style={{
+                border: `1px solid ${tierRow.isUnderCovered ? 'rgba(220,80,80,0.6)' : 'var(--border)'}`,
+                background: tierRow.isUnderCovered ? 'rgba(220,80,80,0.08)' : 'var(--bg-2)',
+                borderRadius: 'var(--r)',
+                padding: 10,
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                <strong style={{ fontSize: 12 }}>Tier {tierRow.tier}</strong>
+                {tierRow.isUnderCovered && <span style={{ color: '#dc5050', fontSize: 10 }}>Under-covered</span>}
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 6 }}>{tierRow.tierName}</div>
+              <div style={{ fontSize: 11, lineHeight: 1.5 }}>
+                <div>Frames: <strong>{tierRow.frameCount}</strong></div>
+                <div>Template coverage: <strong>{Math.round(tierRow.templateCoverageRatio * 100)}%</strong></div>
+                <div>Layout diversity: <strong>{Math.round(tierRow.layoutDiversityRatio * 100)}%</strong></div>
+              </div>
+            </div>
+          ))}
+        </div>
+        {tierCoverage.orphanWarnings.length > 0 && (
+          <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+            <div style={{ fontSize: 10, color: '#dc5050', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Orphan tier warnings</div>
+            <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--muted)', fontSize: 11 }}>
+              {tierCoverage.orphanWarnings.map((warning) => <li key={warning}>{warning}</li>)}
+            </ul>
+          </div>
+        )}
       </div>
 
       <div className="lib-toolbar">
@@ -115,7 +164,13 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
           <option value="name">Sort: Name</option>
           <option value="layout">Sort: Layout</option>
           <option value="tier">Sort: Tier</option>
+          <option value="effort">Sort: Effort</option>
         </select>
+        {sortBy === 'effort' && (
+          <button className="btn btn-ghost btn-sm" onClick={() => setEffortSortDir(d => d === 'asc' ? 'desc' : 'asc')}>
+            Effort: {effortSortDir === 'asc' ? 'Low → High' : 'High → Low'}
+          </button>
+        )}
         <div style={{ display: 'flex', gap: 6 }}>
           <button className={`view-btn ${view==='grid'?'active':''}`} onClick={() => setView('grid')} aria-label="Grid view">Grid</button>
           <button className={`view-btn ${view==='list'?'active':''}`} onClick={() => setView('list')} aria-label="List view">List</button>
@@ -154,6 +209,15 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
         ))}
       </div>
 
+      {/* Difficulty filter */}
+      <div className="filter-group" style={{ marginBottom: 12 }}>
+        <span style={{ fontFamily: 'var(--font-m)', fontSize: 9, color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: '0.1em', alignSelf: 'center' }}>DIFFICULTY:</span>
+        <button className={`filter-btn ${!difficultyFilter?'active':''}`} onClick={() => setDifficultyFilter('')}>All</button>
+        {['easy', 'medium', 'hard'].map((d) => (
+          <button key={d} className={`filter-btn ${difficultyFilter===d?'active':''}`} onClick={() => setDifficultyFilter(difficultyFilter===d?'':d)} style={{ fontSize: 9 }}>{d}</button>
+        ))}
+      </div>
+
       {/* Layout filter */}
       <div className="filter-group" style={{ marginBottom: 12 }}>
         <span style={{ fontFamily: 'var(--font-m)', fontSize: 9, color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: '0.1em', alignSelf: 'center' }}>LAYOUT:</span>
@@ -161,6 +225,13 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
         {layouts.map(l => (
           <button key={l} className={`filter-btn ${layoutFilter===l?'active':''}`} onClick={() => setLayoutFilter(layoutFilter===l?'':l)} style={{ fontSize: 9 }}>{l}</button>
         ))}
+      </div>
+
+      <div className="filter-group" style={{ marginBottom: 12 }}>
+        <span style={{ fontFamily: 'var(--font-m)', fontSize: 9, color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: '0.1em', alignSelf: 'center' }}>STRUCTURE:</span>
+        <button className={`filter-btn ${structureFilter==='all'?'active':''}`} onClick={() => setStructureFilter('all')}>All</button>
+        <button className={`filter-btn ${structureFilter==='structural'?'active':''}`} onClick={() => setStructureFilter('structural')}>Canonical</button>
+        <button className={`filter-btn ${structureFilter==='variant'?'active':''}`} onClick={() => setStructureFilter('variant')}>Variant</button>
       </div>
 
       {/* E6: Tag filters with active count */}
@@ -197,7 +268,7 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
         <div className="frames-grid">
           {filtered.map(frame => (
             <LazyCard key={frame.id}>
-            <div className="frame-card" title={FRAME_GUIDES[frame.id] || frame.desc} onClick={() => {
+            <div className="frame-card" title={FRAME_GUIDANCE_BY_ID[frame.id]?.bestUseCases?.join(' • ') || frame.desc} onClick={() => {
                 setRecentlyUsed(prev => {
                   const next = [frame.id, ...prev.filter(id => id !== frame.id)].slice(0, 20);
                   return next;
@@ -233,9 +304,18 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
                   <SemanticChip kind="category" value={`tier-${frame.tier}`}>T{frame.tier}</SemanticChip>
                   <SemanticChip kind="category" value={frame.layout}>{frame.layout}</SemanticChip>
+                  <SemanticChip kind="category" value={`structure-${frame.structureClass}`}>
+                    {frame.structureClass === 'variant' ? 'Variant' : 'Canonical'}
+                  </SemanticChip>
                 </div>
                 <div className="frame-name">{frame.name}</div>
                 <div className="frame-desc-text">{frame.desc}</div>
+
+                {FRAME_GUIDANCE_BY_ID[frame.id] && (
+                  <div style={{ marginTop: 8, fontSize: 10, color: 'var(--muted)' }}>
+                    <strong style={{ color: 'var(--text)' }}>Best for:</strong> {FRAME_GUIDANCE_BY_ID[frame.id].bestUseCases[0]}
+                  </div>
+                )}
                 <div className="frame-actions">
                   <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                     {frame.tags.slice(0, 2).map(t => (
@@ -263,7 +343,7 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
         <div className="card" style={{ padding: 0 }}>
           <div className="data-table-wrap">
           <table className="data-table">
-            <thead><tr><th>#</th><th>Tier</th><th>Name</th><th>Layout</th><th>Tags</th><th></th></tr></thead>
+            <thead><tr><th>#</th><th>Tier</th><th>Name</th><th>Layout</th><th>Structure</th><th>Tags</th><th></th></tr></thead>
             <tbody>
               {filtered.map(frame => (
                 <tr key={frame.id}>
@@ -271,6 +351,7 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
                   <td><SemanticChip kind="category" value={`tier-${frame.tier}`}>T{frame.tier}</SemanticChip></td>
                   <td><strong style={{ fontSize: 13 }}>{frame.name}</strong></td>
                   <td><SemanticChip kind="category" value={frame.layout}>{frame.layout}</SemanticChip></td>
+                  <td><SemanticChip kind="category" value={`structure-${frame.structureClass}`}>{frame.structureClass === 'variant' ? 'Variant' : 'Canonical'}</SemanticChip></td>
                   <td><div style={{ display: 'flex', gap: 4 }}>{frame.tags.slice(0,2).map(t => (<span key={t} style={{ fontFamily: 'var(--font-m)', fontSize: 9, color: 'var(--dim)', background: 'var(--bg-3)', padding: '1px 5px', borderRadius: 8, border: '1px solid var(--border)' }}>{t}</span>))}</div></td>
                   <td><button className="btn btn-secondary btn-sm" onClick={() => {
                     setRecentlyUsed(prev => [frame.id, ...prev.filter(id => id !== frame.id)].slice(0, 20));
@@ -295,11 +376,37 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
               </button>
             </div>
             <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>{previewFrame.desc}</div>
+            <div style={{ fontFamily: 'var(--font-m)', fontSize: 10, color: 'var(--dim)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              Expected Data: {getExpectedDataPreview(previewFrame.layout)}
+            </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
               <SemanticChip kind="category" value={`tier-${previewFrame.tier}`}>Tier {previewFrame.tier}</SemanticChip>
               <SemanticChip kind="category" value={previewFrame.layout}>{previewFrame.layout}</SemanticChip>
               {previewFrame.tags.map(t => <span key={t} style={{ fontFamily: 'var(--font-m)', fontSize: 9, color: 'var(--dim)', padding: '2px 6px', background: 'var(--bg-3)', borderRadius: 8 }}>{t}</span>)}
             </div>
+
+            {FRAME_GUIDANCE_BY_ID[previewFrame.id] && (
+              <div style={{ display: 'grid', gap: 10, marginBottom: 16 }}>
+                <div>
+                  <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--dim)', marginBottom: 4 }}>Best Use Cases</div>
+                  <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: 'var(--muted)' }}>
+                    {FRAME_GUIDANCE_BY_ID[previewFrame.id].bestUseCases.map((item) => <li key={`best-${item}`}>{item}</li>)}
+                  </ul>
+                </div>
+                <div>
+                  <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--dim)', marginBottom: 4 }}>Anti-Patterns</div>
+                  <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: 'var(--muted)' }}>
+                    {FRAME_GUIDANCE_BY_ID[previewFrame.id].antiPatterns.map((item) => <li key={`anti-${item}`}>{item}</li>)}
+                  </ul>
+                </div>
+                <div>
+                  <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--dim)', marginBottom: 4 }}>When Not to Use</div>
+                  <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: 'var(--muted)' }}>
+                    {FRAME_GUIDANCE_BY_ID[previewFrame.id].whenNotToUse.map((item) => <li key={`avoid-${item}`}>{item}</li>)}
+                  </ul>
+                </div>
+              </div>
+            )}
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setPreviewFrame(null)}>Close</button>
               <button className="btn btn-primary" onClick={() => {
