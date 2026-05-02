@@ -1,4 +1,106 @@
 // Per-frame content templates — gives users a ready-to-edit scaffold
+const SHARED_CONTENT_DEFAULTS = {
+  issueNum:'001',date:'05.01.26',desk:'YIELD',volume:'I',topicTag:'STABLECOIN RISK',
+  title:'THE END OF MERCENARY YIELD',
+  deck:'Why the era of unsustainable APYs is finally closing — and what comes next.',
+  body:'Three years ago, triple-digit APYs were table stakes for any new DeFi protocol. Liquidity mining was the only customer acquisition strategy anyone needed.\n\nThe protocols that survived aren\'t the ones that offered the most — they\'re the ones that built real revenue.',
+  handle:'@0xWhizMiz',socialX:'@X',socialSub:'@SUBSTACK',
+  status:'PUBLISHED',
+  tickerSpeed:28,sparkData:'1.2,1.8,2.9,2.1,1.6,2.4,3.8,4.2,3.6',
+  stats:[{label:'TVL',value:'$4.2B'},{label:'24H VOL',value:'$890M'},{label:'APY',value:'18.4%'},{label:'USERS',value:'142K'},{label:'CHAINS',value:'7'}],
+  tableRows:[{col1:'Aave',col2:'USDC',col3:'5.2%',col4:'Low',col5:'A+'},{col1:'Compound',col2:'ETH',col3:'3.8%',col4:'Low',col5:'A'},{col1:'Pendle',col2:'stETH',col3:'14.1%',col4:'Med',col5:'B+'},{col1:'Morpho',col2:'USDT',col3:'7.3%',col4:'Low',col5:'A-'},{col1:'Yearn',col2:'DAI',col3:'9.6%',col4:'Med',col5:'B+'}],
+  tableHeaders:['PROTOCOL','ASSET','APY','RISK','WHIZ GRADE'],
+  bullPoints:['Real yield is sustainable','Network effects > incentives','Multi-chain reduces risk'],
+  bearPoints:['Regulatory pressure rising','TradFi rates compete','Smart contract risk persists'],
+  bigNumber:'$47B',bigLabel:'TOTAL DeFi TVL',
+  verdict:'Position in protocols with proven revenue. Avoid incentive-only models.',
+  gridItems:[],timelineEvents:[],
+};
+
+const TABLE_LAYOUTS = new Set(['table', 'scorecard', 'compare', 'tier-list', 'receipt', 'postmortem']);
+const LAYOUT_REQUIRED_FIELDS = {
+  table: ['tableRows'],
+  scorecard: ['tableRows'],
+  compare: ['tableRows'],
+  'tier-list': ['tableRows'],
+  receipt: ['tableRows'],
+  postmortem: ['tableRows'],
+  timeline: ['timelineEvents'],
+  'bull-bear': ['bullPoints', 'bearPoints'],
+  stats: ['stats'],
+  grid: ['gridItems'],
+};
+
+const LAYOUT_DEFAULTS = {
+  table: {
+    tableHeaders: ['PROTOCOL', 'ASSET', 'APY', 'RISK', 'WHIZ GRADE'],
+    tableRows: [
+      { col1: 'Aave', col2: 'USDC', col3: '5.2%', col4: 'Low', col5: 'A+' },
+      { col1: 'Pendle', col2: 'stETH', col3: '14.1%', col4: 'Med', col5: 'B+' },
+      { col1: 'Morpho', col2: 'USDT', col3: '7.3%', col4: 'Low', col5: 'A-' },
+    ],
+  },
+  scorecard: {
+    tableRows: [
+      { col1: 'Team', col2: 'Proven execution', col3: 'A' },
+      { col1: 'Product', col2: 'Category fit', col3: 'A-' },
+      { col1: 'Risk', col2: 'Audited contracts', col3: 'B+' },
+    ],
+  },
+  compare: {
+    tableRows: [
+      { col1: 'Protocol', col2: 'Aave', col3: 'Morpho' },
+      { col1: 'TVL', col2: '$12B', col3: '$2.4B' },
+      { col1: 'Edge', col2: 'Deep liquidity', col3: 'Higher efficiency' },
+    ],
+  },
+  'tier-list': {
+    tableRows: [{ col1: 'Aave', col2: 'S' }, { col1: 'Pendle', col2: 'A' }, { col1: 'Yearn', col2: 'B' }],
+  },
+  receipt: {
+    tableRows: [
+      { col1: 'Bridge fee', col2: 'LayerZero', col3: '$1.20', col4: 'cost' },
+      { col1: 'Swap fee', col2: '1inch', col3: '$1.00', col4: 'cost' },
+      { col1: '30-day yield', col2: '14.1% APY', col3: '+$11.75', col4: 'benefit' },
+    ],
+  },
+  postmortem: { tableRows: [{ col1: 'What happened', col2: 'Root cause', col3: 'Recovery', col4: 'Lessons' }] },
+  timeline: { timelineEvents: [{ time: 'Mon', event: 'Catalyst announced' }, { time: 'Wed', event: 'TVL spiked' }] },
+  'bull-bear': {
+    bullPoints: ['Demand is rising', 'Usage is sticky', 'Execution remains strong'],
+    bearPoints: ['Valuation is rich', 'Macro is uncertain', 'Competition is increasing'],
+  },
+  stats: { stats: [{ label: 'TVL', value: '$4.2B' }, { label: '24H VOL', value: '$890M' }, { label: 'APY', value: '18.4%' }] },
+  grid: { gridItems: [{ title: 'Catalyst 1', body: 'Key narrative point' }, { title: 'Catalyst 2', body: 'Supporting detail' }] },
+};
+
+export function createTemplateForLayout(layout, overrides = {}) {
+  const scopedDefaults = {
+    ...SHARED_CONTENT_DEFAULTS,
+    ...(LAYOUT_DEFAULTS[layout] || {}),
+  };
+  return { ...scopedDefaults, ...overrides };
+}
+
+export function checkTemplateLayoutCompatibility(template = {}, layout = 'body') {
+  const requiredFields = LAYOUT_REQUIRED_FIELDS[layout] || [];
+  const missingFields = requiredFields.filter((field) => {
+    const value = template[field];
+    if (Array.isArray(value)) return value.length === 0;
+    return value === undefined || value === null || value === '';
+  });
+
+  return {
+    isCompatible: missingFields.length === 0,
+    missingFields,
+    requiredFields,
+  };
+}
+
+export function isTableLayout(layout = 'body') {
+  return TABLE_LAYOUTS.has(layout);
+}
+
 export const FRAME_TEMPLATES = {
   // Frame 4 — The Watchlist
   4: {
