@@ -38,7 +38,9 @@ export function getComplianceIssues({ overrides, content }) {
   if (content?.issueNum && !/^\d{3}$/.test(content.issueNum)) issues.push('Issue number should be 3 digits (e.g., 047).');
   if (content?.tickerSpeed && (content.tickerSpeed < 10 || content.tickerSpeed > 60)) issues.push('Ticker speed should be between 10s and 60s.');
   if (!Array.isArray(content?.stats) || content.stats.length === 0) issues.push('At least one stat is required.');
-  if ((content?.sourceLinks || '').trim() === '') issues.push('Source links are required for publish-grade exports.');
+  const status = (content?.status || '').toString().trim().toUpperCase();
+  const requiresSourceLinks = status === 'PUBLISHED';
+  if (requiresSourceLinks && (content?.sourceLinks || '').trim() === '') issues.push('Source links are required for published content.');
   if (content?.nextDrop && !/^\d{4}-\d{2}-\d{2}$/.test(content.nextDrop)) issues.push('Next drop date must be YYYY-MM-DD.');
 
   return issues;
