@@ -5,6 +5,7 @@ import TopBar from './components/TopBar';
 import Toast from './components/Toast';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { DEFAULT_THEME } from './data/themes';
+import { UIEventProvider, useUIEventContext } from './state/UIEventContext';
 
 // K4: Code splitting — lazy load pages
 const Dashboard  = lazy(() => import('./pages/Dashboard'));
@@ -135,7 +136,7 @@ function PageLoader() {
   );
 }
 
-export default function App() {
+function AppContent() {
   const [page, setPage] = useState(getPageFromHash);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [toast, setToast] = useState(null);
@@ -151,6 +152,7 @@ export default function App() {
   // M-13: Onboarding — show once for new users
   const [hasSeenOnboarding, setHasSeenOnboarding] = useLocalStorage('whiz-onboarding-done', false);
   const [showOnboarding, setShowOnboarding] = useState(!hasSeenOnboarding);
+  const { dispatchEscape, dispatchGlobalAction } = useUIEventContext();
 
   // Fix #63: newFrameSignal — bump this to tell Editor to reset to a blank new frame
   const [newFrameSignal, setNewFrameSignal] = useState(0);
@@ -209,19 +211,19 @@ export default function App() {
     const handler = (e) => {
       if (e.key === 'Escape') {
         setSidebarOpen(false);
-        // Only dispatch to active page to avoid ghost events on hidden pages
-        window.dispatchEvent(new CustomEvent('whiz-escape', { detail: { page } }));
+        dispatchEscape();
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [page]);
+  }, [dispatchEscape]);
 
   const pageProps = {
     showToast, activeTheme, setActiveTheme, navigateTo,
     editingFrame, clearEditingFrame, newFrameSignal,
     libraryPreFilter, setLibraryPreFilter,
     activeFontPairing, setActiveFontPairing,
+    uiEvents: { dispatchGlobalAction },
   };
 
   const pageStyle = {
@@ -339,5 +341,14 @@ export default function App() {
         </div>
       )}
     </div>
+  );
+}
+
+
+export default function App() {
+  return (
+    <UIEventProvider>
+      <AppContent />
+    </UIEventProvider>
   );
 }

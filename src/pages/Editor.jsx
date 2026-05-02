@@ -3,6 +3,7 @@ import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } fr
 import { FRAMES } from '../data/frames';
 import { THEMES } from '../data/themes';
 import { useLocalStorage } from '../hooks/useLocalStorage';
+import { useUIEventContext } from '../state/UIEventContext';
 import { useUndoRedo } from '../hooks/useUndoRedo';
 import WhizFrame from '../components/WhizFrame';
 import DragItem from '../components/DragItem';
@@ -101,6 +102,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const[showDeleteConfirm,setShowDeleteConfirm]=useState(null);const[saveSearch,setSaveSearch]=useState('');
   const[strictMode,setStrictMode]=useLocalStorage('whiz-strict-mode',true);
   const frameRef=useRef(null);const centerRef=useRef(null);
+  const { registerHandlers } = useUIEventContext();
   const[showAutosavePrompt,setShowAutosavePrompt]=useState(false);const autosaveDataRef=useRef(null);
 
   // Fix #3/11: editingFrame is now {frameId, serial, issue}; compare serial to detect re-opens
@@ -203,11 +205,22 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
           if(!didRedo)redoOverrideRef.current?.();
         }
       }
-      if(e.key==='Escape'){setSelectedEl(null);setEditMode(false);setShowSaveModal(false);setShowLoadModal(false);}
     };
     window.addEventListener('keydown',h);
     return()=>window.removeEventListener('keydown',h);
   },[isActive]);
+
+  useEffect(() => {
+    if (!isActive) return undefined;
+    return registerHandlers({
+      onEscape: () => {
+        setSelectedEl(null);
+        setEditMode(false);
+        setShowSaveModal(false);
+        setShowLoadModal(false);
+      },
+    });
+  }, [isActive, registerHandlers]);
   useEffect(()=>{if(editMode||selectedEl)setRightTab('design');},[editMode,selectedEl]);
   const buildSave=()=>({frameId,theme,content,overrides,aspectRatio,bgGradient,patternOverlay,savedAt:Date.now()});
   const doSave=()=>{const n=saveName.trim()||`${content.topicTag} \u2014 ${new Date().toLocaleDateString()}`;setSaves(p=>[...p,{id:`s_${Date.now()}`,title:n,...buildSave()}]);setShowSaveModal(false);setSaveName('');showToast(`Saved "${n}"`);};
