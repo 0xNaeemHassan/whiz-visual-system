@@ -11,6 +11,7 @@ import ImageUpload from '../components/ImageUpload';
 import AspectRatioSelector, { RATIOS } from '../components/AspectRatioSelector';
 import PatternSelector from '../components/PatternSelector';
 import { CONTENT_TEMPLATES } from '../data/templates';
+import { nearestTypeScale, getComplianceIssues, getBrandScore } from '../utils/editorCompliance';
 
 const DEFAULT_CONTENT = {
   issueNum:'001',date:'05.01.26',desk:'YIELD',volume:'I',topicTag:'STABLECOIN RISK',
@@ -19,14 +20,7 @@ const DEFAULT_CONTENT = {
   body:'Three years ago, triple-digit APYs were table stakes for any new DeFi protocol. Liquidity mining was the only customer acquisition strategy anyone needed.\n\nThe protocols that survived aren\'t the ones that offered the most \u2014 they\'re the ones that built real revenue.',
   handle:'@0xWhizMiz',socialX:'@X',socialSub:'@SUBSTACK',
   status:'PUBLISHED',
-  tableHeaders:['NAME','VALUE','CHANGE','RISK','GRADE'],
-  tableRows:[
-    {col1:'Aave',col2:'USDC',col3:'5.2%',col4:'Low',col5:'A+'},
-    {col1:'Compound',col2:'ETH',col3:'3.8%',col4:'Low',col5:'A'},
-    {col1:'Pendle',col2:'stETH',col3:'14.1%',col4:'Med',col5:'B+'},
-    {col1:'Morpho',col2:'USDT',col3:'7.3%',col4:'Low',col5:'A-'},
-    {col1:'Yearn',col2:'DAI',col3:'9.2%',col4:'Med',col5:'B+'},
-  ],tickerSpeed:28,sparkData:'1.2,1.8,2.9,2.1,1.6,2.4,3.8,4.2,3.6',
+  tickerSpeed:28,sparkData:'1.2,1.8,2.9,2.1,1.6,2.4,3.8,4.2,3.6',
   stats:[{label:'TVL',value:'$4.2B'},{label:'24H VOL',value:'$890M'},{label:'APY',value:'18.4%'},{label:'USERS',value:'142K'},{label:'CHAINS',value:'7'}],
   tableRows:[{col1:'Aave',col2:'USDC',col3:'5.2%',col4:'Low',col5:'A+'},{col1:'Compound',col2:'ETH',col3:'3.8%',col4:'Low',col5:'A'},{col1:'Pendle',col2:'stETH',col3:'14.1%',col4:'Med',col5:'B+'},{col1:'Morpho',col2:'USDT',col3:'7.3%',col4:'Low',col5:'A-'},{col1:'Yearn',col2:'DAI',col3:'9.6%',col4:'Med',col5:'B+'}],
   tableHeaders:['PROTOCOL','ASSET','APY','RISK','WHIZ GRADE'],
@@ -38,17 +32,11 @@ const DEFAULT_CONTENT = {
 };
 const DEFAULT_OVERRIDES = {frameBg:null,spineColor:null,tickerColor:null,tickerBg:null,title:{fontSize:52,fontWeight:700,color:'#F4F5F7',italic:false,lineHeight:1.05,letterSpacing:-0.02,textAlign:'left',opacity:1},deck:{fontSize:18,fontWeight:400,color:'#8B95A3',italic:true},body:{fontSize:15,fontWeight:400,color:'#8B95A3',lineHeight:1.75,textAlign:'left',opacity:1},accent:{color:null},tag:{background:null,color:null,borderColor:null},footer:{background:null},statsColor:null,bignumColor:null,avatarColor:null,ruleBg:null,handleColor:null};
 const ELEMENTS = [{key:'frame',label:'Background',icon:'\u25A1'},{key:'spine',label:'Spine',icon:'|'},{key:'ticker',label:'Ticker',icon:'\u2014'},{key:'title',label:'Title',icon:'T'},{key:'deck',label:'Deck',icon:'D'},{key:'tag',label:'Tag',icon:'#'},{key:'body',label:'Body',icon:'B'},{key:'stats',label:'Stats',icon:'S'},{key:'bignum',label:'Big #',icon:'N'},{key:'footer',label:'Footer',icon:'F'},{key:'accent',label:'Accent',icon:'\u25CF'}];
-
-function ColorRow({label,value,defaultVal,onChange}){const col=value||defaultVal;return(<div className="prop-color-row"><span className="prop-label-text">{label}</span><div className="prop-color-swatch" style={{background:col,position:'relative'}}><input type="color" value={col} onChange={e=>onChange(e.target.value)} aria-label={`${label} color`} style={{position:'absolute',inset:0,opacity:0,cursor:'pointer',width:'100%',height:'100%'}}/></div>
-      <div className="form-group">
-        <label className="form-label">Sparkline Data (comma-separated values)</label>
-        <input className="form-control" value={content.sparkData||''} onChange={e=>updateContent('sparkData',e.target.value)} placeholder="1.2,1.8,2.9,2.1,3.4..." />
-      </div>
-<input type="text" className="prop-hex" value={col} onChange={e=>{const v=e.target.value;if(/^#[0-9A-Fa-f]{0,6}$/.test(v)||v==='')onChange(v||null);}}/><button className="btn btn-ghost btn-sm" onClick={()=>onChange(null)} style={{padding:'4px 7px',fontSize:11,color:'var(--dim)'}} title="Reset">\u21BA</button></div>);}
+function ColorRow({label,value,defaultVal,onChange}){const col=value||defaultVal;return(<div className="prop-color-row"><span className="prop-label-text">{label}</span><div className="prop-color-swatch" style={{background:col,position:'relative'}}><input type="color" value={col} onChange={e=>onChange(e.target.value)} aria-label={`${label} color`} style={{position:'absolute',inset:0,opacity:0,cursor:'pointer',width:'100%',height:'100%'}}/></div><input type="text" className="prop-hex" value={col} onChange={e=>{const v=e.target.value;if(/^#[0-9A-Fa-f]{0,6}$/.test(v)||v==='')onChange(v||null);}}/><button className="btn btn-ghost btn-sm" onClick={()=>onChange(null)} style={{padding:'4px 7px',fontSize:11,color:'var(--dim)'}} title="Reset">\u21BA</button></div>);}
 function SliderRow({label,value,min,max,step,unit,onChange}){return(<div style={{marginBottom:10}}><div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:5}}><span className="prop-label-text">{label}</span><span className="size-val">{value}{unit}</span></div><input type="range" min={min} max={max} step={step||1} value={value} onChange={e=>onChange(Number(e.target.value))} aria-label={label}/></div>);}
 function WeightRow({label,value,weights,onChange}){return(<div style={{marginBottom:10}}><div className="prop-label-text" style={{marginBottom:6}}>{label}</div><div className="ww-grid">{weights.map(w=>(<button key={w} className={`ww-btn ${value===w?'on':''}`} onClick={()=>onChange(w)} style={{fontWeight:w}}>{w}</button>))}</div></div>);}
 
-function DesignPanel({selectedEl,setSelectedEl,overrides,setOverrides,theme,bgGradient,setBgGradient}){
+function DesignPanel({selectedEl,setSelectedEl,overrides,setOverrides,theme,bgGradient,setBgGradient,showToast,resetOverrides,setPatternOverlay}){
   const ov=overrides,set=(k,v)=>setOverrides(p=>({...p,[k]:v})),setN=(g,k,v)=>setOverrides(p=>({...p,[g]:{...(p[g]||{}),[k]:v===''?null:v}})),resetK=k=>setOverrides(p=>({...p,[k]:DEFAULT_OVERRIDES[k]}));
   const ta=theme.accent,tb=theme.base;
   const ctrl=()=>{
@@ -100,6 +88,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const[uploadedImages,setUploadedImages]=useLocalStorage('whiz-images',{logo:null,hero:null,badge:null});
   const[bgGradient,setBgGradient]=useLocalStorage('whiz-bg-gradient',null);const[patternOverlay,setPatternOverlay]=useLocalStorage('whiz-pattern-overlay',null);
   const[showDeleteConfirm,setShowDeleteConfirm]=useState(null);const[saveSearch,setSaveSearch]=useState('');
+  const[strictMode,setStrictMode]=useLocalStorage('whiz-strict-mode',true);
   const frameRef=useRef(null);const centerRef=useRef(null);
   const[showAutosavePrompt,setShowAutosavePrompt]=useState(false);const autosaveDataRef=useRef(null);
 
@@ -135,11 +124,29 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     setTheme(activeTheme);
     setAspectRatio(RATIOS[0]);
     showToast('New frame started');
-  },[newFrameSignal]); // eslint-disable-line
+  },[newFrameSignal]);
 
   useEffect(()=>{try{const r=localStorage.getItem('whiz-autosave');if(r){const d=JSON.parse(r);if(d.savedAt&&Date.now()-d.savedAt<86400000){autosaveDataRef.current=d;setShowAutosavePrompt(true);}}}catch(e){}},[]);
   const restoreAutosave=()=>{const d=autosaveDataRef.current;if(d){d.frameId&&setFrameId(d.frameId);d.theme&&(setTheme(d.theme),setActiveTheme(d.theme));d.content&&resetContent(d.content);d.overrides&&setOverrides(d.overrides);d.aspectRatio&&setAspectRatio(d.aspectRatio);d.bgGradient&&setBgGradient(d.bgGradient);d.patternOverlay&&setPatternOverlay(d.patternOverlay);showToast('Restored');}setShowAutosavePrompt(false);};
   const selectedFrame=FRAMES.find(f=>f.id===frameId)||FRAMES[0];
+  const complianceIssues = useMemo(
+    () => getComplianceIssues({ overrides, content }),
+    [overrides, content],
+  );
+  const brandScore = useMemo(
+    () => getBrandScore({ overrides, content }),
+    [overrides, content],
+  );
+
+  const applyStrictPolish = () => {
+    setOverrides((prev) => ({
+      ...prev,
+      title: { ...(prev.title || {}), fontSize: nearestTypeScale(prev.title?.fontSize ?? 52) },
+      deck: { ...(prev.deck || {}), fontSize: nearestTypeScale(prev.deck?.fontSize ?? 18) },
+      body: { ...(prev.body || {}), fontSize: nearestTypeScale(prev.body?.fontSize ?? 15) },
+    }));
+    showToast('Strict polish applied (type scale snapped).');
+  };
   const updateZoom=useCallback(()=>{if(!centerRef.current)return;const{width:w,height:h}=centerRef.current.getBoundingClientRect();if(w<10||h<10)return;const p=w<640?16:40;setZoom(+(Math.min((w-p)/(aspectRatio?.w||1080),(h-p)/(aspectRatio?.h||1350),1)).toFixed(3));},[aspectRatio]);
   useEffect(()=>{updateZoom();const ro=new ResizeObserver(updateZoom);centerRef.current&&ro.observe(centerRef.current);return()=>ro.disconnect();},[updateZoom]);
   // Fix #32: re-trigger zoom when Editor tab becomes visible
@@ -182,9 +189,10 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const loadSave=s=>{setFrameId(s.frameId);setTheme(s.theme);resetContent(s.content);s.overrides&&setOverrides(s.overrides);s.aspectRatio&&setAspectRatio(s.aspectRatio);s.bgGradient&&setBgGradient(s.bgGradient);s.patternOverlay&&setPatternOverlay(s.patternOverlay);setShowLoadModal(false);showToast(`Loaded`);};
   const confirmDel=()=>{if(showDeleteConfirm){setSaves(p=>p.filter(s=>s.id!==showDeleteConfirm));showToast('Deleted','info');setShowDeleteConfirm(null);}};
   const exportJSON=()=>{const d=JSON.stringify(buildSave(),null,2);const b=new Blob([d],{type:'application/json'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=`whiz_${content.topicTag.replace(/[^a-zA-Z0-9]/g,'_').toLowerCase()}.json`;a.click();URL.revokeObjectURL(u);showToast('JSON exported');};
+  const exportManifest=()=>{const payload={issueNum:content.issueNum,topic:content.topicTag,title:content.title,date:content.date,frameId,themeId:theme.id,strictMode,brandScore,complianceIssues,sources:(content.sourceLinks||'').split(',').map(s=>s.trim()).filter(Boolean),exportedAt:new Date().toISOString()};const d=JSON.stringify(payload,null,2);const b=new Blob([d],{type:'application/json'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=`whiz_issue${content.issueNum||'000'}_manifest.json`;a.click();URL.revokeObjectURL(u);showToast('Manifest exported');};
   const importJSON=e=>{const f=e.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=ev=>{try{const d=JSON.parse(ev.target.result);d.frameId&&setFrameId(d.frameId);d.theme&&(setTheme(d.theme),setActiveTheme(d.theme));d.content&&resetContent(d.content);d.overrides&&setOverrides(d.overrides);d.aspectRatio&&setAspectRatio(d.aspectRatio);d.bgGradient&&setBgGradient(d.bgGradient);d.patternOverlay&&setPatternOverlay(d.patternOverlay);showToast('Imported');}catch(err){showToast('Invalid JSON','error');}};r.readAsText(f);e.target.value='';};
   const exportHTML=()=>{const el=frameRef.current;if(!el)return;const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&family=Inter:wght@300..700&family=JetBrains+Mono:wght@400..700&display=swap" rel="stylesheet"><style>*{margin:0;padding:0;box-sizing:border-box}body{background:#0F1318;display:flex;justify-content:center;align-items:center;min-height:100vh}.whiz-frame{position:relative;overflow:hidden;flex-shrink:0}.wf-spine{position:absolute;left:0;top:0;bottom:0;width:3px;z-index:5}.wf-corner{position:absolute;width:16px;height:16px;z-index:6;opacity:.5}.wf-corner.tl{top:12px;left:12px;border-top:1.5px solid currentColor;border-left:1.5px solid currentColor}.wf-corner.tr{top:12px;right:12px;border-top:1.5px solid currentColor;border-right:1.5px solid currentColor}.wf-corner.bl{bottom:12px;left:12px;border-bottom:1.5px solid currentColor;border-left:1.5px solid currentColor}.wf-corner.br{bottom:12px;right:12px;border-bottom:1.5px solid currentColor;border-right:1.5px solid currentColor}.wf-content{position:relative;z-index:4;padding:40px 36px 32px 44px;display:flex;flex-direction:column;height:100%;box-sizing:border-box}.wf-title{font-family:'Space Grotesk',sans-serif;font-weight:700;letter-spacing:-.02em;line-height:1.05}.wf-deck{font-family:'Inter',sans-serif;line-height:1.6}.wf-body{font-family:'Inter',sans-serif;line-height:1.75}.wf-stat{display:flex;flex-direction:column;gap:4;padding:12px 14px;border-radius:6px}.wf-stat-val{font-family:'Space Grotesk',sans-serif;font-weight:700;line-height:1}.wf-stat-label{font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.1em}.wf-ticker{overflow:hidden;white-space:nowrap;height:28px;display:flex;align-items:center;width:100%;position:relative;z-index:4}.wf-ticker-scroll{display:inline-block;animation:whiz-ticker-scroll 30s linear infinite;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase}.wf-section-head{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.15em;text-transform:uppercase;display:flex;align-items:center;gap:8px;margin-bottom:12px}.wf-section-head::before{content:'';width:12px;height:1.5px;background:currentColor;opacity:.5}.wf-handle{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.08em}.wf-table{width:100%;border-collapse:collapse}.wf-table th{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;text-align:left;padding:7px 10px;border-bottom:1px solid rgba(255,255,255,.06)}.wf-table td{font-family:'Inter',sans-serif;font-size:12px;padding:7px 10px;border-bottom:1px solid rgba(255,255,255,.04)}@keyframes whiz-ticker-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}</style></head><body>${el.outerHTML}</body></html>`;const b=new Blob([html],{type:'text/html'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=`whiz_export.html`;a.click();URL.revokeObjectURL(u);showToast('HTML exported');};
-  const exportPNG=async()=>{if(!frameRef.current||exporting)return;setExporting(true);showToast('Generating PNG...','info');try{const h2c=(await import('html2canvas')).default;const c=frameRef.current.cloneNode(true);c.style.cssText=`position:absolute;left:-9999px;top:0;transform:none;width:${aspectRatio.w}px;height:${aspectRatio.h}px`;document.body.appendChild(c);let cv;try{cv=await h2c(c,{scale:2,useCORS:true,allowTaint:true,width:aspectRatio.w,height:aspectRatio.h,backgroundColor:overrides.frameBg||theme.base,logging:false});}finally{if(document.body.contains(c))document.body.removeChild(c);}try{cv.toBlob(bl=>{bl&&navigator.clipboard?.write&&navigator.clipboard.write([new ClipboardItem({'image/png':bl})]).catch(()=>{});});}catch(e){}const u=cv.toDataURL('image/png');const a=document.createElement('a');a.href=u;a.download=`whiz_export.png`;a.click();showToast(`PNG exported at 2x`);}catch(e){console.error(e);showToast(`Export failed: ${e.message||'unknown error'}`,'error');}setExporting(false);}
+  const exportPNG=async()=>{if(!frameRef.current||exporting)return;if(strictMode&&complianceIssues.length){showToast(`Strict mode blocked export (${complianceIssues.length} issues)`,'error');return;}if(!strictMode&&complianceIssues.length&&!window.confirm(`Whiz compliance warnings:\\n- ${complianceIssues.join('\\n- ')}\\n\\nExport anyway?`))return;setExporting(true);showToast('Generating PNG...','info');try{const h2c=(await import('html2canvas')).default;const c=frameRef.current.cloneNode(true);c.style.cssText=`position:absolute;left:-9999px;top:0;transform:none;width:${aspectRatio.w}px;height:${aspectRatio.h}px`;document.body.appendChild(c);let cv;try{cv=await h2c(c,{scale:2,useCORS:true,allowTaint:true,width:aspectRatio.w,height:aspectRatio.h,backgroundColor:overrides.frameBg||theme.base,logging:false});}finally{if(document.body.contains(c))document.body.removeChild(c);}try{cv.toBlob(bl=>{bl&&navigator.clipboard?.write&&navigator.clipboard.write([new ClipboardItem({'image/png':bl})]).catch(()=>{});});}catch(e){}const u=cv.toDataURL('image/png');const a=document.createElement('a');a.href=u;a.download=`whiz_export.png`;a.click();showToast(`PNG exported at 2x`);}catch(e){console.error(e);showToast(`Export failed: ${e.message||'unknown error'}`,'error');}setExporting(false);}
   const exportWebP=async()=>{
     if(!frameRef.current||exporting)return;
     setExporting(true);showToast('Generating WebP…');
@@ -231,13 +239,28 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
             fontPairing={activeFontPairing}/></div>
         <div className="zoom-bar"><button className="zoom-btn" onClick={()=>setZoom(z=>Math.max(0.1,+(z-0.05).toFixed(2)))}>−</button><span className="zoom-pct">{Math.round(zoom*100)}%</span><button className="zoom-btn" onClick={()=>setZoom(z=>Math.min(1,+(z+0.05).toFixed(2)))}>+</button><button className="zoom-btn" onClick={updateZoom} style={{fontSize:10}}>⊡</button><div style={{width:1,height:16,background:'var(--border)'}}/><button className={`zoom-btn ${showGrid?'active':''}`} onClick={()=>setShowGrid(g=>!g)} style={{color:showGrid?'var(--theme-accent)':undefined}}>▦</button><button className={`zoom-btn ${editMode?'active':''}`} onClick={()=>{setEditMode(m=>!m);editMode&&setSelectedEl(null);}} style={{color:editMode?'var(--theme-accent)':undefined}}>✎</button><div style={{width:1,height:16,background:'var(--border)'}}/><button className="zoom-btn" onClick={()=>undo()} disabled={!canUndo} style={{opacity:canUndo?1:0.3}}>↶</button><button className="zoom-btn" onClick={()=>redo()} disabled={!canRedo} style={{opacity:canRedo?1:0.3}}>↷</button></div>
         <div style={{position:'absolute',top:10,left:10,fontFamily:'var(--font-m)',fontSize:9,color:'var(--dim)',background:'rgba(0,0,0,0.6)',padding:'4px 8px',borderRadius:'var(--r)',backdropFilter:'blur(4px)'}}>{String(frameId).padStart(2,'0')} — {selectedFrame.name} · {aspectRatio.w}×{aspectRatio.h}</div>
-        <div style={{position:'absolute',top:12,right:12,display:'flex',gap:6,background:'var(--glass)',padding:'6px 10px',borderRadius:'var(--r)',border:'1px solid var(--glass-border)',backdropFilter:'blur(12px)'}}><button className="btn btn-ghost btn-sm" onClick={exportJSON} style={{fontSize:10}}>JSON</button><button className="btn btn-secondary btn-sm" onClick={exportHTML} style={{fontSize:10}}>HTML</button><button className="btn btn-primary btn-sm" data-format="png" onClick={exportPNG} disabled={exporting} style={{fontSize:10}}>{exporting?'⟳':'↓'} PNG</button></div>
+        <div style={{position:'absolute',top:12,right:12,display:'flex',gap:6,background:'var(--glass)',padding:'6px 10px',borderRadius:'var(--r)',border:'1px solid var(--glass-border)',backdropFilter:'blur(12px)'}}><button className="btn btn-ghost btn-sm" onClick={exportJSON} style={{fontSize:10}}>JSON</button><button className="btn btn-ghost btn-sm" onClick={exportManifest} style={{fontSize:10}}>Manifest</button><button className="btn btn-secondary btn-sm" onClick={exportHTML} style={{fontSize:10}}>HTML</button><button className="btn btn-secondary btn-sm" onClick={applyStrictPolish} style={{fontSize:10}}>Polish</button><button className="btn btn-primary btn-sm" data-format="png" onClick={exportPNG} disabled={exporting} style={{fontSize:10}}>{exporting?'⟳':'↓'} PNG</button></div>
+        {complianceIssues.length>0&&<div style={{position:'absolute',top:52,right:12,fontFamily:'var(--font-m)',fontSize:10,color:'#FFB3B3',background:'rgba(42,10,10,.9)',padding:'6px 8px',borderRadius:6,border:'1px solid #FF5A5A66',maxWidth:300}}>Compliance: {complianceIssues[0]}{complianceIssues.length>1?` +${complianceIssues.length-1} more`:''}</div>}
         {editMode&&<div style={{position:'absolute',bottom:52,left:'50%',transform:'translateX(-50%)',fontFamily:'var(--font-m)',fontSize:9,color:'var(--theme-accent)',background:'rgba(0,0,0,0.75)',padding:'4px 10px',borderRadius:20,whiteSpace:'nowrap'}}>{selectedEl?`Selected: ${selectedEl}`:'Click any element'}</div>}
       </div>
       {/* RIGHT */}
       <div className={`editor-right ${mobileTab==='content'?'mob-active':''}`}>
         <div className="editor-right-tabs"><button className={`editor-right-tab ${rightTab==='design'?'active':''}`} onClick={()=>setRightTab('design')}>Design</button><button className={`editor-right-tab ${rightTab==='content'?'active':''}`} onClick={()=>setRightTab('content')}>Content</button></div>
-        {rightTab==='design'?(<><div className={`edit-toggle-row ${editMode?'on':''}`} onClick={()=>{setEditMode(m=>!m);editMode&&setSelectedEl(null);}}><div className={`toggle-pill ${editMode?'on':''}`}><div className="toggle-dot"/></div><span className="toggle-label">{editMode?'Edit ON':'Edit OFF'}</span><span className="toggle-hint">{editMode?'Click elements':'Toggle to edit'}</span></div><DesignPanel selectedEl={selectedEl} setSelectedEl={setSelectedEl} overrides={overrides} setOverrides={setOverrides} theme={theme} bgGradient={bgGradient} setBgGradient={setBgGradient}/></>):(<>
+        {rightTab==='design'?(<><div className={`edit-toggle-row ${editMode?'on':''}`} onClick={()=>{setEditMode(m=>!m);editMode&&setSelectedEl(null);}}><div className={`toggle-pill ${editMode?'on':''}`}><div className="toggle-dot"/></div><span className="toggle-label">{editMode?'Edit ON':'Edit OFF'}</span><span className="toggle-hint">{editMode?'Click elements':'Toggle to edit'}</span></div><DesignPanel selectedEl={selectedEl} setSelectedEl={setSelectedEl} overrides={overrides} setOverrides={setOverrides} theme={theme} bgGradient={bgGradient} setBgGradient={setBgGradient} showToast={showToast} resetOverrides={resetOverrides} setPatternOverlay={setPatternOverlay}/>
+          <div className="editor-section">
+            <div className="editor-section-title">Brand Score
+              <span style={{float:'right',fontFamily:'var(--font-m)',fontSize:10,fontWeight:700,color:brandScore.score>=80?'var(--accent)':brandScore.score>=50?'#E5B23A':'#FF5A5A'}}>{brandScore.score}%</span>
+            </div>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+              <span style={{fontFamily:'var(--font-m)',fontSize:10,color:'var(--dim)'}}>Strict mode</span>
+              <button className="btn btn-ghost btn-sm" onClick={()=>setStrictMode(v=>!v)} style={{fontSize:10,color:strictMode?'var(--accent)':'var(--dim)'}}>{strictMode?'ON':'OFF'}</button>
+            </div>
+            <div style={{height:4,background:'var(--bg-3)',borderRadius:3,marginBottom:8,overflow:'hidden'}}>
+              <div style={{height:'100%',width:`${brandScore.score}%`,borderRadius:3,transition:'width 0.35s',background:brandScore.score>=80?'var(--accent)':brandScore.score>=50?'#E5B23A':'#FF5A5A'}}/>
+            </div>
+            {brandScore.checks.map((c,i)=><div key={i} style={{fontFamily:'var(--font-m)',fontSize:10,color:c.pass?'var(--dim)':'#FFB3B3',marginBottom:3}}>{c.pass?'✓':'✗'} {c.label}</div>)}
+          </div>
+          </>):(<>
           <div className="editor-panel-header"><span>Content</span><button className="btn btn-ghost btn-sm" onClick={()=>resetContent(DEFAULT_CONTENT)}>Reset</button></div>
           <div className="editor-section"><div className="editor-section-title">Quick Start</div><div className="template-list">{CONTENT_TEMPLATES.map(t=>(<div key={t.id} className="template-item" onClick={()=>applyTemplate(t)}><div className="template-item-name">{t.name}</div><div className="template-item-desc">{t.desc}</div></div>))}</div></div>
           <div className="editor-section"><div className="editor-section-title">Aspect Ratio</div><AspectRatioSelector value={aspectRatio.id} onChange={r=>{setAspectRatio(r);showToast(`${r.w}×${r.h}`);}}/></div>
@@ -336,18 +359,3 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     </div>
   );
 }
-      <div className="editor-section">
-        <div className="editor-section-title">Brand Score
-          <span style={{float:'right',fontFamily:'var(--font-m)',fontSize:10,fontWeight:700,
-            color:brandScore.score>=80?'var(--accent)':brandScore.score>=50?'#E5B23A':'#FF5A5A'}}>{brandScore.score}%</span>
-        </div>
-        <div style={{height:3,background:'var(--bg-3)',borderRadius:2,marginBottom:8,overflow:'hidden'}}>
-          <div style={{height:'100%',width:`${brandScore.score}%`,borderRadius:2,transition:'width 0.4s',
-            background:brandScore.score>=80?'var(--accent)':brandScore.score>=50?'#E5B23A':'#FF5A5A'}}/>
-        </div>
-        {brandScore.checks.filter(c=>!c.pass).slice(0,3).map((c,i)=>(
-          <div key={i} style={{fontFamily:'var(--font-m)',fontSize:10,color:'var(--dim)',marginBottom:3}}>✗ {c.label}</div>
-        ))}
-        {brandScore.score===100&&<div style={{fontFamily:'var(--font-m)',fontSize:10,color:'var(--accent)'}}>✓ Ready to ship</div>}
-      </div>
-

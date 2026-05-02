@@ -263,9 +263,8 @@ default:          return <BodyLayout {...layoutProps} />;
             <div style={{ color: '#4A5568', fontSize: '10px', marginTop: '1px' }}>WHIZ.DEFI/{content.issueNum}</div>
           </div>
         </div>
-        <div s<div style={{ flex: 1, textAlign: 'center', fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', color: 'rgba(255,255,255,0.22)', letterSpacing: '0.07em', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+        <div style={{ flex: 1, textAlign: 'center', fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', color: 'rgba(255,255,255,0.22)', letterSpacing: '0.07em', overflow: 'hidden', whiteSpace: 'nowrap' }}>
           STATUS: {(content.status||'PUBLISHED').toUpperCase()} ▸{content.nextDrop ? ` NEXT: ${content.nextDrop} ▸` : ''} VERIFIED ✓
-        </div>
         </div>
         <div style={{ color: '#4A5568', textAlign: 'right', fontSize: '8.5px', lineHeight: 1.6 }}>
           {content.socialX || '@X'}<br />{content.socialSub || '@SUBSTACK'}
@@ -384,34 +383,6 @@ function StatRibbon({ stats, ov, accentColor, maxVisible }) {
       ))}
     </div>
   );
-}) {
-  if (!stats?.length) return null;
-  const visible = maxVisible ? stats.slice(0, maxVisible) : stats;
-  return (
-    <div style={{
-      display: 'flex', padding: '14px 0', marginBottom: '14px',
-      borderTop: `1px solid ${accentColor}08`, borderBottom: `1px solid ${accentColor}08`,
-      background: `linear-gradient(180deg, ${accentColor}05 0%, transparent 100%)`,
-    }}>
-      {visible.map((s, i) => (
-        <div key={i} style={{
-          flex: 1, textAlign: 'center',
-          borderRight: i < visible.length - 1 ? `1px solid ${accentColor}08` : 'none',
-          padding: '4px 8px',
-        }}>
-          <div style={{
-            fontFamily: "'Space Grotesk', sans-serif", fontSize: visible.length > 4 ? '18px' : '24px', fontWeight: 700,
-            lineHeight: 1.1, color: ov.statsColor || ov.accent?.color || accentColor,
-            textShadow: `0 0 20px ${accentColor}30`,
-          }}>{s.value}</div>
-          <div style={{
-            fontFamily: "'JetBrains Mono', monospace", fontSize: '8.5px', color: '#5A6478',
-            letterSpacing: '0.1em', textTransform: 'uppercase', marginTop: '5px',
-          }}>{s.label}</div>
-        </div>
-      ))}
-    </div>
-  );
 }
 
 function BigNumber({ content, ov, accentColor }) {
@@ -427,7 +398,7 @@ function BigNumber({ content, ov, accentColor }) {
       )}
       <div style={{
         fontFamily: "'Space Grotesk', sans-serif",
-        fontSize: `${ov.bigNumber?.fontSize || 84}px`, /* spec: 84px */,
+        fontSize: `${ov.bigNumber?.fontSize || 84}px`,
         fontWeight: 700,
         color: ov.bigNumber?.color || accentColor,
         lineHeight: 0.9, letterSpacing: '-0.03em',

@@ -86,10 +86,10 @@ export const FRAME_TEMPLATES = {
   25: {
     topicTag: 'POST-MORTEM',
     title: 'CURVE HACK',
-    deck: '$70M drained via reentrancy in Vyper compiler. Here's what happened.',
+    deck: "$70M drained via reentrancy in Vyper compiler. Here's what happened.",
     tableRows: [{
       col1: '$70M drained from Curve stablecoin pools via reentrancy vulnerability in Vyper compiler versions 0.2.15-0.3.0.',
-      col2: 'Legacy Vyper compiler bug — reentrancy lock wasn't enforced in specific versions. Not a Curve design flaw.',
+      col2: "Legacy Vyper compiler bug — reentrancy lock wasn't enforced in specific versions. Not a Curve design flaw.",
       col3: 'CRV token recovery plan, white-hat negotiation returned ~75% of funds.',
       col4: 'Always verify compiler version in audit scope. Reentrancy can exist at compiler, not just code level.',
     }],
@@ -99,13 +99,13 @@ export const FRAME_TEMPLATES = {
     topicTag: 'THESIS',
     title: 'THE END OF MERCENARY YIELD',
     deck: 'Why the era of unsustainable APYs is finally closing — and what comes next.',
-    body: 'Three years ago, triple-digit APYs were table stakes for any new DeFi protocol. Liquidity mining was the only customer acquisition strategy anyone needed.\n\nThe protocols that survived aren't the ones that offered the most — they're the ones that built real revenue. Aave. Uniswap. Curve. All of them generate genuine fees before offering incentives.\n\nThe next generation of yield is boring. And boring is exactly what we need.',
+    body: "Three years ago, triple-digit APYs were table stakes for any new DeFi protocol. Liquidity mining was the only customer acquisition strategy anyone needed.\n\nThe protocols that survived aren't the ones that offered the most — they're the ones that built real revenue. Aave. Uniswap. Curve. All of them generate genuine fees before offering incentives.\n\nThe next generation of yield is boring. And boring is exactly what we need.",
   },
   // Frame 49 — The Receipt
   49: {
     topicTag: 'THE RECEIPT',
     title: '$1,000 USDC IN PENDLE',
-    deck: 'Here's what you actually paid to deploy $1,000 in Pendle's stETH strategy.',
+    deck: "Here's what you actually paid to deploy $1,000 in Pendle's stETH strategy.",
     tableRows: [
       {col1:'ETH → Arbitrum bridge',col2:'LayerZero',col3:'$1.20',col4:'risk'},
       {col1:'USDC → stETH swap',col2:'1inch, 0.1% slippage',col3:'$1.00',col4:'risk'},
@@ -130,3 +130,10 @@ export function getFrameTemplate(frameId, defaultContent) {
   if (!template) return defaultContent;
   return { ...defaultContent, ...template };
 }
+
+export const CONTENT_TEMPLATES = Object.entries(FRAME_TEMPLATES).map(([id, content]) => ({
+  id: `frame-${id}`,
+  name: `Frame ${id}`,
+  desc: content.deck || content.topicTag || 'Quick-start content preset',
+  content,
+}));

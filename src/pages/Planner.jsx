@@ -4,6 +4,7 @@ import { THEMES } from '../data/themes';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 
 const STATUSES = ['draft', 'planned', 'wip', 'done', 'published'];
+const CONFIDENCE = ['low', 'medium', 'high'];
 const KANBAN_COLS = [
   { id: 'draft', label: 'DRAFT', color: '#8B95A3' },
   { id: 'planned', label: 'PLANNED', color: '#6FA8FF' },
@@ -80,8 +81,10 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
   const [editingIssue, setEditingIssue] = useState(null);
   const [form, setForm] = useState({
     issueNum: '', topic: '', frameId: '', themeId: '', status: 'draft', priority: 'medium',
-    publishDate: '', notes: '', caption: '', sourceLinks: '',
+    publishDate: '', notes: '', caption: '', sourceLinks: '', confidence: 'medium', series: '',
   });
+  const normalizeIssueNum = (v) => String(v || '').replace(/\D/g, '').slice(-3).padStart(3, '0');
+  const existingIssueNums = new Set(issues.map(i => String(i.issueNum || '').padStart(3, '0')));
 
   // Escape handler
   useEffect(() => {
@@ -99,7 +102,7 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
       topic: '', frameId: '', themeId: '',
       status: presetStatus || 'draft',
       publishDate: '', notes: '', caption: '', sourceLinks: '',
-      priority: 'medium',
+      priority: 'medium', confidence: 'medium', series: '',
     });
     setShowModal(true);
   };
@@ -108,11 +111,11 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
 
   const openAdd = (presetStatus) => {
     setEditingIssue(null);
-    setForm({ issueNum: String(nextNum).padStart(3,'0'), topic: '', frameId: '', themeId: '', status: presetStatus || 'draft', publishDate: '', notes: '', caption: '', sourceLinks: '' });
+    setForm({ issueNum: String(nextNum).padStart(3,'0'), topic: '', frameId: '', themeId: '', status: presetStatus || 'draft', publishDate: '', notes: '', caption: '', sourceLinks: '', confidence: 'medium', series: '' });
     setShowModal(true);
   };
 
-  const openEdit = (issue) => { setEditingIssue(issue.id); setForm({ ...issue }); setShowModal(true); };
+  const openEdit = (issue) => { setEditingIssue(issue.id); setForm({ confidence: 'medium', series: '', ...issue }); setShowModal(true); };
 
   // F5: Duplicate issue
   const duplicateIssue = (issue) => {
@@ -123,6 +126,11 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
 
   const saveIssue = () => {
     if (!form.topic.trim()) { showToast('Topic is required', 'error'); return; }
+    const normalizedIssueNum = normalizeIssueNum(form.issueNum);
+    if (!editingIssue && existingIssueNums.has(normalizedIssueNum)) { showToast(`Issue #${normalizedIssueNum} already exists`, 'error'); return; }
+    if (form.status === 'published' && !(form.sourceLinks || '').trim()) { showToast('Source links are required for published issues', 'error'); return; }
+    const duplicateTopic = issues.find(i => i.id !== editingIssue && i.topic?.trim().toLowerCase() === form.topic.trim().toLowerCase());
+    if (duplicateTopic) showToast(`Duplicate topic detected: #${duplicateTopic.issueNum}`, 'warning');
     // F4: Validate publish date isn't in the past
     if (form.publishDate) {
       const d = new Date(form.publishDate);
@@ -130,11 +138,11 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
       if (d < today) showToast('Publish date is in the past', 'warning');
     }
     if (editingIssue) {
-      setIssues(prev => prev.map(i => i.id === editingIssue ? { ...i, ...form } : i));
+      setIssues(prev => prev.map(i => i.id === editingIssue ? { ...i, ...form, issueNum: normalizedIssueNum } : i));
       showToast('Issue updated');
     } else {
-      setIssues(prev => [...prev, { ...form, id: `i_${Date.now()}`, createdAt: Date.now() }]);
-      showToast(`Issue #${form.issueNum} created`);
+      setIssues(prev => [...prev, { ...form, issueNum: normalizedIssueNum, id: `i_${Date.now()}`, createdAt: Date.now() }]);
+      showToast(`Issue #${normalizedIssueNum} created`);
     }
     setShowModal(false);
   };
@@ -162,8 +170,8 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
 
   // F8: CSV export with sourceLinks
   const exportCSV = () => {
-    const headers = ['Issue #', 'Topic', 'Frame #', 'Theme', 'Status', 'Publish Date', 'Notes', 'Caption', 'Source Links'];
-    const rows = issues.map(i => [i.issueNum, i.topic, i.frameId, i.themeId, i.status, i.publishDate, i.notes, i.caption, i.sourceLinks, i.priority || 'medium'].map(v => `"${(v||'').replace(/"/g,'""')}"`));
+    const headers = ['Issue #', 'Topic', 'Frame #', 'Theme', 'Status', 'Publish Date', 'Notes', 'Caption', 'Source Links', 'Priority', 'Confidence', 'Series'];
+    const rows = issues.map(i => [i.issueNum, i.topic, i.frameId, i.themeId, i.status, i.publishDate, i.notes, i.caption, i.sourceLinks, i.priority || 'medium', i.confidence || 'medium', i.series || ''].map(v => `"${(v||'').replace(/"/g,'""')}"`));
     const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -202,18 +210,25 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
           return rows;
         };
         const allRows = parseCSV(text);
-        const startIdx = (allRows[0]?.[0]||'').toLowerCase().includes('issue') ? 1 : 0;
-        const lines = allRows.slice(startIdx);
-        if (lines.length < 2) { showToast('CSV has no data rows', 'error'); return; }
-        const imported = lines.slice(1).map((line, idx) => {
-          const _unused = // ("(?:[^"]|"")*"|[^,]*)/g)?.map(c => c.replace(/^"|"$/g, '').replace(/""/g, '"')) || [];
-          return {
-            id: `i_${Date.now()}_${idx}`, issueNum: cols2[0] || '', topic: cols2[1] || '', frameId: cols2[2] || '',
-            themeId: cols[3]?.trim() || '', status: STATUSES.includes(cols[4]) ? cols[4] : 'draft',
-            publishDate: cols2[5] || '', notes: cols2[6] || '', caption: cols2[7] || '', sourceLinks: cols2[8] || '',
-            createdAt: Date.now(),
-          };
-        });
+        const hasHeader = (allRows[0]?.[0] || '').toLowerCase().includes('issue');
+        const lines = hasHeader ? allRows.slice(1) : allRows;
+        if (lines.length < 1) { showToast('CSV has no data rows', 'error'); return; }
+        const imported = lines.map((cols, idx) => ({
+          id: `i_${Date.now()}_${idx}`,
+          issueNum: cols[0]?.trim() || '',
+          topic: cols[1]?.trim() || '',
+          frameId: cols[2]?.trim() || '',
+          themeId: cols[3]?.trim() || '',
+          status: STATUSES.includes(cols[4]?.trim()) ? cols[4].trim() : 'draft',
+          publishDate: cols[5]?.trim() || '',
+          notes: cols[6]?.trim() || '',
+          caption: cols[7]?.trim() || '',
+          sourceLinks: cols[8]?.trim() || '',
+          priority: cols[9]?.trim() || 'medium',
+          confidence: CONFIDENCE.includes(cols[10]?.trim()) ? cols[10].trim() : 'medium',
+          series: cols[11]?.trim() || '',
+          createdAt: Date.now(),
+        })).filter(i => i.issueNum || i.topic);
         setIssues(prev => [...prev, ...imported]);
         showToast(`Imported ${imported.length} issues`);
       } catch (err) { showToast('Failed to parse CSV', 'error'); }
@@ -387,8 +402,12 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
             <button className="modal-close" onClick={() => setShowModal(false)} aria-label="Close">✕</button>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <div className="form-group"><label className="form-label">Issue #</label><input value={form.issueNum} onChange={e => setForm(f => ({...f, issueNum: e.target.value}))} placeholder="001" /></div>
+            <div className="form-group"><label className="form-label">Issue #</label><input value={form.issueNum} onChange={e => setForm(f => ({...f, issueNum: normalizeIssueNum(e.target.value)}))} placeholder="001" /></div>
             <div className="form-group"><label className="form-label">Status</label><select value={form.status} onChange={e => setForm(f => ({...f, status: e.target.value}))}>{STATUSES.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}</select></div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="form-group"><label className="form-label">Confidence</label><select value={form.confidence || 'medium'} onChange={e => setForm(f => ({...f, confidence: e.target.value}))}>{CONFIDENCE.map(s => <option key={s} value={s}>{s.toUpperCase()}</option>)}</select></div>
+            <div className="form-group"><label className="form-label">Series</label><input value={form.series || ''} onChange={e => setForm(f => ({...f, series: e.target.value}))} placeholder="Stablecoin Risk Pt. 1" /></div>
           </div>
           <div className="form-group"><label className="form-label">Topic / Headline *</label><input value={form.topic} onChange={e => setForm(f => ({...f, topic: e.target.value}))} placeholder="The End of Mercenary Yield" autoFocus /></div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
