@@ -2,6 +2,17 @@ import { TICKER_CONTRACT } from '../domain/tickerContract';
 import { SPINE_DESIGN_TOKENS } from '../domain/spineDesignTokens';
 
 export const TYPE_SCALE = [10, 12, 14, 18, 24, 36, 56, 84];
+export const SPACING_TOKENS = Object.freeze({
+  gapPx: Object.freeze([4, 8, 12, 16, 24, 32]),
+  sectionMarginPx: Object.freeze([8, 12, 16, 24, 32]),
+});
+export const TABLE_STANDARD_TOKENS = Object.freeze({
+  gridColumns: 5,
+  rowHeightPx: 40,
+  borderWidthPx: 1,
+  borderStyle: 'solid',
+  bodyFontSizePx: 12,
+});
 
 const HEX_RE = /^#([0-9a-f]{6}|[0-9a-f]{8})$/i;
 const TOPIC_TAG_RE = /^[A-Z0-9]+(?: [A-Z0-9]+){0,3}$/;
@@ -46,6 +57,7 @@ function approxLuminance(hex) {
 
 export function getComplianceIssues({ overrides, content }) {
   const issues = [];
+  const addActionableIssue = (message, autofix) => issues.push(`${message} Autofix: ${autofix}`);
   const accentTouches = [
     overrides?.spineColor,
     overrides?.tickerColor,
@@ -81,13 +93,46 @@ export function getComplianceIssues({ overrides, content }) {
   if ((content?.tableRows || []).length > 0 && !(content?.tableHeaders || []).every(Boolean)) {
     issues.push('Strict table style enforcement: all table headers must be present.');
   }
+  const hasTableData = (content?.tableRows || []).length > 0;
+  const strictMode = Boolean(content?.strictMode ?? overrides?.strictMode);
+  if (hasTableData && (content?.tableHeaders || []).length > TABLE_STANDARD_TOKENS.gridColumns) {
+    addActionableIssue('Table grid lock: headers exceed canonical grid.', `Use at most ${TABLE_STANDARD_TOKENS.gridColumns} columns.`);
+  }
+  if (hasTableData && strictMode && overrides?.table?.borderStyle && overrides.table.borderStyle !== TABLE_STANDARD_TOKENS.borderStyle) {
+    addActionableIssue('Standard table mode: freeform border styles are disabled.', `Set borderStyle to "${TABLE_STANDARD_TOKENS.borderStyle}".`);
+  }
+  if (hasTableData && strictMode && overrides?.table?.borderWidthPx != null && overrides.table.borderWidthPx !== TABLE_STANDARD_TOKENS.borderWidthPx) {
+    addActionableIssue('Standard table mode: border width must use token.', `Set borderWidthPx to ${TABLE_STANDARD_TOKENS.borderWidthPx}.`);
+  }
+  if (hasTableData && strictMode && overrides?.table?.rowHeightPx != null && overrides.table.rowHeightPx !== TABLE_STANDARD_TOKENS.rowHeightPx) {
+    addActionableIssue('Standard table mode: row height must use token.', `Set rowHeightPx to ${TABLE_STANDARD_TOKENS.rowHeightPx}.`);
+  }
+  if (hasTableData && strictMode && overrides?.table?.fontSizePx != null && overrides.table.fontSizePx !== TABLE_STANDARD_TOKENS.bodyFontSizePx) {
+    addActionableIssue('Standard table mode: table typography must use token.', `Set fontSizePx to ${TABLE_STANDARD_TOKENS.bodyFontSizePx}.`);
+  }
 
   if (content?.tableRows?.length > 7) {
     issues.push('Strict overflow hierarchy: table row count should stay <= 7.');
   }
 
   if (content?.stats?.length > 6) {
-    issues.push('Spacing-token rhythm: stats count exceeds 6-card rhythm.');
+    addActionableIssue('Spacing-token rhythm: stats count exceeds 6-card rhythm.', 'Trim to <=6 stats or split across frames.');
+  }
+  if (overrides?.layout?.gapPx != null && !SPACING_TOKENS.gapPx.includes(overrides.layout.gapPx)) {
+    addActionableIssue('Spacing tokens: layout gap is off-token.', `Set gapPx to one of [${SPACING_TOKENS.gapPx.join(', ')}].`);
+  }
+  if (overrides?.layout?.sectionMarginPx != null && !SPACING_TOKENS.sectionMarginPx.includes(overrides.layout.sectionMarginPx)) {
+    addActionableIssue('Section rhythm: section margin is off-token.', `Set sectionMarginPx to one of [${SPACING_TOKENS.sectionMarginPx.join(', ')}].`);
+  }
+  if (Array.isArray(content?.layoutBlocks)) {
+    content.layoutBlocks.forEach((block, idx) => {
+      if (block?.gapPx != null && !SPACING_TOKENS.gapPx.includes(block.gapPx)) {
+        addActionableIssue(`Layout block #${idx + 1}: gap is off-token.`, `Set gapPx to [${SPACING_TOKENS.gapPx.join(', ')}].`);
+      }
+      if (block?.marginPx != null && !SPACING_TOKENS.sectionMarginPx.includes(block.marginPx)) {
+        addActionableIssue(`Layout block #${idx + 1}: margin is off-token.`, `Set marginPx to [${SPACING_TOKENS.sectionMarginPx.join(', ')}].`);
+      }
+    });
   }
 
   if ((content?.sparkData || '').trim()) {
