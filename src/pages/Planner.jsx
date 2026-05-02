@@ -84,6 +84,20 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
     publishDate: '', notes: '', caption: '', sourceLinks: '', confidence: 'medium', series: '',
   });
   const normalizeIssueNum = (v) => String(v || '').replace(/\D/g, '').slice(-3).padStart(3, '0');
+  const normalizeIssue = (issue) => ({
+    ...issue,
+    issueNum: normalizeIssueNum(issue.issueNum),
+    priority: issue.priority || 'medium',
+    confidence: CONFIDENCE.includes(issue.confidence) ? issue.confidence : 'medium',
+    series: issue.series || '',
+    assistantBrief: issue.assistantBrief || '',
+    targetMetric: issue.targetMetric || '',
+    metricConfidence: issue.metricConfidence || '',
+    metricSource: issue.metricSource || '',
+    metricValue: issue.metricValue || '',
+    metricUnit: issue.metricUnit || '',
+    metricProvenance: Array.isArray(issue.metricProvenance) ? issue.metricProvenance : [],
+  });
   const existingIssueNums = new Set(issues.map(i => String(i.issueNum || '').padStart(3, '0')));
 
   // Escape handler
@@ -170,8 +184,13 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
 
   // F8: CSV export with sourceLinks
   const exportCSV = () => {
-    const headers = ['Issue #', 'Topic', 'Frame #', 'Theme', 'Status', 'Publish Date', 'Notes', 'Caption', 'Source Links', 'Priority', 'Confidence', 'Series'];
-    const rows = issues.map(i => [i.issueNum, i.topic, i.frameId, i.themeId, i.status, i.publishDate, i.notes, i.caption, i.sourceLinks, i.priority || 'medium', i.confidence || 'medium', i.series || ''].map(v => `"${(v||'').replace(/"/g,'""')}"`));
+    const headers = ['Issue #', 'Topic', 'Frame #', 'Theme', 'Status', 'Publish Date', 'Notes', 'Caption', 'Source Links', 'Priority', 'Confidence', 'Series', 'Assistant Brief', 'Target Metric', 'Metric Confidence', 'Metric Source', 'Metric Value', 'Metric Unit', 'Metric Provenance'];
+    const rows = issues.map(i => [
+      i.issueNum, i.topic, i.frameId, i.themeId, i.status, i.publishDate, i.notes, i.caption, i.sourceLinks,
+      i.priority || 'medium', i.confidence || 'medium', i.series || '',
+      i.assistantBrief || '', i.targetMetric || '', i.metricConfidence || '', i.metricSource || '', i.metricValue || '', i.metricUnit || '',
+      JSON.stringify(Array.isArray(i.metricProvenance) ? i.metricProvenance : []),
+    ].map(v => `"${String(v ?? '').replace(/"/g,'""')}"`));
     const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -213,22 +232,41 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
         const hasHeader = (allRows[0]?.[0] || '').toLowerCase().includes('issue');
         const lines = hasHeader ? allRows.slice(1) : allRows;
         if (lines.length < 1) { showToast('CSV has no data rows', 'error'); return; }
-        const imported = lines.map((cols, idx) => ({
-          id: `i_${Date.now()}_${idx}`,
-          issueNum: cols[0]?.trim() || '',
-          topic: cols[1]?.trim() || '',
-          frameId: cols[2]?.trim() || '',
-          themeId: cols[3]?.trim() || '',
-          status: STATUSES.includes(cols[4]?.trim()) ? cols[4].trim() : 'draft',
-          publishDate: cols[5]?.trim() || '',
-          notes: cols[6]?.trim() || '',
-          caption: cols[7]?.trim() || '',
-          sourceLinks: cols[8]?.trim() || '',
-          priority: cols[9]?.trim() || 'medium',
-          confidence: CONFIDENCE.includes(cols[10]?.trim()) ? cols[10].trim() : 'medium',
-          series: cols[11]?.trim() || '',
-          createdAt: Date.now(),
-        })).filter(i => i.issueNum || i.topic);
+        const imported = lines.map((cols, idx) => {
+          let metricProvenance = [];
+          const rawMetricProvenance = cols[18]?.trim();
+          if (rawMetricProvenance) {
+            try {
+              const parsed = JSON.parse(rawMetricProvenance);
+              metricProvenance = Array.isArray(parsed) ? parsed : [];
+            } catch {
+              metricProvenance = [];
+            }
+          }
+          return normalizeIssue({
+            id: `i_${Date.now()}_${idx}`,
+            issueNum: cols[0]?.trim() || '',
+            topic: cols[1]?.trim() || '',
+            frameId: cols[2]?.trim() || '',
+            themeId: cols[3]?.trim() || '',
+            status: STATUSES.includes(cols[4]?.trim()) ? cols[4].trim() : 'draft',
+            publishDate: cols[5]?.trim() || '',
+            notes: cols[6]?.trim() || '',
+            caption: cols[7]?.trim() || '',
+            sourceLinks: cols[8]?.trim() || '',
+            priority: cols[9]?.trim() || 'medium',
+            confidence: cols[10]?.trim() || 'medium',
+            series: cols[11]?.trim() || '',
+            assistantBrief: cols[12]?.trim() || '',
+            targetMetric: cols[13]?.trim() || '',
+            metricConfidence: cols[14]?.trim() || '',
+            metricSource: cols[15]?.trim() || '',
+            metricValue: cols[16]?.trim() || '',
+            metricUnit: cols[17]?.trim() || '',
+            metricProvenance,
+            createdAt: Date.now(),
+          });
+        }).filter(i => i.issueNum || i.topic);
         setIssues(prev => [...prev, ...imported]);
         showToast(`Imported ${imported.length} issues`);
       } catch (err) { showToast('Failed to parse CSV', 'error'); }
