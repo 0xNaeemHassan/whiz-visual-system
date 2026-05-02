@@ -51,6 +51,29 @@ function validateFrame(frame, index, ids, errors) {
       assert(isNonEmptyString(tag), `${prefix}: tags[${tagIndex}] must be a non-empty string`, errors);
     });
   }
+
+  const isStructural = frame.structureClass === 'structural';
+  const isVariant = frame.structureClass === 'variant';
+  assert(isStructural || isVariant, `${prefix}: structureClass must be "structural" or "variant"`, errors);
+  assert(Number.isInteger(frame.archetypeId) && frame.archetypeId > 0, `${prefix}: archetypeId must be a positive integer`, errors);
+  if (isStructural) {
+    assert(frame.variantOf === null || frame.variantOf === undefined, `${prefix}: structural frame cannot define variantOf`, errors);
+  }
+  if (isVariant) {
+    assert(Number.isInteger(frame.variantOf) && frame.variantOf > 0, `${prefix}: variant frame must define a valid variantOf id`, errors);
+  }
+}
+
+function validateFrameRelationships(frame, frameById, errors) {
+  if (frame.structureClass !== 'variant') return;
+  const target = frameById.get(frame.variantOf);
+  const prefix = `FRAMES[${frame.id}]`;
+  assert(Boolean(target), `${prefix}: variantOf ${frame.variantOf} must reference an existing frame`, errors);
+  if (!target) return;
+  const allowVariantParent = frame.allowVariantOfVariant === true;
+  if (!allowVariantParent) {
+    assert(target.structureClass !== 'variant', `${prefix}: variants cannot target another variant unless allowVariantOfVariant=true`, errors);
+  }
 }
 
 function validateTemplateEntry(frameId, template, frameById, errors) {
@@ -118,6 +141,7 @@ export function validateFrameData({ frames, templates }) {
       validateFrame(frame, index, ids, errors);
       if (Number.isInteger(frame.id) && !frameById.has(frame.id)) frameById.set(frame.id, frame);
     });
+    frames.forEach((frame) => validateFrameRelationships(frame, frameById, errors));
   }
 
   assert(templates && typeof templates === 'object' && !Array.isArray(templates), 'FRAME_TEMPLATES must be an object', errors);

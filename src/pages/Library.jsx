@@ -65,6 +65,7 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
   const [tierFilter, setTierFilter] = useState('ALL');
   const [tagFilter, setTagFilter] = useState('');
   const [layoutFilter, setLayoutFilter] = useState('');
+  const [structureFilter, setStructureFilter] = useState('all');
   const [view, setView] = useState('grid');
   const [previewFrame, setPreviewFrame] = useState(null); // Fix #61: preview modal
   const [sortBy, setSortBy] = useLocalStorage('whiz-library-sort', 'id'); // Fix #36: persisted
@@ -79,6 +80,7 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
     let f = FRAMES;
     if (tierFilter !== 'ALL') f = f.filter(fr => fr.tier === tierFilter);
     if (layoutFilter) f = f.filter(fr => fr.layout === layoutFilter);
+    if (structureFilter !== 'all') f = f.filter(fr => fr.structureClass === structureFilter);
     if (search) { const q = search.toLowerCase(); f = f.filter(fr => fr.name.toLowerCase().includes(q) || fr.desc.toLowerCase().includes(q) || fr.tags.some(t => t.includes(q)) || fr.layout.includes(q)); }
     if (tagFilter) f = f.filter(fr => fr.tags.includes(tagFilter));
     if (showFavOnly) f = f.filter(fr => favorites.includes(fr.id)); // Fix #59
@@ -87,7 +89,7 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
     else if (sortBy === 'layout') f = [...f].sort((a,b) => a.layout.localeCompare(b.layout));
     else if (sortBy === 'tier') f = [...f].sort((a,b) => a.tier.localeCompare(b.tier));
     return f;
-  }, [search, tierFilter, tagFilter, layoutFilter, sortBy]);
+  }, [search, tierFilter, tagFilter, layoutFilter, structureFilter, sortBy, showFavOnly, favorites]);
 
   const allTags = useMemo(() => {
     const s = new Set(); FRAMES.forEach(f => f.tags.forEach(t => s.add(t))); return Array.from(s).sort();
@@ -162,6 +164,13 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
         ))}
       </div>
 
+      <div className="filter-group" style={{ marginBottom: 12 }}>
+        <span style={{ fontFamily: 'var(--font-m)', fontSize: 9, color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: '0.1em', alignSelf: 'center' }}>STRUCTURE:</span>
+        <button className={`filter-btn ${structureFilter==='all'?'active':''}`} onClick={() => setStructureFilter('all')}>All</button>
+        <button className={`filter-btn ${structureFilter==='structural'?'active':''}`} onClick={() => setStructureFilter('structural')}>Canonical</button>
+        <button className={`filter-btn ${structureFilter==='variant'?'active':''}`} onClick={() => setStructureFilter('variant')}>Variant</button>
+      </div>
+
       {/* E6: Tag filters with active count */}
       <div className="filter-group" style={{ marginBottom: 16 }}>
         <span style={{ fontFamily: 'var(--font-m)', fontSize: 9, color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: '0.1em', alignSelf: 'center' }}>TAGS:</span>
@@ -223,6 +232,9 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
                   <SemanticChip kind="category" value={`tier-${frame.tier}`}>T{frame.tier}</SemanticChip>
                   <SemanticChip kind="category" value={frame.layout}>{frame.layout}</SemanticChip>
+                  <SemanticChip kind="category" value={`structure-${frame.structureClass}`}>
+                    {frame.structureClass === 'variant' ? 'Variant' : 'Canonical'}
+                  </SemanticChip>
                 </div>
                 <div className="frame-name">{frame.name}</div>
                 <div className="frame-desc-text">{frame.desc}</div>
@@ -253,7 +265,7 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
         <div className="card" style={{ padding: 0 }}>
           <div className="data-table-wrap">
           <table className="data-table">
-            <thead><tr><th>#</th><th>Tier</th><th>Name</th><th>Layout</th><th>Tags</th><th></th></tr></thead>
+            <thead><tr><th>#</th><th>Tier</th><th>Name</th><th>Layout</th><th>Structure</th><th>Tags</th><th></th></tr></thead>
             <tbody>
               {filtered.map(frame => (
                 <tr key={frame.id}>
@@ -261,6 +273,7 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
                   <td><SemanticChip kind="category" value={`tier-${frame.tier}`}>T{frame.tier}</SemanticChip></td>
                   <td><strong style={{ fontSize: 13 }}>{frame.name}</strong></td>
                   <td><SemanticChip kind="category" value={frame.layout}>{frame.layout}</SemanticChip></td>
+                  <td><SemanticChip kind="category" value={`structure-${frame.structureClass}`}>{frame.structureClass === 'variant' ? 'Variant' : 'Canonical'}</SemanticChip></td>
                   <td><div style={{ display: 'flex', gap: 4 }}>{frame.tags.slice(0,2).map(t => (<span key={t} style={{ fontFamily: 'var(--font-m)', fontSize: 9, color: 'var(--dim)', background: 'var(--bg-3)', padding: '1px 5px', borderRadius: 8, border: '1px solid var(--border)' }}>{t}</span>))}</div></td>
                   <td><button className="btn btn-secondary btn-sm" onClick={() => {
                     setRecentlyUsed(prev => [frame.id, ...prev.filter(id => id !== frame.id)].slice(0, 20));
