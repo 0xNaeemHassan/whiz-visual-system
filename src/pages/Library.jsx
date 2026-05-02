@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { FRAMES, TIER_NAMES } from '../data/frames';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { SemanticChip } from '../components/primitives';
+import { getExpectedDataPreview } from '../data/frameDatasetShapes';
 const FRAME_GUIDES = {4: 'Best for weekly yield data. Use TICKER/EVENT/TIME/IMPACT columns.', 8: 'Investment memo format. Set a pull quote and 4 key stats.', 13: "3 bullet points per side. End with a WHIZ'S CALL in the deck.", 21: 'S/A/B/C/D rows. Set col2 to the tier letter for each item.', 25: 'One row: col1=what happened, col2=root cause, col3=recovery, col4=lesson.', 42: 'Long-form. Put 3 paragraphs in body, split by double newline.', 49: "col1=item, col2=method, col3=cost (use + for benefits), col4='benefit'/'risk'", 50: 'Quarterly only. Set volume number and a single powerful headline.'};
 
 
@@ -226,6 +227,9 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
                 </div>
                 <div className="frame-name">{frame.name}</div>
                 <div className="frame-desc-text">{frame.desc}</div>
+                <div style={{ fontFamily: 'var(--font-m)', fontSize: 9, color: 'var(--dim)', marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Expected Data: {getExpectedDataPreview(frame.layout)}
+                </div>
                 <div className="frame-actions">
                   <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                     {frame.tags.slice(0, 2).map(t => (
@@ -285,6 +289,9 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
               </button>
             </div>
             <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>{previewFrame.desc}</div>
+            <div style={{ fontFamily: 'var(--font-m)', fontSize: 10, color: 'var(--dim)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              Expected Data: {getExpectedDataPreview(previewFrame.layout)}
+            </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
               <SemanticChip kind="category" value={`tier-${previewFrame.tier}`}>Tier {previewFrame.tier}</SemanticChip>
               <SemanticChip kind="category" value={previewFrame.layout}>{previewFrame.layout}</SemanticChip>
