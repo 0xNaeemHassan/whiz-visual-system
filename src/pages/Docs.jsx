@@ -86,9 +86,9 @@ export default function Docs({ activeTheme }) {
 
   return (
     <>
-      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+      <div className="page-header docs-page-header">
         <div className="page-title">Documentation
-        <div className="search-wrap" style={{ width: 200, marginTop: 8 }}>
+        <div className="search-wrap docs-search-wrap">
           <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="9" cy="9" r="5"/><path d="m15 15-3-3"/></svg>
           <input placeholder="Search docs…" value={docsSearch} onChange={e => setDocsSearch(e.target.value)} />
           {docsSearch && <button className="search-clear" onClick={() => setDocsSearch('')}>✕</button>}
@@ -124,7 +124,7 @@ export default function Docs({ activeTheme }) {
         </nav>
 
         {/* Content */}
-        <div className="docs-content" ref={contentRef}>
+        <div className="docs-content" ref={contentRef} style={{ '--docs-accent': activeTheme.accent }}>
 
           <Section id="intro" title="The Whiz Visual System™">
             <p className="docs-p">A complete 50-frame brand framework for DeFi infographics. Built around a single unifying visual metaphor — applied consistently to every post you create.</p>
@@ -154,7 +154,7 @@ export default function Docs({ activeTheme }) {
             <p className="docs-p">Every Whiz infographic shares 7 anchor elements. This is your DNA — never skip any of them.</p>
 
             <SubHead>1. The Ticker Header</SubHead>
-            <p className="docs-p">A horizontal "market ticker" bar at the very top, ~50px tall, dark background. Monospace text includes: <code style={{ fontFamily: 'var(--font-m)', fontSize: 11, color: activeTheme.accent }}>WHIZ.DEFI ▸ {'{DATE}'} ▸ {'{ISSUE_NUMBER}'} ▸ {'{TOPIC_TAG}'} ▸ ALPHA UNLOCKED ▸</code></p>
+            <p className="docs-p">A horizontal "market ticker" bar at the very top, ~50px tall, dark background. Monospace text includes: <code className="docs-inline-code-accent">WHIZ.DEFI ▸ {'{DATE}'} ▸ {'{ISSUE_NUMBER}'} ▸ {'{TOPIC_TAG}'} ▸ ALPHA UNLOCKED ▸</code></p>
             <div className="docs-tip">Looks like a stock ticker. Static image, but feels alive.</div>
 
             <SubHead>2. The Slug Block (top-left)</SubHead>
@@ -164,10 +164,10 @@ DESK  / YIELD`}</div>
             <p className="docs-p">Monospace font, 10-12pt, muted color. Mimics a research-note byline. This is what makes it feel like a filed document, not a social post.</p>
 
             <SubHead>3. The Topic Tag (top-right)</SubHead>
-            <p className="docs-p">A pill-shaped tag: <code style={{ fontFamily: 'var(--font-m)', fontSize: 11, color: activeTheme.accent }}>▸ STABLECOIN RISK</code> — the color of the pill equals the post's theme color. The only place the theme color appears in the frame chrome itself.</p>
+            <p className="docs-p">A pill-shaped tag: <code className="docs-inline-code-accent">▸ STABLECOIN RISK</code> — the color of the pill equals the post's theme color. The only place the theme color appears in the frame chrome itself.</p>
 
             <SubHead>4. The Spine (left edge)</SubHead>
-            <p className="docs-p">A 4-6px vertical bar running the full height of the post, in the post's theme color. Inside, rotated 90°: <code style={{ fontFamily: 'var(--font-m)', fontSize: 11, color: activeTheme.accent }}>WHIZ DEFI DESK / VOL.{'{VOLUME}'}</code></p>
+            <p className="docs-p">A 4-6px vertical bar running the full height of the post, in the post's theme color. Inside, rotated 90°: <code className="docs-inline-code-accent">WHIZ DEFI DESK / VOL.{'{VOLUME}'}</code></p>
 
             <SubHead>5. The Title Slab</SubHead>
             <p className="docs-p">Bold, oversized title in Space Grotesk 700, with a thin horizontal rule beneath it AND a one-line "deck" (subtitle in italic) explaining what the post answers. This is the editorial heart.</p>
@@ -189,7 +189,7 @@ RIGHT:  WHIZ.DEFI/{ISSUE_NUMBER} · social icons`}</div>
               <li>~20% of section headers</li>
               <li>One accent element (a chart line, a key number)</li>
             </ul>
-            <p className="docs-p">Everything else stays in the neutral system: <code style={{ fontFamily: 'var(--font-m)', color: activeTheme.accent }}>#0F1318</code> (near-black), <code style={{ fontFamily: 'var(--font-m)', color: activeTheme.accent }}>#F4F5F7</code> (off-white), <code style={{ fontFamily: 'var(--font-m)', color: activeTheme.accent }}>#8B95A3</code> (muted gray).</p>
+            <p className="docs-p">Everything else stays in the neutral system: <code className="docs-inline-code-accent">#0F1318</code> (near-black), <code className="docs-inline-code-accent">#F4F5F7</code> (off-white), <code className="docs-inline-code-accent">#8B95A3</code> (muted gray).</p>
             <div className="docs-warning"><strong>This is what makes posts feel cohesive — restraint with color.</strong> The temptation to add more color is always wrong.</div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 8, marginTop: 12 }}>
