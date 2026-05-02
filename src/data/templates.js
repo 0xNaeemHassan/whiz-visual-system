@@ -130,6 +130,7 @@ export const FRAME_TEMPLATES = {
 };
 
 import { createDefaultContent, hasRequiredContentShape } from '../domain/editorDefaults.js';
+import { getLayoutDatasetShape } from './frameDatasetShapes.js';
 
 // Merge with canonical defaults for any unspecified fields
 export function getFrameTemplate(frameId) {
@@ -188,6 +189,8 @@ export const CONTENT_TEMPLATES = Object.entries(FRAME_TEMPLATES).map(([id, conte
 
 const LAYOUT_REQUIRED_FIELDS = {
   table: ['tableRows'],
+  scorecard: ['tableRows'],
+  'tier-list': ['tableRows'],
   'bull-bear': ['bullPoints', 'bearPoints'],
   timeline: ['timelineEvents'],
   grid: ['gridItems'],
@@ -205,6 +208,11 @@ export function createTemplateForLayout(layout) {
   return base;
 }
 
+function validateRowShape(rows, shape) {
+  if (!Array.isArray(rows) || rows.length === 0 || !shape.fields.length) return true;
+  return rows.every((row) => shape.fields.every((field) => field.name in row));
+}
+
 export function checkTemplateLayoutCompatibility(template, layout) {
   const requiredFields = LAYOUT_REQUIRED_FIELDS[layout] || [];
   const missingFields = requiredFields.filter((field) => {
@@ -213,8 +221,18 @@ export function checkTemplateLayoutCompatibility(template, layout) {
     return value === undefined || value === null || value === '';
   });
 
+  const datasetShape = getLayoutDatasetShape(layout);
+
+  if (layout === 'table' || layout === 'scorecard' || layout === 'tier-list') {
+    const rows = template?.tableRows;
+    if (!validateRowShape(rows, datasetShape)) {
+      missingFields.push('tableRows schema mismatch');
+    }
+  }
+
   return {
     isCompatible: missingFields.length === 0,
     missingFields,
+    expectedDataShape: datasetShape,
   };
 }

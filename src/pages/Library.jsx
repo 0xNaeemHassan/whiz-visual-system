@@ -367,6 +367,9 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
               </button>
             </div>
             <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>{previewFrame.desc}</div>
+            <div style={{ fontFamily: 'var(--font-m)', fontSize: 10, color: 'var(--dim)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              Expected Data: {getExpectedDataPreview(previewFrame.layout)}
+            </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
               <SemanticChip kind="category" value={`tier-${previewFrame.tier}`}>Tier {previewFrame.tier}</SemanticChip>
               <SemanticChip kind="category" value={previewFrame.layout}>{previewFrame.layout}</SemanticChip>
