@@ -103,6 +103,17 @@ export const FRAME_TEMPLATES = {
     deck: 'Why the era of unsustainable APYs is finally closing — and what comes next.',
     body: "Three years ago, triple-digit APYs were table stakes for any new DeFi protocol. Liquidity mining was the only customer acquisition strategy anyone needed.\n\nThe protocols that survived aren't the ones that offered the most — they're the ones that built real revenue. Aave. Uniswap. Curve. All of them generate genuine fees before offering incentives.\n\nThe next generation of yield is boring. And boring is exactly what we need.",
   },
+  // Frame 48 — Field Guide
+  48: {
+    topicTag: 'FIELD GUIDE',
+    title: 'SPECIES OF THE DEFI WILDS',
+    deck: 'A quick reference for the most common archetypes you’ll encounter on-chain.',
+    species: 'Yield Farmer',
+    habitat: 'Arbitrum and Base vault ecosystems with weekly rotation into high-incentive pools.',
+    diet: 'Point programs, emissions boosts, and short-term APY dislocations.',
+    spottingTips: 'Watch for sudden TVL surges after incentive announcements, then quick outflows before lock expiry.',
+    behaviorNote: 'Moves quickly between opportunities and rarely holds conviction once rewards normalize.',
+  },
   // Frame 49 — The Receipt
   49: {
     topicTag: 'THE RECEIPT',

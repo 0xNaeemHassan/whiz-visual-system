@@ -97,6 +97,30 @@ function validateTemplateEntry(frameId, template, frameById, errors) {
       });
     }
   }
+
+  if (frameId === 48) {
+    const structuredSections = ['species', 'habitat', 'diet', 'spottingTips', 'behaviorNote'];
+    const sectionLengthBounds = {
+      species: { min: 3, max: 80 },
+      habitat: { min: 20, max: 220 },
+      diet: { min: 20, max: 220 },
+      spottingTips: { min: 30, max: 260 },
+      behaviorNote: { min: 30, max: 260 },
+    };
+
+    structuredSections.forEach((sectionKey) => {
+      assert(isNonEmptyString(template[sectionKey]), `${prefix}: "${sectionKey}" must be a non-empty string`, errors);
+      if (isNonEmptyString(template[sectionKey])) {
+        const sectionLen = template[sectionKey].trim().length;
+        const bounds = sectionLengthBounds[sectionKey];
+        assert(
+          sectionLen >= bounds.min && sectionLen <= bounds.max,
+          `${prefix}: "${sectionKey}" length must be between ${bounds.min}-${bounds.max} chars (received ${sectionLen})`,
+          errors,
+        );
+      }
+    });
+  }
 }
 
 function validateFooter(content, label, errors) {
