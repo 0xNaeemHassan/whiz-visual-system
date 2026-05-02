@@ -14,6 +14,58 @@ export function nearestTypeScale(value) {
 }
 
 
+
+
+export function resolveBigNumberHierarchy({
+  availableWidth = 560,
+  availableHeight = 220,
+  bigValue = '',
+  unit = '',
+  label = '',
+  companionMetrics = 0,
+} = {}) {
+  const valueLen = String(bigValue || '').trim().length || 1;
+  const unitLen = String(unit || '').trim().length;
+  const labelLen = String(label || '').trim().length;
+  const areaFactor = Math.max(0.65, Math.min(1.35, Math.sqrt((availableWidth * availableHeight) / (560 * 220))));
+  const densityPenalty = Math.min(0.25, companionMetrics * 0.04);
+
+  const targetBig = (84 * areaFactor) - (valueLen * 1.6) - (unitLen * 1.2) - (labelLen > 24 ? 4 : 0) - (84 * densityPenalty);
+  const big = nearestTypeScale(targetBig);
+  const unitTarget = Math.max(10, big * 0.42);
+  const labelTarget = Math.max(10, big * 0.24);
+  const resolvedUnit = nearestTypeScale(unitTarget);
+  const resolvedLabel = nearestTypeScale(labelTarget);
+
+  const spacingBigToUnit = Math.max(4, Math.round(big * 0.08));
+  const spacingUnitToLabel = Math.max(4, Math.round(resolvedUnit * 0.5));
+  const minContrastGap = 6;
+
+  const estimatedWidth = (valueLen * big * 0.62) + (unitLen * resolvedUnit * 0.58);
+  const hierarchyValid = (
+    big - resolvedUnit >= minContrastGap
+    && resolvedUnit - resolvedLabel >= 2
+    && spacingBigToUnit >= 4
+    && spacingUnitToLabel >= 4
+    && estimatedWidth <= availableWidth
+  );
+
+  const failureStates = [];
+  if (estimatedWidth > availableWidth) failureStates.push('Big-number hierarchy failure: available width cannot fit value/unit without truncation.');
+  if (big - resolvedUnit < minContrastGap) failureStates.push('Big-number hierarchy failure: value-unit contrast gap below minimum.');
+  if (resolvedUnit - resolvedLabel < 2) failureStates.push('Big-number hierarchy failure: unit-label contrast gap below minimum.');
+  if (spacingBigToUnit < 4 || spacingUnitToLabel < 4) failureStates.push('Big-number hierarchy failure: spacing guardrail below minimum.');
+
+  return {
+    big,
+    unit: resolvedUnit,
+    label: resolvedLabel,
+    spacingBigToUnit,
+    spacingUnitToLabel,
+    hierarchyValid,
+    failureStates,
+  };
+}
 function relativeLuminance(hex) {
   if (!HEX_RE.test(hex || '')) return null;
   const value = hex.slice(1, 7);
@@ -116,6 +168,16 @@ export function getComplianceIssues({ overrides, content }) {
 
   if ((content?.bigNumber || '').trim() && !(content.bigNumber || '').match(/^[$€£]?\d[\d.,]*[KMBT%]?$/)) {
     issues.push('Big-number hierarchy heuristics: big number should be compact numeric notation.');
+  }
+
+  if ((content?.bigValue || '').trim()) {
+    const hierarchy = resolveBigNumberHierarchy({
+      bigValue: content.bigValue,
+      unit: content.bigUnit || '',
+      label: content.bigLabel || '',
+      companionMetrics: Array.isArray(content?.stats) ? content.stats.length : 0,
+    });
+    if (!hierarchy.hierarchyValid) issues.push(...hierarchy.failureStates);
   }
 
   if (!Array.isArray(content?.stats) || content.stats.length === 0) issues.push('At least one stat is required.');

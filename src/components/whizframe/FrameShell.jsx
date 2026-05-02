@@ -4,6 +4,7 @@ import { coreLayoutKeys } from './layouts/CoreLayouts';
 import { applyOverflowPolicy } from './layouts/OverflowPolicy';
 import { TICKER_CONTRACT, normalizeTickerSpeed } from '../../domain/tickerContract';
 import { SPINE_DESIGN_TOKENS } from '../../domain/spineDesignTokens';
+import { resolveBigNumberHierarchy } from '../../utils/editorCompliance';
 
 export function FrameShell({ frameRef, frame, theme, content, editMode, selectedEl, onSelectEl, styleOverrides, showGrid, aspectRatio, uploadedImages, bgGradient, patternOverlay }) {
   const ov = styleOverrides || {};
@@ -56,16 +57,6 @@ export function FrameShell({ frameRef, frame, theme, content, editMode, selected
         </div>
       );
     });
-  };
-
-  // B17: Auto-scale big numbers to prevent overflow
-  const getBigNumFontSize = (text) => {
-    if (!text) return 80;
-    if (text.length <= 4) return 80;
-    if (text.length <= 6) return 64;
-    if (text.length <= 8) return 52;
-    if (text.length <= 12) return 40;
-    return 32;
   };
 
   // B16: Auto-scale title font size
@@ -354,22 +345,45 @@ function StatRibbon({ stats, ov, accentColor, maxVisible }) {
 
 function BigNumber({ content, ov, accentColor }) {
   if (!content.bigLabel && !content.bigValue) return null;
+  const hierarchy = resolveBigNumberHierarchy({
+    availableWidth: 520,
+    availableHeight: 220,
+    bigValue: content.bigValue || '',
+    unit: content.bigUnit || '',
+    label: content.bigLabel || '',
+    companionMetrics: Array.isArray(content.stats) ? content.stats.length : 0,
+  });
+  const bigSize = ov.bigNumber?.fontSize || hierarchy.big;
+  const unitSize = ov.bigUnit?.fontSize || hierarchy.unit;
+  const labelSize = ov.bigLabel?.fontSize || hierarchy.label;
   return (
     <div style={{ textAlign: 'center', margin: '14px 0', flexShrink: 0 }}>
       {content.bigLabel && (
         <div style={{
-          fontFamily: "'JetBrains Mono', monospace", fontSize: '10px',
+          fontFamily: "'JetBrains Mono', monospace", fontSize: `${labelSize}px`,
           letterSpacing: '0.14em', textTransform: 'uppercase',
-          color: 'rgba(255,255,255,0.35)', marginBottom: 6,
+          color: 'rgba(255,255,255,0.35)', marginBottom: hierarchy.spacingUnitToLabel,
         }}>{content.bigLabel}</div>
       )}
-      <div style={{
-        fontFamily: "'Space Grotesk', sans-serif",
-        fontSize: `${ov.bigNumber?.fontSize || 84}px`,
-        fontWeight: 700,
-        color: ov.bigNumber?.color || accentColor,
-        lineHeight: 0.9, letterSpacing: '-0.03em',
-      }}>{content.bigValue}</div>
+      <div style={{ display: 'inline-flex', alignItems: 'flex-end', gap: hierarchy.spacingBigToUnit }}>
+        <div style={{
+          fontFamily: "'Space Grotesk', sans-serif",
+          fontSize: `${bigSize}px`,
+          fontWeight: 700,
+          color: ov.bigNumber?.color || accentColor,
+          lineHeight: 0.9, letterSpacing: '-0.03em',
+        }}>{content.bigValue}</div>
+        {content.bigUnit && (
+          <div style={{
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: `${unitSize}px`,
+            fontWeight: 600,
+            color: '#B0BAC8',
+            lineHeight: 1,
+            marginBottom: Math.max(2, Math.round(unitSize * 0.1)),
+          }}>{content.bigUnit}</div>
+        )}
+      </div>
       {content.bigSub && (
         <div style={{
           fontFamily: "'Inter', sans-serif", fontSize: '14px',
