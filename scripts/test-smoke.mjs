@@ -66,3 +66,4 @@ assert.equal(manifestPayload.metricConfidence, 'high', 'Manifest payload should 
 assert.deepEqual(manifestPayload.metricProvenance, ['internal-analytics'], 'Manifest payload should include metricProvenance when present');
 
 console.log('Smoke tests passed');
+import './test-editor-mutations.mjs';
