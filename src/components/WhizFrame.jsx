@@ -1,5 +1,6 @@
 // WhizFrame v8.0 — Complete visual overhaul with unique layouts for all frame types
 import { memo } from 'react';
+import { FRAMES } from '../data/frames';
 
 function WhizFrameInner({ frameRef, frame, theme, content, editMode, selectedEl, onSelectEl, styleOverrides, showGrid, aspectRatio, uploadedImages, bgGradient, patternOverlay }) {
   const ov = styleOverrides || {};
@@ -29,48 +30,8 @@ function WhizFrameInner({ frameRef, frame, theme, content, editMode, selectedEl,
   const layoutProps = { theme, content, SectionHead, ov, editMode, selectedEl, sel, ec, accentColor };
 
   const renderContent = () => {
-    switch (frame.layout) {
-      case 'table':     return <TableLayout {...layoutProps} />;
-      case 'bull-bear': return <BullBearLayout {...layoutProps} />;
-      case 'stats':     return <StatsLayout {...layoutProps} />;
-      case 'grid':      return <GridLayout {...layoutProps} />;
-      case 'timeline':  return <TimelineLayout {...layoutProps} />;
-      case 'network':   return <NetworkLayout {...layoutProps} />;
-      case 'editorial': return <EditorialLayout {...layoutProps} />;
-      case 'heatmap':   return <HeatmapLayout {...layoutProps} />;
-      case 'compare':   return <CompareLayout {...layoutProps} />;
-      case 'scorecard': return <ScoreCardLayout {...layoutProps} />;
-      case 'quote':     return <QuoteLayout {...layoutProps} />;
-      case 'tier-list':   return <TierListLayout {...layoutProps} />;
-      case 'postmortem':   return <PostmortemLayout {...layoutProps} />;
-      case 'trust-stack':  return <TrustStackLayout {...layoutProps} />;
-      case 'pitch-deck':   return <PitchDeckLayout {...layoutProps} />;
-      case 'mechanism':    return <MechanismLayout {...layoutProps} />;
-      case 'thesis':       return <ThesisLayout {...layoutProps} />;
-      case 'cover-story':  return <CoverStoryLayout {...layoutProps} />;
-      case 'receipt':      return <ReceiptLayout {...layoutProps} />;
-      case 'glossary':     return <GlossaryLayout {...layoutProps} />;
-      case 'matrix':       return <MatrixLayout {...layoutProps} />;
-      case 'threat-model': return <ThreatModelLayout {...layoutProps} />;
-      case 'failure-tree': return <FailureTreeLayout {...layoutProps} />;
-      case 'founder':      return <FounderLayout {...layoutProps} />;
-      case 'anatomy':      return <AnatomyLayout {...layoutProps} />;
-      case 'flow':         return <FlowLayout {...layoutProps} />;
-      case 'bracket':      return <BracketLayout {...layoutProps} />;
-      case 'three-layer':  return <ThreeLayerLayout {...layoutProps} />;
-      case 'long-bet':     return <LongBetLayout {...layoutProps} />;
-      case 'org-chart':    return <OrgChartLayout {...layoutProps} />;
-      case 'periodic':     return <PeriodicLayout {...layoutProps} />;
-      case 'curve':        return <CurveLayout {...layoutProps} />;
-      case 'field-guide':  return <FieldGuideLayout {...layoutProps} />;
-      case 'mental-model': return <MentalModelLayout {...layoutProps} />;
-      case 'subway':       return <SubwayLayout {...layoutProps} />;
-      case 'constellation': return <ConstellationLayout {...layoutProps} />;
-      case 'stack':         return <StackLayout {...layoutProps} />;
-      case 'trade-routes':  return <TradeRoutesLayout {...layoutProps} />;
-            case 'body':
-default:          return <BodyLayout {...layoutProps} />;
-    }
+    const LayoutComponent = LAYOUT_COMPONENTS[frame.layout] || BodyLayout;
+    return <LayoutComponent {...layoutProps} />;
   };
 
   // A1-A7: Render uploaded images with full position/size/rotation/opacity controls
@@ -275,6 +236,59 @@ default:          return <BodyLayout {...layoutProps} />;
 }
 
 // K6: Memoize WhizFrame to prevent unnecessary re-renders
+
+const LAYOUT_COMPONENTS = {
+  table: TableLayout,
+  'bull-bear': BullBearLayout,
+  stats: StatsLayout,
+  grid: GridLayout,
+  timeline: TimelineLayout,
+  network: NetworkLayout,
+  editorial: EditorialLayout,
+  heatmap: HeatmapLayout,
+  compare: CompareLayout,
+  scorecard: ScoreCardLayout,
+  quote: QuoteLayout,
+  'tier-list': TierListLayout,
+  postmortem: PostmortemLayout,
+  'trust-stack': TrustStackLayout,
+  'pitch-deck': PitchDeckLayout,
+  mechanism: MechanismLayout,
+  thesis: ThesisLayout,
+  'cover-story': CoverStoryLayout,
+  receipt: ReceiptLayout,
+  glossary: GlossaryLayout,
+  matrix: MatrixLayout,
+  'threat-model': ThreatModelLayout,
+  'failure-tree': FailureTreeLayout,
+  founder: FounderLayout,
+  anatomy: AnatomyLayout,
+  flow: FlowLayout,
+  bracket: BracketLayout,
+  'three-layer': ThreeLayerLayout,
+  'long-bet': LongBetLayout,
+  'org-chart': OrgChartLayout,
+  periodic: PeriodicLayout,
+  curve: CurveLayout,
+  'field-guide': FieldGuideLayout,
+  'mental-model': MentalModelLayout,
+  subway: SubwayLayout,
+  constellation: ConstellationLayout,
+  stack: StackLayout,
+  'trade-routes': TradeRoutesLayout,
+  body: BodyLayout,
+};
+
+if (import.meta.env?.DEV) {
+  const unresolvedLayouts = [...new Set(FRAMES.map((frame) => frame.layout))].filter(
+    (layout) => !LAYOUT_COMPONENTS[layout],
+  );
+
+  if (unresolvedLayouts.length > 0) {
+    throw new Error(`Unregistered frame layout(s): ${unresolvedLayouts.join(', ')}`);
+  }
+}
+
 const WhizFrame = memo(WhizFrameInner, (prev, next) => {
   // Only re-render when visually relevant props change
   return (
