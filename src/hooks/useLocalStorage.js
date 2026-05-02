@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { applyStorageMigrations, isEnvelope, shouldEnvelopeKey, toEnvelope } from '../storage/migrations';
 
 // Fix #54: Images should not bloat localStorage — callers should use IndexedDB for large
 // binary data. This hook now clears only autosave AND large image keys when quota is hit.
@@ -7,7 +8,21 @@ export function useLocalStorage(key, initialValue) {
   const [storedValue, setStoredValue] = useState(() => {
     try {
       const item = window.localStorage.getItem(key);
-      return item ? JSON.parse(item) : initialValue;
+      if (!item) return initialValue;
+
+      const parsed = JSON.parse(item);
+      const migration = applyStorageMigrations(key, parsed);
+
+      if (!migration.ok) {
+        window.dispatchEvent(new CustomEvent('whiz-storage-recovery', { detail: { key } }));
+        return initialValue;
+      }
+
+      if (migration.migrated || (shouldEnvelopeKey(key) && !isEnvelope(parsed))) {
+        window.localStorage.setItem(key, JSON.stringify(migration.value));
+      }
+
+      return isEnvelope(migration.value) ? migration.value.data : migration.value;
     } catch (e) {
       console.warn(`useLocalStorage: failed to parse "${key}", using default`, e);
       return initialValue;
@@ -18,7 +33,8 @@ export function useLocalStorage(key, initialValue) {
     setStoredValue(prev => {
       const newValue = value instanceof Function ? value(prev) : value;
       try {
-        window.localStorage.setItem(key, JSON.stringify(newValue));
+        const valueToStore = shouldEnvelopeKey(key) ? toEnvelope(newValue) : newValue;
+        window.localStorage.setItem(key, JSON.stringify(valueToStore));
       } catch (e) {
         if (e.name === 'QuotaExceededError') {
           console.error(`localStorage quota exceeded for "${key}". Attempting cleanup...`);
@@ -26,7 +42,8 @@ export function useLocalStorage(key, initialValue) {
             // Clear autosave and image data to free the most space
             localStorage.removeItem('whiz-autosave');
             localStorage.removeItem('whiz-images');
-            window.localStorage.setItem(key, JSON.stringify(newValue));
+            const valueToStore = shouldEnvelopeKey(key) ? toEnvelope(newValue) : newValue;
+            window.localStorage.setItem(key, JSON.stringify(valueToStore));
           } catch (e2) {
             console.error(`Still exceeded after cleanup for "${key}"`, e2);
           }

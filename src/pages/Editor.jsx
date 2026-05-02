@@ -1,8 +1,9 @@
-import { getFrameTemplate } from '../data/templates.js';
+import { createTemplateForLayout, checkTemplateLayoutCompatibility, getFrameTemplate } from '../data/templates.js';
 import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
 import { FRAMES } from '../data/frames.js';
 import { THEMES } from '../data/themes.js';
 import { useLocalStorage } from '../hooks/useLocalStorage';
+import { useUIEventContext } from '../state/UIEventContext';
 import { useUndoRedo } from '../hooks/useUndoRedo';
 import WhizFrame from '../components/WhizFrame';
 import DragItem from '../components/DragItem';
@@ -10,9 +11,17 @@ import GradientEditor from '../components/GradientEditor';
 import ImageUpload from '../components/ImageUpload';
 import AspectRatioSelector, { RATIOS } from '../components/AspectRatioSelector';
 import PatternSelector from '../components/PatternSelector';
-import { CONTENT_TEMPLATES } from '../data/templates.js';
+import { CONTENT_TEMPLATES } from '../data/templates';
+import { createDefaultContent, createDefaultOverrides, createDefaultEditorState } from '../domain/editorDefaults.js';
 import { nearestTypeScale, getComplianceIssues, getBrandScore } from '../utils/editorCompliance';
+import { buildMutationDispatcher } from './editorMutations';
 
+/** @typedef {import('../types/editor.js').FrameContent} FrameContent */
+/** @typedef {import('../types/editor.js').StyleOverrides} StyleOverrides */
+/** @typedef {import('../types/editor.js').Theme} Theme */
+/** @typedef {import('../types/editor.js').ExportPayload} ExportPayload */
+
+/** @type {FrameContent} */
 const DEFAULT_CONTENT = {
   issueNum:'001',date:'05.01.26',desk:'YIELD',volume:'I',topicTag:'STABLECOIN RISK',
   title:'THE END OF MERCENARY YIELD',
@@ -30,6 +39,7 @@ const DEFAULT_CONTENT = {
   verdict:'Position in protocols with proven revenue. Avoid incentive-only models.',
   gridItems:[],timelineEvents:[],
 };
+/** @type {StyleOverrides} */
 const DEFAULT_OVERRIDES = {frameBg:null,spineColor:null,tickerColor:null,tickerBg:null,title:{fontSize:52,fontWeight:700,color:'#F4F5F7',italic:false,lineHeight:1.05,letterSpacing:-0.02,textAlign:'left',opacity:1},deck:{fontSize:18,fontWeight:400,color:'#8B95A3',italic:true},body:{fontSize:15,fontWeight:400,color:'#8B95A3',lineHeight:1.75,textAlign:'left',opacity:1},accent:{color:null},tag:{background:null,color:null,borderColor:null},footer:{background:null},statsColor:null,bignumColor:null,avatarColor:null,ruleBg:null,handleColor:null};
 const ELEMENTS = [{key:'frame',label:'Background',icon:'\u25A1'},{key:'spine',label:'Spine',icon:'|'},{key:'ticker',label:'Ticker',icon:'\u2014'},{key:'title',label:'Title',icon:'T'},{key:'deck',label:'Deck',icon:'D'},{key:'tag',label:'Tag',icon:'#'},{key:'body',label:'Body',icon:'B'},{key:'stats',label:'Stats',icon:'S'},{key:'bignum',label:'Big #',icon:'N'},{key:'footer',label:'Footer',icon:'F'},{key:'accent',label:'Accent',icon:'\u25CF'}];
 function ColorRow({label,value,defaultVal,onChange}){const col=value||defaultVal;return(<div className="prop-color-row"><span className="prop-label-text">{label}</span><div className="prop-color-swatch" style={{background:col,position:'relative'}}><input type="color" value={col} onChange={e=>onChange(e.target.value)} aria-label={`${label} color`} style={{position:'absolute',inset:0,opacity:0,cursor:'pointer',width:'100%',height:'100%'}}/></div><input type="text" className="prop-hex" value={col} onChange={e=>{const v=e.target.value;if(/^#[0-9A-Fa-f]{0,6}$/.test(v)||v==='')onChange(v||null);}}/><button className="btn btn-ghost btn-sm" onClick={()=>onChange(null)} style={{padding:'4px 7px',fontSize:11,color:'var(--dim)'}} title="Reset">\u21BA</button></div>);}
@@ -62,14 +72,20 @@ function DesignPanel({selectedEl,setSelectedEl,overrides,setOverrides,theme,bgGr
     </div>
     <button className="btn btn-danger w-full btn-sm" onClick={()=>{
       if(window.confirm('Reset all design overrides? This cannot be undone.')){
-        resetOverrides(DEFAULT_OVERRIDES);
-        setBgGradient(null);
-        setPatternOverlay(null);
-        showToast('Design reset to defaults');
+        resetDesignState({
+          resetOverrides,
+          defaultOverrides: DEFAULT_OVERRIDES,
+          setBgGradient,
+          setPatternOverlay,
+          showToast,
+        });
       }
     }}>Reset All</button></div></div>);
 }
 
+/**
+ * @param {{ activeFontPairing?: {body?:string}|null, showToast: (message:string, kind?:string)=>void, activeTheme: Theme, setActiveTheme: (theme:Theme)=>void, editingFrame?: any, clearEditingFrame?: ()=>void, newFrameSignal:number, isActive:boolean }} props
+ */
 export default function Editor({ activeFontPairing,showToast,activeTheme,setActiveTheme,editingFrame,clearEditingFrame,newFrameSignal,isActive}){
   const[saves,setSaves]=useLocalStorage('whiz-saves',[]);
   const[frameId,setFrameId]=useState(editingFrame||4);
@@ -85,11 +101,19 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const[showGrid,setShowGrid]=useState(false);const[editMode,setEditMode]=useState(false);
   const[selectedEl,setSelectedEl]=useState(null);const[rightTab,setRightTab]=useState('content');
   const[mobileTab,setMobileTab]=useState('preview');const[aspectRatio,setAspectRatio]=useState(RATIOS[0]);
-  const[uploadedImages,setUploadedImages]=useLocalStorage('whiz-images',{logo:null,hero:null,badge:null});
-  const[bgGradient,setBgGradient]=useLocalStorage('whiz-bg-gradient',null);const[patternOverlay,setPatternOverlay]=useLocalStorage('whiz-pattern-overlay',null);
+  const [_savedMedia, persistMedia] = useLocalStorage('whiz-media',{uploadedImages:{logo:null,hero:null,badge:null},bgGradient:null,patternOverlay:null});
+  const { state: mediaState, set: setMediaState, reset: resetMediaState } = useUndoRedo(_savedMedia);
+  const uploadedImages = mediaState.uploadedImages;
+  const bgGradient = mediaState.bgGradient;
+  const patternOverlay = mediaState.patternOverlay;
+  useEffect(()=>{persistMedia(mediaState);},[mediaState,persistMedia]);
+  const setBgGradient = (value) => setMediaState(prev => ({...prev, bgGradient: value}), { immediate: true });
+  const setPatternOverlay = (value) => setMediaState(prev => ({...prev, patternOverlay: value}), { immediate: true });
+
   const[showDeleteConfirm,setShowDeleteConfirm]=useState(null);const[saveSearch,setSaveSearch]=useState('');
   const[strictMode,setStrictMode]=useLocalStorage('whiz-strict-mode',true);
   const frameRef=useRef(null);const centerRef=useRef(null);
+  const { registerHandlers } = useUIEventContext();
   const[showAutosavePrompt,setShowAutosavePrompt]=useState(false);const autosaveDataRef=useRef(null);
 
   // Fix #3/11: editingFrame is now {frameId, serial, issue}; compare serial to detect re-opens
@@ -99,7 +123,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     // Fix #21: Pre-fill content from issue if provided
     if(editingFrame.issue){
       const iss=editingFrame.issue;
-      const base={...DEFAULT_CONTENT};
+      const base=createDefaultContent();
       if(iss.topic)base.title=iss.topic.toUpperCase();
       if(iss.caption)base.deck=iss.caption;
       if(iss.notes)base.body=iss.notes;
@@ -112,33 +136,48 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   // Fix #38/63: True "New Frame" action — reset all state
   useEffect(()=>{
     if(newFrameSignal===0)return;
-    setFrameId(4);
+    const nextFrameId=4;
+    setFrameId(nextFrameId);
     resetContent(DEFAULT_CONTENT);
     // P3-05: Load frame-specific content template
-    const nextFrameId = editingFrame?.frameId ?? 4;
     const tmpl=getFrameTemplate(nextFrameId,DEFAULT_CONTENT);
-      setContent(tmpl);
+    resetContent(tmpl);
     resetOverrides(DEFAULT_OVERRIDES);
-    setBgGradient(null);setPatternOverlay(null);
+    resetMediaState({ uploadedImages: { logo:null, hero:null, badge:null }, bgGradient:null, patternOverlay:null });
     setTheme(activeTheme);
     setAspectRatio(RATIOS[0]);
     showToast('New frame started');
   },[newFrameSignal]);
 
   useEffect(()=>{try{const r=localStorage.getItem('whiz-autosave');if(r){const d=JSON.parse(r);if(d.savedAt&&Date.now()-d.savedAt<86400000){autosaveDataRef.current=d;setShowAutosavePrompt(true);}}}catch(e){}},[]);
-  const restoreAutosave=()=>{const d=autosaveDataRef.current;if(d){d.frameId&&setFrameId(d.frameId);d.theme&&(setTheme(d.theme),setActiveTheme(d.theme));d.content&&resetContent(d.content);d.overrides&&setOverrides(d.overrides);d.aspectRatio&&setAspectRatio(d.aspectRatio);d.bgGradient&&setBgGradient(d.bgGradient);d.patternOverlay&&setPatternOverlay(d.patternOverlay);showToast('Restored');}setShowAutosavePrompt(false);};
+  const restoreAutosave=()=>{const d=autosaveDataRef.current;if(d){d.frameId&&setFrameId(d.frameId);d.theme&&(setTheme(d.theme),setActiveTheme(d.theme));d.content&&resetContent(d.content);d.overrides&&setOverrides(d.overrides);d.aspectRatio&&setAspectRatio(d.aspectRatio);d.bgGradient&&updateMedia(prev=>({...prev,bgGradient:d.bgGradient}));d.patternOverlay&&updateMedia(prev=>({...prev,patternOverlay:d.patternOverlay}));showToast('Restored');}setShowAutosavePrompt(false);};
   const selectedFrame=FRAMES.find(f=>f.id===frameId)||FRAMES[0];
+  useEffect(() => {
+    const layoutBase = createTemplateForLayout(selectedFrame.layout);
+    const frameTemplate = getFrameTemplate(frameId, layoutBase);
+    const compatibility = checkTemplateLayoutCompatibility(frameTemplate, selectedFrame.layout);
+
+    resetContent((prev) => ({
+      ...layoutBase,
+      ...prev,
+      ...frameTemplate,
+    }));
+
+    if (!compatibility.isCompatible) {
+      showToast(`Template missing layout fields: ${compatibility.missingFields.join(', ')}`, 'warning');
+    }
+  }, [frameId]);
   const complianceIssues = useMemo(
-    () => getComplianceIssues({ overrides, content }),
+    () => computeCompliance({ overrides, content }),
     [overrides, content],
   );
   const brandScore = useMemo(
-    () => getBrandScore({ overrides, content }),
+    () => computeBrandScore({ overrides, content }),
     [overrides, content],
   );
 
   const applyStrictPolish = () => {
-    setOverrides((prev) => ({
+    updateStyle((prev) => ({
       ...prev,
       title: { ...(prev.title || {}), fontSize: nearestTypeScale(prev.title?.fontSize ?? 52) },
       deck: { ...(prev.deck || {}), fontSize: nearestTypeScale(prev.deck?.fontSize ?? 18) },
@@ -177,47 +216,66 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
           if(!didRedo)redoOverrideRef.current?.();
         }
       }
-      if(e.key==='Escape'){setSelectedEl(null);setEditMode(false);setShowSaveModal(false);setShowLoadModal(false);}
     };
     window.addEventListener('keydown',h);
     return()=>window.removeEventListener('keydown',h);
   },[isActive]);
+
+  useEffect(() => {
+    if (!isActive) return undefined;
+    return registerHandlers({
+      onEscape: () => {
+        setSelectedEl(null);
+        setEditMode(false);
+        setShowSaveModal(false);
+        setShowLoadModal(false);
+      },
+    });
+  }, [isActive, registerHandlers]);
   useEffect(()=>{if(editMode||selectedEl)setRightTab('design');},[editMode,selectedEl]);
-  const buildSave=()=>({frameId,theme,content,overrides,aspectRatio,bgGradient,patternOverlay,savedAt:Date.now()});
+  const buildSave=()=>buildFrameSave({frameId,theme,content,overrides,aspectRatio,bgGradient,patternOverlay});
   const doSave=()=>{const n=saveName.trim()||`${content.topicTag} \u2014 ${new Date().toLocaleDateString()}`;setSaves(p=>[...p,{id:`s_${Date.now()}`,title:n,...buildSave()}]);setShowSaveModal(false);setSaveName('');showToast(`Saved "${n}"`);};
-  const loadSave=s=>{setFrameId(s.frameId);setTheme(s.theme);resetContent(s.content);s.overrides&&setOverrides(s.overrides);s.aspectRatio&&setAspectRatio(s.aspectRatio);s.bgGradient&&setBgGradient(s.bgGradient);s.patternOverlay&&setPatternOverlay(s.patternOverlay);setShowLoadModal(false);showToast(`Loaded`);};
+  const loadSave=s=>{setFrameId(s.frameId);setTheme(s.theme);resetContent(s.content);s.overrides&&setOverrides(s.overrides);s.aspectRatio&&setAspectRatio(s.aspectRatio);s.bgGradient&&updateMedia(prev=>({...prev,bgGradient:s.bgGradient}));s.patternOverlay&&updateMedia(prev=>({...prev,patternOverlay:s.patternOverlay}));setShowLoadModal(false);showToast(`Loaded`);};
   const confirmDel=()=>{if(showDeleteConfirm){setSaves(p=>p.filter(s=>s.id!==showDeleteConfirm));showToast('Deleted','info');setShowDeleteConfirm(null);}};
   const exportJSON=()=>{const d=JSON.stringify(buildSave(),null,2);const b=new Blob([d],{type:'application/json'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=`whiz_${content.topicTag.replace(/[^a-zA-Z0-9]/g,'_').toLowerCase()}.json`;a.click();URL.revokeObjectURL(u);showToast('JSON exported');};
-  const exportManifest=()=>{const payload={issueNum:content.issueNum,topic:content.topicTag,title:content.title,date:content.date,frameId,themeId:theme.id,strictMode,brandScore,complianceIssues,sources:(content.sourceLinks||'').split(',').map(s=>s.trim()).filter(Boolean),exportedAt:new Date().toISOString()};const d=JSON.stringify(payload,null,2);const b=new Blob([d],{type:'application/json'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=`whiz_issue${content.issueNum||'000'}_manifest.json`;a.click();URL.revokeObjectURL(u);showToast('Manifest exported');};
+  const exportManifest=()=>{const payload={issueNum:content.issueNum,topic:content.topicTag,title:content.title,date:content.date,frameId,themeId:theme.id,strictMode,brandScore,complianceIssues,sources:(content.sourceLinks||'').split(',').map(s=>s.trim()).filter(Boolean),targetMetric:content.targetMetric||'',metricConfidence:content.metricConfidence||'',metricProvenance:Array.isArray(content.metricProvenance)?content.metricProvenance:(content.metricProvenance?[content.metricProvenance]:[]),exportedAt:new Date().toISOString()};const d=JSON.stringify(payload,null,2);const b=new Blob([d],{type:'application/json'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=`whiz_issue${content.issueNum||'000'}_manifest.json`;a.click();URL.revokeObjectURL(u);showToast('Manifest exported');};
   const importJSON=e=>{const f=e.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=ev=>{try{const d=JSON.parse(ev.target.result);d.frameId&&setFrameId(d.frameId);d.theme&&(setTheme(d.theme),setActiveTheme(d.theme));d.content&&resetContent(d.content);d.overrides&&setOverrides(d.overrides);d.aspectRatio&&setAspectRatio(d.aspectRatio);d.bgGradient&&setBgGradient(d.bgGradient);d.patternOverlay&&setPatternOverlay(d.patternOverlay);showToast('Imported');}catch(err){showToast('Invalid JSON','error');}};r.readAsText(f);e.target.value='';};
   const exportHTML=()=>{const el=frameRef.current;if(!el)return;const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&family=Inter:wght@300..700&family=JetBrains+Mono:wght@400..700&display=swap" rel="stylesheet"><style>*{margin:0;padding:0;box-sizing:border-box}body{background:#0F1318;display:flex;justify-content:center;align-items:center;min-height:100vh}.whiz-frame{position:relative;overflow:hidden;flex-shrink:0}.wf-spine{position:absolute;left:0;top:0;bottom:0;width:3px;z-index:5}.wf-corner{position:absolute;width:16px;height:16px;z-index:6;opacity:.5}.wf-corner.tl{top:12px;left:12px;border-top:1.5px solid currentColor;border-left:1.5px solid currentColor}.wf-corner.tr{top:12px;right:12px;border-top:1.5px solid currentColor;border-right:1.5px solid currentColor}.wf-corner.bl{bottom:12px;left:12px;border-bottom:1.5px solid currentColor;border-left:1.5px solid currentColor}.wf-corner.br{bottom:12px;right:12px;border-bottom:1.5px solid currentColor;border-right:1.5px solid currentColor}.wf-content{position:relative;z-index:4;padding:40px 36px 32px 44px;display:flex;flex-direction:column;height:100%;box-sizing:border-box}.wf-title{font-family:'Space Grotesk',sans-serif;font-weight:700;letter-spacing:-.02em;line-height:1.05}.wf-deck{font-family:'Inter',sans-serif;line-height:1.6}.wf-body{font-family:'Inter',sans-serif;line-height:1.75}.wf-stat{display:flex;flex-direction:column;gap:4;padding:12px 14px;border-radius:6px}.wf-stat-val{font-family:'Space Grotesk',sans-serif;font-weight:700;line-height:1}.wf-stat-label{font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.1em}.wf-ticker{overflow:hidden;white-space:nowrap;height:28px;display:flex;align-items:center;width:100%;position:relative;z-index:4}.wf-ticker-scroll{display:inline-block;animation:whiz-ticker-scroll 30s linear infinite;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase}.wf-section-head{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.15em;text-transform:uppercase;display:flex;align-items:center;gap:8px;margin-bottom:12px}.wf-section-head::before{content:'';width:12px;height:1.5px;background:currentColor;opacity:.5}.wf-handle{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.08em}.wf-table{width:100%;border-collapse:collapse}.wf-table th{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;text-align:left;padding:7px 10px;border-bottom:1px solid rgba(255,255,255,.06)}.wf-table td{font-family:'Inter',sans-serif;font-size:12px;padding:7px 10px;border-bottom:1px solid rgba(255,255,255,.04)}@keyframes whiz-ticker-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}</style></head><body>${el.outerHTML}</body></html>`;const b=new Blob([html],{type:'text/html'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=`whiz_export.html`;a.click();URL.revokeObjectURL(u);showToast('HTML exported');};
-  const exportPNG=async()=>{if(!frameRef.current||exporting)return;if(strictMode&&complianceIssues.length){showToast(`Strict mode blocked export (${complianceIssues.length} issues)`,'error');return;}if(!strictMode&&complianceIssues.length&&!window.confirm(`Whiz compliance warnings:\\n- ${complianceIssues.join('\\n- ')}\\n\\nExport anyway?`))return;setExporting(true);showToast('Generating PNG...','info');try{const h2c=(await import('html2canvas')).default;const c=frameRef.current.cloneNode(true);c.style.cssText=`position:absolute;left:-9999px;top:0;transform:none;width:${aspectRatio.w}px;height:${aspectRatio.h}px`;document.body.appendChild(c);let cv;try{cv=await h2c(c,{scale:2,useCORS:true,allowTaint:true,width:aspectRatio.w,height:aspectRatio.h,backgroundColor:overrides.frameBg||theme.base,logging:false});}finally{if(document.body.contains(c))document.body.removeChild(c);}try{cv.toBlob(bl=>{bl&&navigator.clipboard?.write&&navigator.clipboard.write([new ClipboardItem({'image/png':bl})]).catch(()=>{});});}catch(e){}const u=cv.toDataURL('image/png');const a=document.createElement('a');a.href=u;a.download=`whiz_export.png`;a.click();showToast(`PNG exported at 2x`);}catch(e){console.error(e);showToast(`Export failed: ${e.message||'unknown error'}`,'error');}setExporting(false);}
+  const exportPNG=async()=>{if(!frameRef.current||exporting)return;if(strictMode&&complianceIssues.length){showToast(`Strict mode blocked export (${complianceIssues.length} issues)`,'error');return;}if(!strictMode&&complianceIssues.length&&!window.confirm(`Whiz compliance warnings:\\n- ${complianceIssues.join('\\n- ')}\\n\\nExport anyway?`))return;setExporting(true);showToast('Generating PNG...','info');try{const sceneModel=createSceneModel({frameId,theme,content,overrides,aspectRatio,bgGradient});const{canvas,usedFallback}=await exportFrame({contractInput:{format:'png',dimensions:{width:aspectRatio.w,height:aspectRatio.h},quality:1,background:overrides.frameBg||theme.base,version:'1.0.0'},sceneModel,sceneRenderer:renderSceneToCanvas,domFallbackRenderer:(contract)=>renderDomSnapshotToCanvas(frameRef.current,{width:contract.dimensions.width,height:contract.dimensions.height,backgroundColor:contract.background})});try{canvas.toBlob(bl=>{bl&&navigator.clipboard?.write&&navigator.clipboard.write([new ClipboardItem({'image/png':bl})]).catch(()=>{});});}catch(e){}const u=canvas.toDataURL('image/png');const a=document.createElement('a');a.href=u;a.download=`whiz_export.png`;a.click();showToast(`PNG exported at 2x${usedFallback?' (DOM fallback)':''}`);}catch(e){console.error(e);showToast(`Export failed: ${e.message||'unknown error'}`,'error');}setExporting(false);}
   const exportWebP=async()=>{
     if(!frameRef.current||exporting)return;
+    const v=validateEditorState({content,overrides,uploadedImages});
+    if(!v.valid){showToast(`Export blocked (${v.codes.join(', ')})`,'error');return;}
     setExporting(true);showToast('Generating WebP…');
     try{
-      const h2c=(await import('html2canvas')).default;
-      const el=frameRef.current;
-      const c=el.cloneNode(true);
-      c.style.cssText=el.style.cssText;c.style.transform='none';c.style.position='fixed';c.style.left='0';c.style.top='0';
-      document.body.appendChild(c);
-      let cv;
-      try{
-        cv=await h2c(c,{scale:2,useCORS:true,allowTaint:true,width:aspectRatio.w,height:aspectRatio.h,backgroundColor:overrides.frameBg||theme.base,logging:false});
-      }finally{if(document.body.contains(c))document.body.removeChild(c);}
+      const sceneModel=createSceneModel({frameId,theme,content,overrides,aspectRatio,bgGradient});
+      const {canvas:cv,usedFallback}=await exportFrame({contractInput:{format:'webp',dimensions:{width:aspectRatio.w,height:aspectRatio.h},quality:0.92,background:overrides.frameBg||theme.base,version:'1.0.0'},sceneModel,sceneRenderer:renderSceneToCanvas,domFallbackRenderer:(contract)=>renderDomSnapshotToCanvas(frameRef.current,{width:contract.dimensions.width,height:contract.dimensions.height,backgroundColor:contract.background})});
       await new Promise((res,rej)=>cv.toBlob(b=>{
         if(!b){rej(new Error('WebP blob empty'));return;}
         const u=URL.createObjectURL(b);const a=document.createElement('a');
         a.href=u;a.download='whiz_export.webp';a.click();URL.revokeObjectURL(u);
-        showToast('WebP exported');res();
+        showToast(`WebP exported${usedFallback?' (DOM fallback)':''}`);res();
       },'image/webp',0.92));
     }catch(e){showToast(`WebP failed: ${e.message||'error'}`,'error');}
     setExporting(false);
   };
-  const updateContent=(k,v)=>setContent(c=>({...c,[k]:v}));
+  const mutations = useMemo(() => buildMutationDispatcher({ setContent, setOverrides, setMedia: setMediaState }), [setContent, setOverrides, setMediaState]);
+  const updateContent=(k,v,forceImmediate=false)=>mutations.content(k,c=>({...c,[k]:v}),forceImmediate);
+  const updateStyle=(updater)=>mutations.style(updater);
+  const updateMedia=(updater)=>mutations.image(updater);
   useEffect(()=>{if(!isActive)return;const t=setTimeout(()=>{try{localStorage.setItem('whiz-autosave',JSON.stringify({frameId,theme,content,overrides,aspectRatio,bgGradient,patternOverlay,savedAt:Date.now()}));}catch(e){}},3000);return()=>clearTimeout(t);},[content,overrides,frameId,theme,aspectRatio,bgGradient,patternOverlay]);
   const applyTheme=t=>{setTheme(t);setActiveTheme(t);};
-  const applyTemplate=t=>{resetContent({...DEFAULT_CONTENT,...t.content});showToast(`Template: ${t.name}`);};
+  const applyTemplate=t=>{
+    const layoutBase = createTemplateForLayout(selectedFrame.layout);
+    const merged = { ...layoutBase, ...t.content };
+    const compatibility = checkTemplateLayoutCompatibility(merged, selectedFrame.layout);
+    resetContent(merged);
+    if (!compatibility.isCompatible) {
+      showToast(`Template incompatibility: missing ${compatibility.missingFields.join(', ')}`, 'warning');
+      return;
+    }
+    showToast(`Template: ${t.name}`);
+  };
   const filteredFrames=useMemo(()=>{if(!frameSearch)return FRAMES;const q=frameSearch.toLowerCase();return FRAMES.filter(f=>f.name.toLowerCase().includes(q)||f.tags.some(t=>t.includes(q))||f.layout.includes(q));},[frameSearch]);
   // Fix #33: scroll frame list to top when search changes
   useEffect(()=>{if(frameListRef.current)frameListRef.current.scrollTop=0;},[frameSearch,filteredFrames]);
@@ -263,7 +321,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
           <div className="editor-panel-header"><span>Content</span><button className="btn btn-ghost btn-sm" onClick={()=>resetContent(DEFAULT_CONTENT)}>Reset</button></div>
           <div className="editor-section"><div className="editor-section-title">Quick Start</div><div className="template-list">{CONTENT_TEMPLATES.map(t=>(<div key={t.id} className="template-item" onClick={()=>applyTemplate(t)}><div className="template-item-name">{t.name}</div><div className="template-item-desc">{t.desc}</div></div>))}</div></div>
           <div className="editor-section"><div className="editor-section-title">Aspect Ratio</div><AspectRatioSelector value={aspectRatio.id} onChange={r=>{setAspectRatio(r);showToast(`${r.w}×${r.h}`);}}/></div>
-          <div className="editor-section"><div className="editor-section-title">Pattern</div><PatternSelector value={patternOverlay?.id||null} onChange={p=>setPatternOverlay(p)}/></div>
+          <div className="editor-section"><div className="editor-section-title">Pattern</div><PatternSelector value={patternOverlay?.id||null} onChange={p=>updateMedia(prev=>({...prev,patternOverlay:p}))}/></div>
           <div className="editor-section"><div className="editor-section-title">Metadata</div><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>{[['Issue #','issueNum'],['Date','date'],['Desk','desk'],['Volume','volume']].map(([l,k])=>(<div key={k} className="form-group" style={{marginBottom:0}}><label className="form-label">{l}</label><input value={content[k]} onChange={e=>updateContent(k,e.target.value)}/></div>))}</div><div className="form-group" style={{marginTop:8}}><label className="form-label">Topic Tag</label><input value={content.topicTag} onChange={e=>updateContent('topicTag',e.target.value)}/></div>
       <div className="form-group">
         <label className="form-label">Ticker Speed (seconds) — {content.tickerSpeed||28}s</label>
@@ -346,7 +404,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
             {(content.timelineEvents||[]).length===0&&<div style={{fontFamily:'var(--font-m)',fontSize:10,color:'var(--dim)',padding:'8px 0'}}>No events yet — click + Event to add</div>}
           </div>
           <div className="editor-section"><div className="editor-section-title">Big Number</div><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}><div className="form-group" style={{marginBottom:0}}><label className="form-label">Label</label><input value={content.bigLabel||''} onChange={e=>updateContent('bigLabel',e.target.value)}/></div><div className="form-group" style={{marginBottom:0}}><label className="form-label">Value</label><input value={content.bigNumber||''} onChange={e=>updateContent('bigNumber',e.target.value)}/></div></div></div>
-          <div className="editor-section"><div className="editor-section-title">Images</div><ImageUpload label="Logo" value={uploadedImages.logo} onChange={v=>setUploadedImages(p=>({...p,logo:v}))} maxSize={2} showToast={showToast}/><ImageUpload label="Hero" value={uploadedImages.hero} onChange={v=>setUploadedImages(p=>({...p,hero:v}))} maxSize={4} showToast={showToast}/><ImageUpload label="Badge" value={uploadedImages.badge} onChange={v=>setUploadedImages(p=>({...p,badge:v}))} maxSize={1} showToast={showToast}/></div>
+          <div className="editor-section"><div className="editor-section-title">Images</div><ImageUpload label="Logo" value={uploadedImages.logo} onChange={v=>updateMedia(p=>({...p,uploadedImages:{...p.uploadedImages,logo:v}}))} maxSize={2} showToast={showToast}/><ImageUpload label="Hero" value={uploadedImages.hero} onChange={v=>updateMedia(p=>({...p,uploadedImages:{...p.uploadedImages,hero:v}}))} maxSize={4} showToast={showToast}/><ImageUpload label="Badge" value={uploadedImages.badge} onChange={v=>updateMedia(p=>({...p,uploadedImages:{...p.uploadedImages,badge:v}}))} maxSize={1} showToast={showToast}/></div>
           <div className="editor-section"><div className="editor-section-title">Export</div><div style={{fontFamily:'var(--font-m)',fontSize:9,color:'var(--dim)',marginBottom:8,lineHeight:1.7}}>⌘S Save · ⌘Z Undo · ⌘⇧Z Redo</div><div style={{display:'flex',flexDirection:'column',gap:8}}><div style={{display:'flex',gap:6}}><button className="btn btn-primary btn-sm" style={{flex:1}} onClick={exportPNG} disabled={exporting}>{exporting?'…':`PNG`}</button><button className="btn btn-secondary btn-sm" style={{flex:1}} onClick={exportWebP} disabled={exporting}>WebP</button></div><div style={{display:'flex',gap:6}}><button className="btn btn-ghost btn-sm" style={{flex:1}} onClick={exportHTML}>HTML</button><button className="btn btn-ghost btn-sm" style={{flex:1}} onClick={exportJSON}>JSON</button></div><label className="import-label">↑ Import <input type="file" accept=".json" onChange={importJSON}/></label><button className="btn btn-secondary w-full" onClick={()=>setShowSaveModal(true)}>Save</button><button className="btn btn-ghost w-full" onClick={()=>{const n=`${content.title||'Frame'} (copy)`;setSaves(p=>[...p,{id:`s_${Date.now()}`,title:n,...buildSave()}]);showToast('Duplicated');}}>Duplicate</button>{saves.length>0&&<button className="btn btn-ghost w-full" onClick={()=>{setSaveSearch('');setShowLoadModal(true);}}>Load ({saves.length})</button>}</div></div>
         </>)}
       </div>
