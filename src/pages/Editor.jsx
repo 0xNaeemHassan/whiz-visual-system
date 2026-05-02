@@ -259,7 +259,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   useEffect(()=>{if(editMode||selectedEl)setRightTab('design');},[editMode,selectedEl]);
   const buildSave=()=>buildFrameSave({frameId,theme,content,overrides,aspectRatio,bgGradient,patternOverlay});
   const doSave=()=>{const n=saveName.trim()||`${content.topicTag} \u2014 ${new Date().toLocaleDateString()}`;setSaves(p=>[...p,{id:`s_${Date.now()}`,title:n,...buildSave()}]);setShowSaveModal(false);setSaveName('');showToast(`Saved "${n}"`);};
-  const loadSave=s=>{setFrameId(s.frameId);setTheme(s.theme);resetContent(s.content);if(s.overrides){const validation=validateEditorState({content:s.content||{},overrides:s.overrides},{strictMode:Boolean(strictMode),sanitizeStrictStyle:true});const next=validation.sanitizedOverrides||s.overrides;setOverrides(next);if(strictMode&&validation.codes.includes('STRICT_STYLE_OVERRIDE_BLOCKED')){showToast('Loaded with strict-style sanitization.','warning');}}s.aspectRatio&&setAspectRatio(s.aspectRatio);s.bgGradient&&updateMedia(prev=>({...prev,bgGradient:s.bgGradient}));s.patternOverlay&&updateMedia(prev=>({...prev,patternOverlay:s.patternOverlay}));setShowLoadModal(false);showToast(`Loaded`);};
+  const loadSave=s=>{setFrameId(s.frameId);setTheme(s.theme);resetContent(s.content);if(s.overrides){const validation=validateEditorState({frameId:s.frameId,theme:s.theme,content:s.content||{},overrides:s.overrides},{strictMode:Boolean(strictMode),sanitizeStrictStyle:true});const next=validation.sanitizedOverrides||s.overrides;setOverrides(next);if(strictMode&&validation.codes.includes('STRICT_STYLE_OVERRIDE_BLOCKED')){showToast('Loaded with strict-style sanitization.','warning');}}s.aspectRatio&&setAspectRatio(s.aspectRatio);s.bgGradient&&updateMedia(prev=>({...prev,bgGradient:s.bgGradient}));s.patternOverlay&&updateMedia(prev=>({...prev,patternOverlay:s.patternOverlay}));setShowLoadModal(false);showToast(`Loaded`);};
   const confirmDel=()=>{if(showDeleteConfirm){setSaves(p=>p.filter(s=>s.id!==showDeleteConfirm));showToast('Deleted','info');setShowDeleteConfirm(null);}};
   const runNormalizationPreflight=()=>{
     const result=normalizeContentTaxonomy(content);
@@ -278,7 +278,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     if(!frameRef.current||exporting)return;
     if(hasBlockingSpineContrastIssue){showToast('Publish blocked: rotated spine contrast is below threshold.','error');return;}
     const preflight=runNormalizationPreflight();if(!preflight)return;const { normalizedContent, taxonomyAutoCorrected }=preflight;
-    const v=validateEditorState({content,overrides,uploadedImages});
+    const v=validateEditorState({frameId,theme,content,overrides,uploadedImages});
     if(!v.valid){showToast(`Export blocked (${v.codes.join(', ')})`,'error');return;}
     setExporting(true);showToast('Generating WebP…');
     try{

@@ -1,5 +1,6 @@
 import { TICKER_CONTRACT } from '../domain/tickerContract';
 import { collectStrictStyleViolations, sanitizeStrictStyleOverrides } from '../domain/strictStylePolicy';
+import { resolveRiskAccent } from '../domain/riskAccentPolicy';
 
 const CODES = {
   ROOT_INVALID: 'ROOT_INVALID',
@@ -23,6 +24,7 @@ const CODES = {
   IMAGE_OPACITY_OOB: 'IMAGE_OPACITY_OOB',
   IMAGE_ROTATION_OOB: 'IMAGE_ROTATION_OOB',
   STRICT_STYLE_OVERRIDE_BLOCKED: 'STRICT_STYLE_OVERRIDE_BLOCKED',
+  RISK_ACCENT_OVERRIDE_UNACKNOWLEDGED: 'RISK_ACCENT_OVERRIDE_UNACKNOWLEDGED',
 };
 
 const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -37,7 +39,7 @@ export function validateEditorState(state, options = {}) {
     return { valid: false, errors, codes: errors.map((e) => e.code) };
   }
 
-  const { content, uploadedImages } = state;
+  const { content, uploadedImages, frameId, theme } = state;
   let overrides = state.overrides;
   if (!isObj(content)) push(errors, CODES.CONTENT_MISSING, 'content', 'Content is required.');
   if (!isObj(overrides)) push(errors, CODES.OVERRIDES_MISSING, 'overrides', 'Overrides must be an object.');
@@ -72,6 +74,10 @@ export function validateEditorState(state, options = {}) {
     if (!Number.isNaN(titleSize) && !inRange(titleSize, 28, 80)) push(errors, CODES.TITLE_FONT_SIZE_OOB, 'overrides.title.fontSize', 'Title font size out of bounds.');
     if (!Number.isNaN(deckSize) && !inRange(deckSize, 12, 32)) push(errors, CODES.DECK_FONT_SIZE_OOB, 'overrides.deck.fontSize', 'Deck font size out of bounds.');
     if (!Number.isNaN(bodySize) && !inRange(bodySize, 11, 22)) push(errors, CODES.BODY_FONT_SIZE_OOB, 'overrides.body.fontSize', 'Body font size out of bounds.');
+    const accentResolution = resolveRiskAccent({ frameId, theme, overrides });
+    if (accentResolution.warned) {
+      push(errors, CODES.RISK_ACCENT_OVERRIDE_UNACKNOWLEDGED, 'overrides.accent.color', 'Risk frames require a safety accent unless override is explicitly acknowledged.', { requiredFlag: 'overrides.accent.riskOverrideAcknowledged' });
+    }
   }
 
 
