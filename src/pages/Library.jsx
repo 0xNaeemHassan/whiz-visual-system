@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { FRAMES, TIER_NAMES } from '../data/frames';
+import { getFramePitfalls } from '../data/framePitfalls';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { SemanticChip } from '../components/primitives';
 const FRAME_GUIDES = {4: 'Best for weekly yield data. Use TICKER/EVENT/TIME/IMPACT columns.', 8: 'Investment memo format. Set a pull quote and 4 key stats.', 13: "3 bullet points per side. End with a WHIZ'S CALL in the deck.", 21: 'S/A/B/C/D rows. Set col2 to the tier letter for each item.', 25: 'One row: col1=what happened, col2=root cause, col3=recovery, col4=lesson.', 42: 'Long-form. Put 3 paragraphs in body, split by double newline.', 49: "col1=item, col2=method, col3=cost (use + for benefits), col4='benefit'/'risk'", 50: 'Quarterly only. Set volume number and a single powerful headline.'};
@@ -206,6 +207,15 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
               <div className="frame-thumb">
                 <MiniFrame accent={activeTheme.accent} layout={frame.layout} />
                 <span className="frame-num">{String(frame.id).padStart(2, '0')}</span>
+                {getFramePitfalls(frame.id).length > 0 && (
+                  <span style={{
+                    position: 'absolute', top: 6, left: 6, fontFamily: 'var(--font-m)', fontSize: 8,
+                    background: 'rgba(229,178,58,0.15)', color: '#E5B23A', border: '1px solid rgba(229,178,58,0.45)',
+                    borderRadius: 3, padding: '2px 5px', letterSpacing: '0.06em', textTransform: 'uppercase',
+                  }}>
+                    ⚠ {getFramePitfalls(frame.id).length}
+                  </span>
+                )}
                 <span style={{
                   position: 'absolute', bottom: 6, left: 6,
                   fontFamily: 'var(--font-m)', fontSize: 7, letterSpacing: '0.08em',
