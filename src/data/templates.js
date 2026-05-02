@@ -96,6 +96,25 @@ export const FRAME_TEMPLATES = {
       col4: 'Always verify compiler version in audit scope. Reentrancy can exist at compiler, not just code level.',
     }],
   },
+
+  // Frame 38 — Bracket
+  38: {
+    topicTag: 'YIELD BRACKET',
+    title: 'TOP STRATEGIES SHOWDOWN',
+    deck: 'Seeded matchups auto-progress as scores update.',
+    bracketRound1: [
+      {leftSeed:'1',leftName:'Pendle PT-USDe',leftScore:'78',rightSeed:'8',rightName:'Curve crvUSD',rightScore:'65'},
+      {leftSeed:'4',leftName:'Aave USDC',leftScore:'71',rightSeed:'5',rightName:'Morpho Prime',rightScore:'74'},
+      {leftSeed:'2',leftName:'Ethena sUSDe',leftScore:'82',rightSeed:'7',rightName:'Spark sDAI',rightScore:'61'},
+      {leftSeed:'3',leftName:'Euler Boosted',leftScore:'69',rightSeed:'6',rightName:'Fluid Vault',rightScore:'67'}
+    ],
+    bracketRound2: [
+      {leftSeed:'',leftName:'',leftScore:'73',rightSeed:'',rightName:'',rightScore:'76'},
+      {leftSeed:'',leftName:'',leftScore:'84',rightSeed:'',rightName:'',rightScore:'79'}
+    ],
+    bracketRound3: [{leftSeed:'',leftName:'',leftScore:'88',rightSeed:'',rightName:'',rightScore:'85'}],
+    bracketWinner: {name:'',seed:'',score:''},
+  },
   // Frame 42 — Thesis
   42: {
     topicTag: 'THESIS',

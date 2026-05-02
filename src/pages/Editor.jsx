@@ -17,6 +17,7 @@ import { createDefaultContent, createDefaultOverrides, createDefaultEditorState 
 import { nearestTypeScale, getComplianceIssues, getBrandScore } from '../utils/editorCompliance';
 import { normalizeContentTaxonomy } from '../utils/contentNormalization';
 import { buildMutationDispatcher } from './EditorMutations';
+import { applyBracketProgression } from '../domain/services/bracketProgressionService';
 import { SemanticChip } from '../components/primitives';
 
 /** @typedef {import('../types/editor.js').FrameContent} FrameContent */
@@ -42,6 +43,7 @@ const DEFAULT_CONTENT = {
   bigNumber:'$47B',bigLabel:'TOTAL DeFi TVL',
   verdict:'Position in protocols with proven revenue. Avoid incentive-only models.',
   gridItems:[],timelineEvents:[],
+  bracketRound1:[],bracketRound2:[],bracketRound3:[],bracketWinner:{name:'',seed:'',score:''},
 };
 /** @type {StyleOverrides} */
 const DEFAULT_OVERRIDES = {frameBg:null,spineColor:null,tickerColor:null,tickerBg:null,title:{fontSize:52,fontWeight:700,color:'#F4F5F7',italic:false,lineHeight:1.05,letterSpacing:-0.02,textAlign:'left',opacity:1},deck:{fontSize:18,fontWeight:400,color:'#8B95A3',italic:true},body:{fontSize:15,fontWeight:400,color:'#8B95A3',lineHeight:1.75,textAlign:'left',opacity:1},accent:{color:null},tag:{background:null,color:null,borderColor:null},footer:{background:null},statsColor:null,bignumColor:null,avatarColor:null,ruleBg:null,handleColor:null};
@@ -294,7 +296,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     setExporting(false);
   };
   const mutations = useMemo(() => buildMutationDispatcher({ setContent, setOverrides, setMedia: setMediaState }), [setContent, setOverrides, setMediaState]);
-  const updateContent=(k,v,forceImmediate=false)=>mutations.content(k,c=>{const next={...c,[k]:v};if(k==='topicTag'||k==='slug'){return normalizeContentTaxonomy(next).content;}return next;},forceImmediate);
+  const updateContent=(k,v,forceImmediate=false)=>mutations.content(k,c=>{let next={...c,[k]:v};if(k==='topicTag'||k==='slug'){next=normalizeContentTaxonomy(next).content;}if(['bracketRound1','bracketRound2','bracketRound3'].includes(k)||selectedFrame?.layout==='bracket'){next=applyBracketProgression(next);}return next;},forceImmediate);
   const updateStyle=(updater)=>mutations.style(updater);
   const updateMedia=(updater)=>mutations.image(updater);
   const strictWhizMode = Boolean(strictMode);
