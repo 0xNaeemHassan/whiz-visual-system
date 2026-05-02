@@ -1,4 +1,6 @@
 const VALID_TIERS = new Set(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']);
+export const FOOTER_FIELD_ORDER = Object.freeze(['source', 'timestamp', 'issueId', 'status']);
+export const REQUIRED_FOOTER_FIELDS = new Set(FOOTER_FIELD_ORDER);
 
 function isNonEmptyString(value) {
   return typeof value === 'string' && value.trim().length > 0;
@@ -6,6 +8,23 @@ function isNonEmptyString(value) {
 
 function assert(condition, message, errors) {
   if (!condition) errors.push(message);
+}
+
+function normalizeFooter(content = {}) {
+  return {
+    source: content.handle,
+    timestamp: content.date,
+    issueId: content.issueNum,
+    status: content.status,
+  };
+}
+
+export function resolveFooterData(content = {}) {
+  const normalized = normalizeFooter(content);
+  return FOOTER_FIELD_ORDER.reduce((acc, key) => {
+    acc[key] = normalized[key];
+    return acc;
+  }, {});
 }
 
 function validateFrame(frame, index, ids, errors) {
@@ -80,6 +99,14 @@ function validateTemplateEntry(frameId, template, frameById, errors) {
   }
 }
 
+function validateFooter(content, label, errors) {
+  const footer = resolveFooterData(content);
+  FOOTER_FIELD_ORDER.forEach((field, index) => {
+    assert(field === FOOTER_FIELD_ORDER[index], `${label}: footer field order drift detected`, errors);
+    assert(isNonEmptyString(footer[field]), `${label}: footer.${field} is required`, errors);
+  });
+}
+
 export function validateFrameData({ frames, templates }) {
   const errors = [];
   const ids = new Set();
@@ -105,6 +132,7 @@ export function validateFrameData({ frames, templates }) {
       }
       if (template && typeof template === 'object' && !Array.isArray(template)) {
         validateTemplateEntry(frameId, template, frameById, errors);
+        validateFooter(template, `${prefix}`, errors);
       }
     });
   }

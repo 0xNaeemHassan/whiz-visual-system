@@ -4,13 +4,17 @@ import { coreLayoutKeys } from './layouts/CoreLayouts';
 import { applyOverflowPolicy } from './layouts/OverflowPolicy';
 import { TICKER_CONTRACT, normalizeTickerSpeed } from '../../domain/tickerContract';
 import { SPINE_DESIGN_TOKENS } from '../../domain/spineDesignTokens';
-import { Sparkline, SemanticChip } from '../primitives';
+import { FrameFooter } from './FrameFooter';
 
-export function FrameShell({ frameRef, frame, theme, content, editMode, selectedEl, onSelectEl, styleOverrides, showGrid, aspectRatio, uploadedImages, bgGradient, patternOverlay }) {
+export function FrameShell({ frameRef, frame, theme, content, editMode, selectedEl, onSelectEl, styleOverrides, showGrid, aspectRatio, uploadedImages, bgGradient, patternOverlay, strictWhizMode = false, whizEffects = { glow: true, noise: true, intenseAccent: false } }) {
   const ov = styleOverrides || {};
   const sel = (key, e) => { if (editMode) { e?.stopPropagation(); onSelectEl?.(selectedEl === key ? null : key); } };
   const ec = (key) => editMode ? `wf-editable${selectedEl === key ? ' wf-sel' : ''}` : '';
   const accentColor = ov.accent?.color || theme.accent;
+  const noiseEnabled = !strictWhizMode && whizEffects?.noise !== false;
+  const glowEnabled = !strictWhizMode && whizEffects?.glow !== false;
+  const intenseAccentEnabled = !strictWhizMode && whizEffects?.intenseAccent === true;
+  const accentIntensity = intenseAccentEnabled ? '70' : '50';
 
   const tagStyle = {
     background: ov.tag?.background || `${accentColor}08`,
@@ -112,18 +116,18 @@ export function FrameShell({ frameRef, frame, theme, content, editMode, selected
       onClick={() => { if (editMode) onSelectEl?.(null); }}
     >
       {/* Noise texture — PNG fallback safe */}
-      <div style={{
+      {noiseEnabled && <div style={{
         position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1, opacity: 0.06,
         backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
         backgroundSize: '128px 128px',
-      }} />
+      }} />}
 
       {/* Radial glow */}
-      <div style={{
+      {glowEnabled && <div style={{
         position: 'absolute', top: '15%', left: '50%', transform: 'translateX(-50%)',
         width: '80%', height: '40%', pointerEvents: 'none', zIndex: 1,
         background: `radial-gradient(ellipse at center, ${accentColor}06 0%, transparent 70%)`,
-      }} />
+      }} />}
 
       {showGrid && <div className="grid-overlay visible" aria-hidden="true" />}
 
@@ -160,7 +164,7 @@ export function FrameShell({ frameRef, frame, theme, content, editMode, selected
 
       {/* Spine — 5px color bar + rotated label that sits beside it */}
       <div className={`wf-spine ${ec('spine')}`}
-        style={{ background: ov.spineColor || accentColor, position: 'absolute', left: SPINE_DESIGN_TOKENS.position.barLeftPx, top: SPINE_DESIGN_TOKENS.position.barTopPx, width: `${SPINE_DESIGN_TOKENS.geometry.barWidthPx}px`, height: '100%', zIndex: 5, boxShadow: `0 0 20px ${accentColor}60` }}
+        style={{ background: ov.spineColor || accentColor, position: 'absolute', left: SPINE_DESIGN_TOKENS.position.barLeftPx, top: SPINE_DESIGN_TOKENS.position.barTopPx, width: `${SPINE_DESIGN_TOKENS.geometry.barWidthPx}px`, height: '100%', zIndex: 5, boxShadow: `0 0 20px ${accentColor}${accentIntensity}` }}
         onClick={e => sel('spine', e)} />
       <div style={{
         position: 'absolute', left: `${SPINE_DESIGN_TOKENS.position.labelWrapLeftPx}px`, top: SPINE_DESIGN_TOKENS.position.labelWrapTopPx, width: `${SPINE_DESIGN_TOKENS.geometry.labelWrapWidthPx}px`, height: '100%',
@@ -226,38 +230,14 @@ export function FrameShell({ frameRef, frame, theme, content, editMode, selected
 
       {renderUploadedImages()}
 
-      {/* Footer */}
-      <div className={`wf-footer ${ec('footer')}`}
-        style={{
-          width: '100%', height: '72px', flexShrink: 0,
-          background: ov.footerBg || 'rgba(0,0,0,0.45)',
-          backdropFilter: 'blur(16px)',
-          display: 'flex', alignItems: 'center',
-          padding: '0 26px', gap: '16px',
-          fontFamily: "'JetBrains Mono', monospace", fontSize: '10px',
-          borderTop: `1px solid ${accentColor}08`, marginTop: 'auto',
-        }}
-        onClick={e => sel('footer', e)}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div style={{
-            width: '28px', height: '28px', borderRadius: '6px',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontWeight: 700, fontSize: '12px', color: '#090D10',
-            background: `linear-gradient(135deg, ${ov.avatarColor || accentColor}, ${ov.avatarColor || accentColor}CC)`,
-            boxShadow: `0 2px 8px ${accentColor}40`,
-          }}>W</div>
-          <div>
-            <div style={{ color: ov.handleColor || '#F4F5F7', fontSize: '10px', fontWeight: 600 }}>{content.handle}</div>
-            <div style={{ color: '#4A5568', fontSize: '10px', marginTop: '1px' }}>WHIZ.DEFI/{resolvedContent.issueNum}</div>
-          </div>
-        </div>
-        <div style={{ flex: 1, textAlign: 'center', fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', color: 'rgba(255,255,255,0.22)', letterSpacing: '0.07em', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-          STATUS: {(content.status||'PUBLISHED').toUpperCase()} ▸{content.nextDrop ? ` NEXT: ${content.nextDrop} ▸` : ''} VERIFIED ✓
-        </div>
-        <div style={{ color: '#4A5568', textAlign: 'right', fontSize: '8.5px', lineHeight: 1.6 }}>
-          {content.socialX || '@X'}<br />{content.socialSub || '@SUBSTACK'}
-        </div>
-      </div>
+      <FrameFooter
+        content={content}
+        ov={ov}
+        accentColor={accentColor}
+        resolvedContent={resolvedContent}
+        ec={ec}
+        sel={sel}
+      />
     </div>
   );
 }
