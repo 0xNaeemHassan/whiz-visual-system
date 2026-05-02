@@ -131,6 +131,7 @@ default:          return <BodyLayout {...layoutProps} />;
       role="img"
       aria-label={`Whiz Frame: ${content.title}. ${content.deck}. Stats: ${(content.stats || []).map(s => `${s.label}: ${s.value}`).join(', ')}`}
       style={{
+        '--wf-accent': accentColor,
         width: `${aspectRatio?.w || 1080}px`,
         height: `${aspectRatio?.h || 1350}px`,
         background: bgGradient || ov.frameBg || theme.base,
@@ -172,19 +173,10 @@ default:          return <BodyLayout {...layoutProps} />;
 
       {/* Spine — 5px color bar + rotated label that sits beside it */}
       <div className={`wf-spine ${ec('spine')}`}
-        style={{ background: ov.spineColor || accentColor, position: 'absolute', left: 0, top: 0, width: '5px', height: '100%', zIndex: 5, boxShadow: `0 0 20px ${accentColor}60` }}
+        style={{ background: ov.spineColor || accentColor, boxShadow: `0 0 20px ${accentColor}60` }}
         onClick={e => sel('spine', e)} />
-      <div style={{
-        position: 'absolute', left: '5px', top: 0, width: '18px', height: '100%',
-        zIndex: 6, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'transparent', pointerEvents: 'none',
-      }}>
-        <span style={{
-          fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', letterSpacing: '0.16em',
-          textTransform: 'uppercase', color: ov.spineColor || accentColor, opacity: 0.35,
-          transform: 'rotate(-90deg)', whiteSpace: 'nowrap', fontWeight: 600,
-          userSelect: 'none',
-        }}>
+      <div className="wf-spine-label-wrap">
+        <span className="wf-spine-label" style={{ color: ov.spineColor || accentColor }}>
           WHIZ DEFI DESK / VOL.{content.volume}
         </span>
       </div>
@@ -241,32 +233,25 @@ default:          return <BodyLayout {...layoutProps} />;
       {/* Footer */}
       <div className={`wf-footer ${ec('footer')}`}
         style={{
-          width: '100%', height: '72px', flexShrink: 0,
           background: ov.footerBg || 'rgba(0,0,0,0.45)',
           backdropFilter: 'blur(16px)',
-          display: 'flex', alignItems: 'center',
-          padding: '0 26px', gap: '16px',
-          fontFamily: "'JetBrains Mono', monospace", fontSize: '10px',
           borderTop: `1px solid ${accentColor}08`, marginTop: 'auto',
         }}
         onClick={e => sel('footer', e)}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div style={{
-            width: '28px', height: '28px', borderRadius: '6px',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontWeight: 700, fontSize: '12px', color: '#090D10',
+        <div className="wf-footer-handle">
+          <div className="wf-footer-avatar" style={{
             background: `linear-gradient(135deg, ${ov.avatarColor || accentColor}, ${ov.avatarColor || accentColor}CC)`,
             boxShadow: `0 2px 8px ${accentColor}40`,
           }}>W</div>
           <div>
-            <div style={{ color: ov.handleColor || '#F4F5F7', fontSize: '10px', fontWeight: 600 }}>{content.handle}</div>
-            <div style={{ color: '#4A5568', fontSize: '10px', marginTop: '1px' }}>WHIZ.DEFI/{content.issueNum}</div>
+            <div className="wf-footer-handle-main" style={{ color: ov.handleColor || '#F4F5F7' }}>{content.handle}</div>
+            <div className="wf-footer-handle-sub">WHIZ.DEFI/{content.issueNum}</div>
           </div>
         </div>
-        <div style={{ flex: 1, textAlign: 'center', fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', color: 'rgba(255,255,255,0.22)', letterSpacing: '0.07em', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+        <div className="wf-footer-status">
           STATUS: {(content.status||'PUBLISHED').toUpperCase()} ▸{content.nextDrop ? ` NEXT: ${content.nextDrop} ▸` : ''} VERIFIED ✓
         </div>
-        <div style={{ color: '#4A5568', textAlign: 'right', fontSize: '8.5px', lineHeight: 1.6 }}>
+        <div className="wf-footer-social">
           {content.socialX || '@X'}<br />{content.socialSub || '@SUBSTACK'}
         </div>
       </div>
