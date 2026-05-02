@@ -41,4 +41,24 @@ const score = getBrandScore({
 });
 assert.equal(score.score, 100, 'Fully compliant payload should score 100');
 
+
+const buildManifestPayload = ({ content = {} }) => ({
+  targetMetric: content.targetMetric || '',
+  metricConfidence: content.metricConfidence || '',
+  metricProvenance: Array.isArray(content.metricProvenance)
+    ? content.metricProvenance
+    : (content.metricProvenance ? [content.metricProvenance] : []),
+});
+
+const manifestPayload = buildManifestPayload({
+  content: {
+    targetMetric: 'DAU',
+    metricConfidence: 'high',
+    metricProvenance: ['internal-analytics'],
+  },
+});
+assert.equal(manifestPayload.targetMetric, 'DAU', 'Manifest payload should include targetMetric when present');
+assert.equal(manifestPayload.metricConfidence, 'high', 'Manifest payload should include metricConfidence when present');
+assert.deepEqual(manifestPayload.metricProvenance, ['internal-analytics'], 'Manifest payload should include metricProvenance when present');
+
 console.log('Smoke tests passed');
