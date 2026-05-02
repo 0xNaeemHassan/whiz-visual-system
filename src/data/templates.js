@@ -1,4 +1,6 @@
+/** @typedef {import('../types/editor.js').FrameContent} FrameContent */
 // Per-frame content templates — gives users a ready-to-edit scaffold
+/** @type {Record<number, Partial<FrameContent>>} */
 export const FRAME_TEMPLATES = {
   // Frame 4 — The Watchlist
   4: {
