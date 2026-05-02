@@ -31,6 +31,7 @@ const DEFAULT_CONTENT = {
   body:'Three years ago, triple-digit APYs were table stakes for any new DeFi protocol. Liquidity mining was the only customer acquisition strategy anyone needed.\n\nThe protocols that survived aren\'t the ones that offered the most \u2014 they\'re the ones that built real revenue.',
   handle:'@0xWhizMiz',socialX:'@X',socialSub:'@SUBSTACK',
   status:'PUBLISHED',
+  sourceLinks:'',
   tickerSpeed:28,sparkData:'1.2,1.8,2.9,2.1,1.6,2.4,3.8,4.2,3.6',
   stats:[{label:'TVL',value:'$4.2B'},{label:'24H VOL',value:'$890M'},{label:'APY',value:'18.4%'},{label:'USERS',value:'142K'},{label:'CHAINS',value:'7'}],
   tableRows:[{col1:'Aave',col2:'USDC',col3:'5.2%',col4:'Low',col5:'A+'},{col1:'Compound',col2:'ETH',col3:'3.8%',col4:'Low',col5:'A'},{col1:'Pendle',col2:'stETH',col3:'14.1%',col4:'Med',col5:'B+'},{col1:'Morpho',col2:'USDT',col3:'7.3%',col4:'Low',col5:'A-'},{col1:'Yearn',col2:'DAI',col3:'9.6%',col4:'Med',col5:'B+'}],
@@ -355,6 +356,13 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
           <option value="SCHEDULED">SCHEDULED</option>
           <option value="EMBARGOED">EMBARGOED</option>
         </select>
+      </div>
+      <div className="form-group">
+        <label className="form-label">Source Links</label>
+        <textarea className="form-control" rows={2} value={content.sourceLinks||''} onChange={e=>updateContent('sourceLinks',e.target.value)} placeholder="https://defillama.com/protocol/...\nhttps://dune.com/..." />
+        {(content.status||'PUBLISHED')==='PUBLISHED' && !(content.sourceLinks||'').trim() && (
+          <div style={{marginTop:4,fontFamily:'var(--font-m)',fontSize:10,color:'#FFB3B3'}}>Source links are required when status is PUBLISHED.</div>
+        )}
       </div>
       <div className="form-group">
         <label className="form-label">Next Drop Date</label>
