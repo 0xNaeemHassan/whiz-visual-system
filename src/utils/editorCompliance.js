@@ -1,4 +1,5 @@
 import { TICKER_CONTRACT } from '../domain/tickerContract';
+import { SPINE_DESIGN_TOKENS } from '../domain/spineDesignTokens';
 
 export const TYPE_SCALE = [10, 12, 14, 18, 24, 36, 56, 84];
 
@@ -10,6 +11,24 @@ export function nearestTypeScale(value) {
   return TYPE_SCALE.reduce((prev, curr) => (
     Math.abs(curr - value) < Math.abs(prev - value) ? curr : prev
   ), TYPE_SCALE[0]);
+}
+
+
+function relativeLuminance(hex) {
+  if (!HEX_RE.test(hex || '')) return null;
+  const value = hex.slice(1, 7);
+  const rgb = [value.slice(0, 2), value.slice(2, 4), value.slice(4, 6)].map((part) => parseInt(part, 16) / 255);
+  const linear = rgb.map((channel) => (channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4));
+  return (0.2126 * linear[0]) + (0.7152 * linear[1]) + (0.0722 * linear[2]);
+}
+
+function contrastRatio(fgHex, bgHex) {
+  const l1 = relativeLuminance(fgHex);
+  const l2 = relativeLuminance(bgHex);
+  if (l1 == null || l2 == null) return null;
+  const lighter = Math.max(l1, l2);
+  const darker = Math.min(l1, l2);
+  return (lighter + 0.05) / (darker + 0.05);
 }
 
 function getSlugFromTopic(topicTag = '') {
@@ -109,10 +128,15 @@ export function getComplianceIssues({ overrides, content }) {
     issues.push('Neutral palette lock: body color must remain in approved neutrals.');
   }
 
-  const spineLum = approxLuminance(overrides?.spineColor || overrides?.accent?.color || '');
-  const bgLum = approxLuminance(overrides?.frameBg || '');
-  if (spineLum !== null && bgLum !== null && Math.abs(spineLum - bgLum) < 0.25) {
-    issues.push('Rotated-spine contrast checks: spine contrast is too low against background.');
+  const spineTextColor = overrides?.spineColor || overrides?.accent?.color || null;
+  const frameBg = overrides?.frameBg || null;
+  const spineBar = overrides?.spineColor || overrides?.accent?.color || null;
+  const textToBgContrast = contrastRatio(spineTextColor, frameBg);
+  const textToSpineContrast = contrastRatio(spineTextColor, spineBar);
+  const lowContrastAgainstBg = textToBgContrast !== null && textToBgContrast < SPINE_DESIGN_TOKENS.contrast.minRatio;
+  const lowContrastAgainstSpine = textToSpineContrast !== null && textToSpineContrast < SPINE_DESIGN_TOKENS.contrast.minRatio;
+  if (lowContrastAgainstBg || lowContrastAgainstSpine) {
+    issues.push(`Rotated-spine contrast checks: minimum ${SPINE_DESIGN_TOKENS.contrast.minRatio}:1 required against spine/background combinations.`);
   }
 
   if ((overrides?.title?.letterSpacing ?? -0.02) > 0.12 || (overrides?.title?.lineHeight ?? 1.05) > 1.6) {
