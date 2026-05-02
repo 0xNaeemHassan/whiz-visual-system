@@ -1,4 +1,6 @@
+/** @typedef {import('../types/editor.js').FrameDefinition} FrameDefinition */
 // All 50 frames data
+/** @type {FrameDefinition[]} */
 export const FRAMES = [
   // TIER A — Weekly Recaps (1-7)
   { id: 1, tier: 'A', tierName: 'Weekly Recaps', name: 'The Ticker Tape', desc: 'Full-width scrolling-style header listing every event of the week as ticker symbols. Below, 6-9 mini cards in a 3×3 grid expanding each tag.', tags: ['weekly', 'recap', 'events'], layout: 'grid' },

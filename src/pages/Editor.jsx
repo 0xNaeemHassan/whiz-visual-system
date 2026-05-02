@@ -1,8 +1,9 @@
-import { getFrameTemplate } from '../data/templates.js';
+import { createTemplateForLayout, checkTemplateLayoutCompatibility, getFrameTemplate } from '../data/templates.js';
 import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
 import { FRAMES } from '../data/frames';
 import { THEMES } from '../data/themes';
 import { useLocalStorage } from '../hooks/useLocalStorage';
+import { useUIEventContext } from '../state/UIEventContext';
 import { useUndoRedo } from '../hooks/useUndoRedo';
 import WhizFrame from '../components/WhizFrame';
 import DragItem from '../components/DragItem';
@@ -11,8 +12,15 @@ import ImageUpload from '../components/ImageUpload';
 import AspectRatioSelector, { RATIOS } from '../components/AspectRatioSelector';
 import PatternSelector from '../components/PatternSelector';
 import { CONTENT_TEMPLATES } from '../data/templates';
+import { createDefaultContent, createDefaultOverrides, createDefaultEditorState } from '../domain/editorDefaults.js';
 import { nearestTypeScale, getComplianceIssues, getBrandScore } from '../utils/editorCompliance';
 
+/** @typedef {import('../types/editor.js').FrameContent} FrameContent */
+/** @typedef {import('../types/editor.js').StyleOverrides} StyleOverrides */
+/** @typedef {import('../types/editor.js').Theme} Theme */
+/** @typedef {import('../types/editor.js').ExportPayload} ExportPayload */
+
+/** @type {FrameContent} */
 const DEFAULT_CONTENT = {
   issueNum:'001',date:'05.01.26',desk:'YIELD',volume:'I',topicTag:'STABLECOIN RISK',
   title:'THE END OF MERCENARY YIELD',
@@ -30,6 +38,7 @@ const DEFAULT_CONTENT = {
   verdict:'Position in protocols with proven revenue. Avoid incentive-only models.',
   gridItems:[],timelineEvents:[],
 };
+/** @type {StyleOverrides} */
 const DEFAULT_OVERRIDES = {frameBg:null,spineColor:null,tickerColor:null,tickerBg:null,title:{fontSize:52,fontWeight:700,color:'#F4F5F7',italic:false,lineHeight:1.05,letterSpacing:-0.02,textAlign:'left',opacity:1},deck:{fontSize:18,fontWeight:400,color:'#8B95A3',italic:true},body:{fontSize:15,fontWeight:400,color:'#8B95A3',lineHeight:1.75,textAlign:'left',opacity:1},accent:{color:null},tag:{background:null,color:null,borderColor:null},footer:{background:null},statsColor:null,bignumColor:null,avatarColor:null,ruleBg:null,handleColor:null};
 const ELEMENTS = [{key:'frame',label:'Background',icon:'\u25A1'},{key:'spine',label:'Spine',icon:'|'},{key:'ticker',label:'Ticker',icon:'\u2014'},{key:'title',label:'Title',icon:'T'},{key:'deck',label:'Deck',icon:'D'},{key:'tag',label:'Tag',icon:'#'},{key:'body',label:'Body',icon:'B'},{key:'stats',label:'Stats',icon:'S'},{key:'bignum',label:'Big #',icon:'N'},{key:'footer',label:'Footer',icon:'F'},{key:'accent',label:'Accent',icon:'\u25CF'}];
 function ColorRow({label,value,defaultVal,onChange}){const col=value||defaultVal;return(<div className="prop-color-row"><span className="prop-label-text">{label}</span><div className="prop-color-swatch" style={{background:col,position:'relative'}}><input type="color" value={col} onChange={e=>onChange(e.target.value)} aria-label={`${label} color`} style={{position:'absolute',inset:0,opacity:0,cursor:'pointer',width:'100%',height:'100%'}}/></div><input type="text" className="prop-hex" value={col} onChange={e=>{const v=e.target.value;if(/^#[0-9A-Fa-f]{0,6}$/.test(v)||v==='')onChange(v||null);}}/><button className="btn btn-ghost btn-sm" onClick={()=>onChange(null)} style={{padding:'4px 7px',fontSize:11,color:'var(--dim)'}} title="Reset">\u21BA</button></div>);}
@@ -70,6 +79,9 @@ function DesignPanel({selectedEl,setSelectedEl,overrides,setOverrides,theme,bgGr
     }}>Reset All</button></div></div>);
 }
 
+/**
+ * @param {{ activeFontPairing?: {body?:string}|null, showToast: (message:string, kind?:string)=>void, activeTheme: Theme, setActiveTheme: (theme:Theme)=>void, editingFrame?: any, clearEditingFrame?: ()=>void, newFrameSignal:number, isActive:boolean }} props
+ */
 export default function Editor({ activeFontPairing,showToast,activeTheme,setActiveTheme,editingFrame,clearEditingFrame,newFrameSignal,isActive}){
   const[saves,setSaves]=useLocalStorage('whiz-saves',[]);
   const[frameId,setFrameId]=useState(editingFrame||4);
@@ -90,6 +102,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const[showDeleteConfirm,setShowDeleteConfirm]=useState(null);const[saveSearch,setSaveSearch]=useState('');
   const[strictMode,setStrictMode]=useLocalStorage('whiz-strict-mode',true);
   const frameRef=useRef(null);const centerRef=useRef(null);
+  const { registerHandlers } = useUIEventContext();
   const[showAutosavePrompt,setShowAutosavePrompt]=useState(false);const autosaveDataRef=useRef(null);
 
   // Fix #3/11: editingFrame is now {frameId, serial, issue}; compare serial to detect re-opens
@@ -99,7 +112,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     // Fix #21: Pre-fill content from issue if provided
     if(editingFrame.issue){
       const iss=editingFrame.issue;
-      const base={...DEFAULT_CONTENT};
+      const base=createDefaultContent();
       if(iss.topic)base.title=iss.topic.toUpperCase();
       if(iss.caption)base.deck=iss.caption;
       if(iss.notes)base.body=iss.notes;
@@ -112,13 +125,12 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   // Fix #38/63: True "New Frame" action — reset all state
   useEffect(()=>{
     if(newFrameSignal===0)return;
-    setFrameId(4);
+    const nextFrameId=4;
+    setFrameId(nextFrameId);
     resetContent(DEFAULT_CONTENT);
     // P3-05: Load frame-specific content template
-    if(selectedFrameId){
-      const tmpl=getFrameTemplate(selectedFrameId,DEFAULT_CONTENT);
-      setContent(tmpl);
-    }
+    const tmpl=getFrameTemplate(nextFrameId,DEFAULT_CONTENT);
+    resetContent(tmpl);
     resetOverrides(DEFAULT_OVERRIDES);
     setBgGradient(null);setPatternOverlay(null);
     setTheme(activeTheme);
@@ -129,6 +141,21 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   useEffect(()=>{try{const r=localStorage.getItem('whiz-autosave');if(r){const d=JSON.parse(r);if(d.savedAt&&Date.now()-d.savedAt<86400000){autosaveDataRef.current=d;setShowAutosavePrompt(true);}}}catch(e){}},[]);
   const restoreAutosave=()=>{const d=autosaveDataRef.current;if(d){d.frameId&&setFrameId(d.frameId);d.theme&&(setTheme(d.theme),setActiveTheme(d.theme));d.content&&resetContent(d.content);d.overrides&&setOverrides(d.overrides);d.aspectRatio&&setAspectRatio(d.aspectRatio);d.bgGradient&&setBgGradient(d.bgGradient);d.patternOverlay&&setPatternOverlay(d.patternOverlay);showToast('Restored');}setShowAutosavePrompt(false);};
   const selectedFrame=FRAMES.find(f=>f.id===frameId)||FRAMES[0];
+  useEffect(() => {
+    const layoutBase = createTemplateForLayout(selectedFrame.layout);
+    const frameTemplate = getFrameTemplate(frameId, layoutBase);
+    const compatibility = checkTemplateLayoutCompatibility(frameTemplate, selectedFrame.layout);
+
+    resetContent((prev) => ({
+      ...layoutBase,
+      ...prev,
+      ...frameTemplate,
+    }));
+
+    if (!compatibility.isCompatible) {
+      showToast(`Template missing layout fields: ${compatibility.missingFields.join(', ')}`, 'warning');
+    }
+  }, [frameId]);
   const complianceIssues = useMemo(
     () => getComplianceIssues({ overrides, content }),
     [overrides, content],
@@ -178,18 +205,29 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
           if(!didRedo)redoOverrideRef.current?.();
         }
       }
-      if(e.key==='Escape'){setSelectedEl(null);setEditMode(false);setShowSaveModal(false);setShowLoadModal(false);}
     };
     window.addEventListener('keydown',h);
     return()=>window.removeEventListener('keydown',h);
   },[isActive]);
+
+  useEffect(() => {
+    if (!isActive) return undefined;
+    return registerHandlers({
+      onEscape: () => {
+        setSelectedEl(null);
+        setEditMode(false);
+        setShowSaveModal(false);
+        setShowLoadModal(false);
+      },
+    });
+  }, [isActive, registerHandlers]);
   useEffect(()=>{if(editMode||selectedEl)setRightTab('design');},[editMode,selectedEl]);
   const buildSave=()=>({frameId,theme,content,overrides,aspectRatio,bgGradient,patternOverlay,savedAt:Date.now()});
   const doSave=()=>{const n=saveName.trim()||`${content.topicTag} \u2014 ${new Date().toLocaleDateString()}`;setSaves(p=>[...p,{id:`s_${Date.now()}`,title:n,...buildSave()}]);setShowSaveModal(false);setSaveName('');showToast(`Saved "${n}"`);};
   const loadSave=s=>{setFrameId(s.frameId);setTheme(s.theme);resetContent(s.content);s.overrides&&setOverrides(s.overrides);s.aspectRatio&&setAspectRatio(s.aspectRatio);s.bgGradient&&setBgGradient(s.bgGradient);s.patternOverlay&&setPatternOverlay(s.patternOverlay);setShowLoadModal(false);showToast(`Loaded`);};
   const confirmDel=()=>{if(showDeleteConfirm){setSaves(p=>p.filter(s=>s.id!==showDeleteConfirm));showToast('Deleted','info');setShowDeleteConfirm(null);}};
   const exportJSON=()=>{const d=JSON.stringify(buildSave(),null,2);const b=new Blob([d],{type:'application/json'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=`whiz_${content.topicTag.replace(/[^a-zA-Z0-9]/g,'_').toLowerCase()}.json`;a.click();URL.revokeObjectURL(u);showToast('JSON exported');};
-  const exportManifest=()=>{const payload={issueNum:content.issueNum,topic:content.topicTag,title:content.title,date:content.date,frameId,themeId:theme.id,strictMode,brandScore,complianceIssues,sources:(content.sourceLinks||'').split(',').map(s=>s.trim()).filter(Boolean),exportedAt:new Date().toISOString()};const d=JSON.stringify(payload,null,2);const b=new Blob([d],{type:'application/json'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=`whiz_issue${content.issueNum||'000'}_manifest.json`;a.click();URL.revokeObjectURL(u);showToast('Manifest exported');};
+  const exportManifest=()=>{const payload={issueNum:content.issueNum,topic:content.topicTag,title:content.title,date:content.date,frameId,themeId:theme.id,strictMode,brandScore,complianceIssues,sources:(content.sourceLinks||'').split(',').map(s=>s.trim()).filter(Boolean),targetMetric:content.targetMetric||'',metricConfidence:content.metricConfidence||'',metricProvenance:Array.isArray(content.metricProvenance)?content.metricProvenance:(content.metricProvenance?[content.metricProvenance]:[]),exportedAt:new Date().toISOString()};const d=JSON.stringify(payload,null,2);const b=new Blob([d],{type:'application/json'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=`whiz_issue${content.issueNum||'000'}_manifest.json`;a.click();URL.revokeObjectURL(u);showToast('Manifest exported');};
   const importJSON=e=>{const f=e.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=ev=>{try{const d=JSON.parse(ev.target.result);d.frameId&&setFrameId(d.frameId);d.theme&&(setTheme(d.theme),setActiveTheme(d.theme));d.content&&resetContent(d.content);d.overrides&&setOverrides(d.overrides);d.aspectRatio&&setAspectRatio(d.aspectRatio);d.bgGradient&&setBgGradient(d.bgGradient);d.patternOverlay&&setPatternOverlay(d.patternOverlay);showToast('Imported');}catch(err){showToast('Invalid JSON','error');}};r.readAsText(f);e.target.value='';};
   const exportHTML=()=>{const el=frameRef.current;if(!el)return;const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&family=Inter:wght@300..700&family=JetBrains+Mono:wght@400..700&display=swap" rel="stylesheet"><style>*{margin:0;padding:0;box-sizing:border-box}body{background:#0F1318;display:flex;justify-content:center;align-items:center;min-height:100vh}.whiz-frame{position:relative;overflow:hidden;flex-shrink:0}.wf-spine{position:absolute;left:0;top:0;bottom:0;width:3px;z-index:5}.wf-corner{position:absolute;width:16px;height:16px;z-index:6;opacity:.5}.wf-corner.tl{top:12px;left:12px;border-top:1.5px solid currentColor;border-left:1.5px solid currentColor}.wf-corner.tr{top:12px;right:12px;border-top:1.5px solid currentColor;border-right:1.5px solid currentColor}.wf-corner.bl{bottom:12px;left:12px;border-bottom:1.5px solid currentColor;border-left:1.5px solid currentColor}.wf-corner.br{bottom:12px;right:12px;border-bottom:1.5px solid currentColor;border-right:1.5px solid currentColor}.wf-content{position:relative;z-index:4;padding:40px 36px 32px 44px;display:flex;flex-direction:column;height:100%;box-sizing:border-box}.wf-title{font-family:'Space Grotesk',sans-serif;font-weight:700;letter-spacing:-.02em;line-height:1.05}.wf-deck{font-family:'Inter',sans-serif;line-height:1.6}.wf-body{font-family:'Inter',sans-serif;line-height:1.75}.wf-stat{display:flex;flex-direction:column;gap:4;padding:12px 14px;border-radius:6px}.wf-stat-val{font-family:'Space Grotesk',sans-serif;font-weight:700;line-height:1}.wf-stat-label{font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.1em}.wf-ticker{overflow:hidden;white-space:nowrap;height:28px;display:flex;align-items:center;width:100%;position:relative;z-index:4}.wf-ticker-scroll{display:inline-block;animation:whiz-ticker-scroll 30s linear infinite;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase}.wf-section-head{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.15em;text-transform:uppercase;display:flex;align-items:center;gap:8px;margin-bottom:12px}.wf-section-head::before{content:'';width:12px;height:1.5px;background:currentColor;opacity:.5}.wf-handle{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.08em}.wf-table{width:100%;border-collapse:collapse}.wf-table th{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;text-align:left;padding:7px 10px;border-bottom:1px solid rgba(255,255,255,.06)}.wf-table td{font-family:'Inter',sans-serif;font-size:12px;padding:7px 10px;border-bottom:1px solid rgba(255,255,255,.04)}@keyframes whiz-ticker-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}</style></head><body>${el.outerHTML}</body></html>`;const b=new Blob([html],{type:'text/html'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=`whiz_export.html`;a.click();URL.revokeObjectURL(u);showToast('HTML exported');};
   const exportPNG=async()=>{if(!frameRef.current||exporting)return;if(strictMode&&complianceIssues.length){showToast(`Strict mode blocked export (${complianceIssues.length} issues)`,'error');return;}if(!strictMode&&complianceIssues.length&&!window.confirm(`Whiz compliance warnings:\\n- ${complianceIssues.join('\\n- ')}\\n\\nExport anyway?`))return;setExporting(true);showToast('Generating PNG...','info');try{const h2c=(await import('html2canvas')).default;const c=frameRef.current.cloneNode(true);c.style.cssText=`position:absolute;left:-9999px;top:0;transform:none;width:${aspectRatio.w}px;height:${aspectRatio.h}px`;document.body.appendChild(c);let cv;try{cv=await h2c(c,{scale:2,useCORS:true,allowTaint:true,width:aspectRatio.w,height:aspectRatio.h,backgroundColor:overrides.frameBg||theme.base,logging:false});}finally{if(document.body.contains(c))document.body.removeChild(c);}try{cv.toBlob(bl=>{bl&&navigator.clipboard?.write&&navigator.clipboard.write([new ClipboardItem({'image/png':bl})]).catch(()=>{});});}catch(e){}const u=cv.toDataURL('image/png');const a=document.createElement('a');a.href=u;a.download=`whiz_export.png`;a.click();showToast(`PNG exported at 2x`);}catch(e){console.error(e);showToast(`Export failed: ${e.message||'unknown error'}`,'error');}setExporting(false);}
@@ -218,7 +256,17 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const updateContent=(k,v)=>setContent(c=>({...c,[k]:v}));
   useEffect(()=>{if(!isActive)return;const t=setTimeout(()=>{try{localStorage.setItem('whiz-autosave',JSON.stringify({frameId,theme,content,overrides,aspectRatio,bgGradient,patternOverlay,savedAt:Date.now()}));}catch(e){}},3000);return()=>clearTimeout(t);},[content,overrides,frameId,theme,aspectRatio,bgGradient,patternOverlay]);
   const applyTheme=t=>{setTheme(t);setActiveTheme(t);};
-  const applyTemplate=t=>{resetContent({...DEFAULT_CONTENT,...t.content});showToast(`Template: ${t.name}`);};
+  const applyTemplate=t=>{
+    const layoutBase = createTemplateForLayout(selectedFrame.layout);
+    const merged = { ...layoutBase, ...t.content };
+    const compatibility = checkTemplateLayoutCompatibility(merged, selectedFrame.layout);
+    resetContent(merged);
+    if (!compatibility.isCompatible) {
+      showToast(`Template incompatibility: missing ${compatibility.missingFields.join(', ')}`, 'warning');
+      return;
+    }
+    showToast(`Template: ${t.name}`);
+  };
   const filteredFrames=useMemo(()=>{if(!frameSearch)return FRAMES;const q=frameSearch.toLowerCase();return FRAMES.filter(f=>f.name.toLowerCase().includes(q)||f.tags.some(t=>t.includes(q))||f.layout.includes(q));},[frameSearch]);
   // Fix #33: scroll frame list to top when search changes
   useEffect(()=>{if(frameListRef.current)frameListRef.current.scrollTop=0;},[frameSearch,filteredFrames]);
