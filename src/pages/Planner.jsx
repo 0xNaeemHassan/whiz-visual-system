@@ -76,6 +76,7 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
   const maxMonthly = Math.max(1, ...monthlyActivity.map(m => m.count));
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [seriesFocusFilter, setSeriesFocusFilter] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [editingIssue, setEditingIssue] = useState(null);
@@ -275,12 +276,70 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
     e.target.value = '';
   };
 
+
+  const toDateOnly = (value) => {
+    if (!value) return null;
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d;
+  };
+
+  const cadenceAlerts = useMemo(() => {
+    const now = new Date();
+    const dayMs = 1000 * 60 * 60 * 24;
+    const grouped = issues.reduce((acc, issue) => {
+      const series = (issue.series || '').trim();
+      const d = toDateOnly(issue.publishDate);
+      if (!series || !d) return acc;
+      acc[series] = acc[series] || [];
+      acc[series].push({ ...issue, publishDateObj: d });
+      return acc;
+    }, {});
+
+    return Object.entries(grouped)
+      .map(([series, seriesIssues]) => {
+        const sorted = [...seriesIssues].sort((a, b) => a.publishDateObj - b.publishDateObj);
+        const gaps = [];
+        for (let i = 1; i < sorted.length; i += 1) {
+          gaps.push((sorted[i].publishDateObj - sorted[i - 1].publishDateObj) / dayMs);
+        }
+        const avgGap = gaps.length ? gaps.reduce((sum, g) => sum + g, 0) / gaps.length : 0;
+        const lastPost = sorted[sorted.length - 1].publishDateObj;
+        const daysSinceLastPost = Math.max(0, Math.floor((now - lastPost) / dayMs));
+        const drift = avgGap > 0 ? daysSinceLastPost - avgGap : daysSinceLastPost;
+        const severity = drift >= 14 ? 'critical' : drift >= 7 ? 'warn' : 'info';
+        return {
+          series,
+          avgGapDays: avgGap,
+          daysSinceLastPost,
+          drift,
+          severity,
+          issueCount: sorted.length,
+          lowConfidenceCount: seriesIssues.filter(i => (i.confidence || 'medium') === 'low').length,
+        };
+      })
+      .filter((a) => a.issueCount >= 2)
+      .sort((a, b) => b.drift - a.drift)
+      .slice(0, 5);
+  }, [issues]);
+
+  const openNewIssueForSeries = (seriesName) => {
+    openAdd('planned');
+    setForm((prev) => ({ ...prev, series: seriesName, status: 'planned' }));
+  };
+
+  const focusLowConfidenceSeries = (seriesName) => {
+    setViewSafe('table');
+    setStatusFilter('ALL');
+    setSeriesFocusFilter(seriesName);
+  };
+
   const filtered = useMemo(() => {
     let f = issues;
     if (statusFilter !== 'ALL') f = f.filter(i => i.status === statusFilter);
     if (search) { const q = search.toLowerCase(); f = f.filter(i => i.topic?.toLowerCase().includes(q) || i.issueNum?.includes(q) || i.notes?.toLowerCase().includes(q) || i.caption?.toLowerCase().includes(q) || i.sourceLinks?.toLowerCase().includes(q)); }
+    if (seriesFocusFilter) f = f.filter(i => (i.series || '').trim() === seriesFocusFilter && (i.confidence || 'medium') === 'low');
     return f.sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0));
-  }, [issues, statusFilter, search]);
+  }, [issues, statusFilter, search, seriesFocusFilter]);
 
   const stats = STATUSES.reduce((acc, s) => { acc[s] = issues.filter(i => i.status === s).length; return acc; }, {});
 
@@ -311,6 +370,56 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
           <div style={{ fontFamily: 'var(--font-d)', fontSize: 24, fontWeight: 700, color: activeTheme.accent, lineHeight: 1 }}>{issues.length}</div>
           <div style={{ fontFamily: 'var(--font-m)', fontSize: 9, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>TOTAL<br/>ISSUES</div>
         </div>
+      </div>
+
+
+
+      {/* Intelligence Panel */}
+      <div className="card" style={{ marginBottom: 16 }} aria-label="Cadence intelligence panel">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
+          <div>
+            <div style={{ fontFamily: 'var(--font-m)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)' }}>Intelligence</div>
+            <div style={{ fontSize: 13, color: 'var(--text)' }}>Top cadence alerts by posting drift.</div>
+          </div>
+          {seriesFocusFilter && (
+            <button className="btn btn-ghost btn-sm" onClick={() => setSeriesFocusFilter(null)}>
+              Clear low-confidence filter ({seriesFocusFilter})
+            </button>
+          )}
+        </div>
+        {cadenceAlerts.length === 0 ? (
+          <div style={{ fontSize: 12, color: 'var(--muted)' }}>No cadence alerts yet. Add at least two dated posts in a series.</div>
+        ) : (
+          <div style={{ display: 'grid', gap: 8 }}>
+            {cadenceAlerts.map((alert) => {
+              const severityMeta = {
+                info: { label: 'Info', color: '#6FA8FF' },
+                warn: { label: 'Warn', color: '#E5B23A' },
+                critical: { label: 'Critical', color: '#FF5A5A' },
+              }[alert.severity];
+              return (
+                <div key={alert.series} style={{ border: '1px solid var(--border)', borderLeft: `4px solid ${severityMeta.color}`, borderRadius: 'var(--r)', padding: 10, display: 'grid', gap: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                    <strong style={{ fontSize: 12 }}>{alert.series}</strong>
+                    <span aria-label={`Severity ${severityMeta.label}`} style={{ fontSize: 10, fontFamily: 'var(--font-m)', color: severityMeta.color, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{severityMeta.label}</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: 11, color: 'var(--muted)' }}>
+                    <span>Avg gap: {Math.round(alert.avgGapDays)}d</span>
+                    <span>Days since last post: {alert.daysSinceLastPost}d</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button className="btn btn-secondary btn-sm" onClick={() => openNewIssueForSeries(alert.series)}>
+                      Create next issue in series
+                    </button>
+                    <button className="btn btn-ghost btn-sm" onClick={() => focusLowConfidenceSeries(alert.series)}>
+                      Boost confidence
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Toolbar */}
