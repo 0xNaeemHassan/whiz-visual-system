@@ -35,3 +35,5 @@ export const extendedLayouts = {
   stack: StackLayout,
   'trade-routes': TradeRoutesLayout,
 };
+
+export const extendedLayoutKeys = new Set(Object.keys(extendedLayouts));

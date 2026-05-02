@@ -17,3 +17,5 @@ export const coreLayouts = {
   scorecard: ScoreCardLayout,
   quote: QuoteLayout,
 };
+
+export const coreLayoutKeys = new Set(Object.keys(coreLayouts));

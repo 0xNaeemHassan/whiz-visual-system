@@ -1,9 +1,10 @@
 // WhizFrame v8.0 — Complete visual overhaul with unique layouts for all frame types
 import { getLayoutComponent } from './layoutRegistry';
+import { coreLayoutKeys } from './layouts/coreLayouts';
+import { applyOverflowPolicy } from './layouts/OverflowPolicy';
 
 export function FrameShell({ frameRef, frame, theme, content, editMode, selectedEl, onSelectEl, styleOverrides, showGrid, aspectRatio, uploadedImages, bgGradient, patternOverlay }) {
   const ov = styleOverrides || {};
-  const tickerText = `WHIZ.DEFI ▸ ${content.date} ▸ ISSUE ${content.issueNum} ▸ ${content.topicTag} ▸ ALPHA UNLOCKED ▸ `;
   const sel = (key, e) => { if (editMode) { e?.stopPropagation(); onSelectEl?.(selectedEl === key ? null : key); } };
   const ec = (key) => editMode ? `wf-editable${selectedEl === key ? ' wf-sel' : ''}` : '';
   const accentColor = ov.accent?.color || theme.accent;
@@ -25,11 +26,6 @@ export function FrameShell({ frameRef, frame, theme, content, editMode, selected
       <span style={{ flex: 1, height: '1px', background: `linear-gradient(90deg, ${accentColor}40, transparent)` }} />
     </div>
   );
-
-  const layoutProps = { theme, content, SectionHead, ov, editMode, selectedEl, sel, ec, accentColor };
-
-  const LayoutComponent = getLayoutComponent(frame?.layout);
-
 
   // A1-A7: Render uploaded images with full position/size/rotation/opacity controls
   const renderUploadedImages = () => {
@@ -82,12 +78,27 @@ export function FrameShell({ frameRef, frame, theme, content, editMode, selected
     return 18;
   };
 
+  const layoutFamily = coreLayoutKeys.has(frame?.layout) ? 'core' : 'extended';
+  const overflowResult = applyOverflowPolicy({
+    family: layoutFamily,
+    aspectRatio,
+    content,
+    ov,
+    baseTitleSize: getTitleFontSize(),
+  });
+  const resolvedContent = overflowResult.content;
+  const resolvedOv = overflowResult.ov;
+  const tickerText = `WHIZ.DEFI ▸ ${resolvedContent.date} ▸ ISSUE ${resolvedContent.issueNum} ▸ ${resolvedContent.topicTag} ▸ ALPHA UNLOCKED ▸ `;
+  const layoutProps = { theme, content: resolvedContent, SectionHead, ov: resolvedOv, editMode, selectedEl, sel, ec, accentColor };
+  const LayoutComponent = getLayoutComponent(frame?.layout);
+
+
   return (
     <div
       ref={frameRef}
       className="whiz-frame"
       role="img"
-      aria-label={`Whiz Frame: ${content.title}. ${content.deck}. Stats: ${(content.stats || []).map(s => `${s.label}: ${s.value}`).join(', ')}`}
+      aria-label={`Whiz Frame: ${resolvedContent.title}. ${resolvedContent.deck}. Stats: ${(content.stats || []).map(s => `${s.label}: ${s.value}`).join(', ')}`}
       style={{
         width: `${aspectRatio?.w || 1080}px`,
         height: `${aspectRatio?.h || 1350}px`,
@@ -152,12 +163,12 @@ export function FrameShell({ frameRef, frame, theme, content, editMode, selected
       {/* Header */}
       <div className="wf-header" style={{ flexShrink: 0 }}>
         <div className={`wf-slug ${ec('slug')}`} onClick={e => sel('slug', e)}>
-          <span className="wf-slug-line"><span style={{ color: '#5A6478' }}>ISSUE /</span> <span style={{ color: accentColor }}>{content.issueNum}</span></span>
+          <span className="wf-slug-line"><span style={{ color: '#5A6478' }}>ISSUE /</span> <span style={{ color: accentColor }}>{resolvedContent.issueNum}</span></span>
           <span className="wf-slug-line"><span style={{ color: '#5A6478' }}>FILED /</span> {content.date}</span>
           <span className="wf-slug-line"><span style={{ color: '#5A6478' }}>DESK /</span> {content.desk}</span>
         </div>
         <div className={`wf-topic-tag ${ec('tag')}`} style={tagStyle} onClick={e => sel('tag', e)}>
-          <span style={{ fontSize: '10px', marginRight: '4px' }}>&#9654;</span> {content.topicTag}
+          <span style={{ fontSize: '10px', marginRight: '4px' }}>&#9654;</span> {resolvedContent.topicTag}
         </div>
       </div>
 
@@ -166,27 +177,27 @@ export function FrameShell({ frameRef, frame, theme, content, editMode, selected
         <div className={`wf-title ${ec('title')}`}
           style={{
             fontFamily: "'Space Grotesk', sans-serif",
-            fontSize: `${getTitleFontSize()}px`,
-            fontWeight: ov.title?.fontWeight || 700,
-            color: ov.title?.color || '#F4F5F7',
-            fontStyle: ov.title?.italic ? 'italic' : 'normal',
-            lineHeight: ov.title?.lineHeight || 1.05,
-            letterSpacing: `${ov.title?.letterSpacing || -0.02}em`,
-            textAlign: ov.title?.textAlign || 'left',
-            opacity: ov.title?.opacity ?? 1,
+            fontSize: `${resolvedOv.title?.fontSize || getTitleFontSize()}px`,
+            fontWeight: resolvedOv.title?.fontWeight || 700,
+            color: resolvedOv.title?.color || '#F4F5F7',
+            fontStyle: resolvedOv.title?.italic ? 'italic' : 'normal',
+            lineHeight: resolvedOv.title?.lineHeight || 1.05,
+            letterSpacing: `${resolvedOv.title?.letterSpacing || -0.02}em`,
+            textAlign: resolvedOv.title?.textAlign || 'left',
+            opacity: resolvedOv.title?.opacity ?? 1,
           }}
-          onClick={e => sel('title', e)}>{content.title}</div>
+          onClick={e => sel('title', e)}>{resolvedContent.title}</div>
         <div style={{ height: '1px', margin: '18px 0 14px', background: `linear-gradient(90deg, ${accentColor}50, ${ov.ruleBg || '#1E2A3A'}80, transparent)` }} />
         <div className={`wf-deck ${ec('deck')}`}
           style={{
             fontFamily: "'Inter', sans-serif",
-            fontSize: `${ov.deck?.fontSize || 18}px`,
-            fontWeight: ov.deck?.fontWeight || 400,
-            color: ov.deck?.color || '#8B95A3',
-            fontStyle: ov.deck?.italic !== false ? 'italic' : 'normal',
+            fontSize: `${resolvedOv.deck?.fontSize || 18}px`,
+            fontWeight: resolvedOv.deck?.fontWeight || 400,
+            color: resolvedOv.deck?.color || '#8B95A3',
+            fontStyle: resolvedOv.deck?.italic !== false ? 'italic' : 'normal',
             lineHeight: 1.45,
           }}
-          onClick={e => sel('deck', e)}>{content.deck}</div>
+          onClick={e => sel('deck', e)}>{resolvedContent.deck}</div>
       </div>
 
       {/* Content — auto-scroll on overflow instead of clip */}
@@ -218,7 +229,7 @@ export function FrameShell({ frameRef, frame, theme, content, editMode, selected
           }}>W</div>
           <div>
             <div style={{ color: ov.handleColor || '#F4F5F7', fontSize: '10px', fontWeight: 600 }}>{content.handle}</div>
-            <div style={{ color: '#4A5568', fontSize: '10px', marginTop: '1px' }}>WHIZ.DEFI/{content.issueNum}</div>
+            <div style={{ color: '#4A5568', fontSize: '10px', marginTop: '1px' }}>WHIZ.DEFI/{resolvedContent.issueNum}</div>
           </div>
         </div>
         <div style={{ flex: 1, textAlign: 'center', fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', color: 'rgba(255,255,255,0.22)', letterSpacing: '0.07em', overflow: 'hidden', whiteSpace: 'nowrap' }}>
@@ -314,7 +325,7 @@ function StatRibbon({ stats, ov, accentColor, maxVisible }) {
           }}>{s.label}</div>
           <div style={{
             fontFamily: "'Space Grotesk', sans-serif", fontSize: '18px',
-            fontWeight: 700, color: ov.title?.color || '#F4F5F7',
+            fontWeight: 700, color: resolvedOv.title?.color || '#F4F5F7',
             lineHeight: 1, letterSpacing: '-0.01em',
           }}>{s.value}</div>
         </div>
@@ -352,16 +363,16 @@ function BigNumber({ content, ov, accentColor }) {
 }
 
 function BodyText({ content, ov, ec, sel, maxParagraphs }) {
-  const paras = content.body.split('\n').filter(Boolean);
+  const paras = resolvedContent.body.split('\n').filter(Boolean);
   const visible = maxParagraphs ? paras.slice(0, maxParagraphs) : paras;
   return (
     <div className={ec?.('body') || ''} onClick={e => sel?.('body', e)}>
       {visible.map((p, i) => (
         <p key={i} style={{
           marginBottom: '18px', fontFamily: "'Inter', sans-serif",
-          fontSize: `${ov.body?.fontSize || 15}px`, color: ov.body?.color || '#B0BAC8',
-          lineHeight: ov.body?.lineHeight || 1.75,
-          textAlign: ov.body?.textAlign || 'left', opacity: ov.body?.opacity ?? 1,
+          fontSize: `${resolvedOv.body?.fontSize || 15}px`, color: resolvedOv.body?.color || '#B0BAC8',
+          lineHeight: resolvedOv.body?.lineHeight || 1.75,
+          textAlign: resolvedOv.body?.textAlign || 'left', opacity: resolvedOv.body?.opacity ?? 1,
         }}>{p}</p>
       ))}
     </div>
@@ -408,8 +419,8 @@ function CompareLayout(props) {
   return (
     <>
       <SectionHead>{content.topicTag || 'COMPARISON'}</SectionHead>
-      <div style={{ fontSize: ov.title?.fontSize || 46, fontWeight: 700, lineHeight: 1.05, color: ov.title?.color || '#F4F5F7', marginBottom: 12, fontFamily: "'Space Grotesk', sans-serif" }}>
-        {content.title}
+      <div style={{ fontSize: resolvedOv.title?.fontSize || 46, fontWeight: 700, lineHeight: 1.05, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 12, fontFamily: "'Space Grotesk', sans-serif" }}>
+        {resolvedContent.title}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, flex: 1 }}>
         <div style={{ padding: 16, borderRadius: 8, background: `${accentColor}06`, border: `1px solid ${accentColor}25` }}>
@@ -419,7 +430,7 @@ function CompareLayout(props) {
           {leftItems.map((pt, i) => (
             <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'flex-start' }}>
               <span style={{ color: accentColor, fontSize: 14, lineHeight: 1, flexShrink: 0, marginTop: 1 }}>✓</span>
-              <span style={{ fontFamily: "'Inter', sans-serif", fontSize: 12, color: ov.body?.color || '#8B95A3', lineHeight: 1.5 }}>{pt}</span>
+              <span style={{ fontFamily: "'Inter', sans-serif", fontSize: 12, color: resolvedOv.body?.color || '#8B95A3', lineHeight: 1.5 }}>{pt}</span>
             </div>
           ))}
         </div>
@@ -430,7 +441,7 @@ function CompareLayout(props) {
           {rightItems.map((pt, i) => (
             <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'flex-start' }}>
               <span style={{ color: '#8B95A3', fontSize: 14, lineHeight: 1, flexShrink: 0, marginTop: 1 }}>◦</span>
-              <span style={{ fontFamily: "'Inter', sans-serif", fontSize: 12, color: ov.body?.color || '#8B95A3', lineHeight: 1.5 }}>{pt}</span>
+              <span style={{ fontFamily: "'Inter', sans-serif", fontSize: 12, color: resolvedOv.body?.color || '#8B95A3', lineHeight: 1.5 }}>{pt}</span>
             </div>
           ))}
         </div>
@@ -448,8 +459,8 @@ function ScoreCardLayout(props) {
     <>
       <StatRibbon stats={content.stats?.slice(0, 4)} ov={ov} accentColor={accentColor} />
       <SectionHead>{content.topicTag || 'SCORECARD'}</SectionHead>
-      <div style={{ fontSize: ov.title?.fontSize ? Math.min(ov.title.fontSize, 40) : 40, fontWeight: 700, lineHeight: 1.05, color: ov.title?.color || '#F4F5F7', marginBottom: 12, fontFamily: "'Space Grotesk', sans-serif" }}>
-        {content.title}
+      <div style={{ fontSize: resolvedOv.title?.fontSize ? Math.min(resolvedOv.title.fontSize, 40) : 40, fontWeight: 700, lineHeight: 1.05, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 12, fontFamily: "'Space Grotesk', sans-serif" }}>
+        {resolvedContent.title}
       </div>
       <div style={{ flex: 1 }}>
         {rows.map((row, i) => {
@@ -459,7 +470,7 @@ function ScoreCardLayout(props) {
             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
               <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: '#555', width: 18, textAlign: 'right', flexShrink: 0 }}>{i + 1}</div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 13, fontWeight: 600, color: ov.title?.color || '#F4F5F7' }}>{row.col1}</div>
+                <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 13, fontWeight: 600, color: resolvedOv.title?.color || '#F4F5F7' }}>{row.col1}</div>
                 <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: '#555', marginTop: 2 }}>{row.col2} · {row.col3}</div>
               </div>
               <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 16, fontWeight: 700, color: gradeColor, background: `${gradeColor}15`, borderRadius: 6, padding: '4px 10px', flexShrink: 0 }}>{grade || '-'}</div>
@@ -481,21 +492,21 @@ function QuoteLayout(props) {
         <div style={{ color: accentColor, fontSize: 64, lineHeight: 0.8, fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, marginBottom: 8, opacity: 0.6 }}>"</div>
         <div style={{
           fontFamily: "'Space Grotesk', sans-serif",
-          fontSize: Math.min(ov.title?.fontSize || 40, 40),
+          fontSize: Math.min(resolvedOv.title?.fontSize || 40, 40),
           fontWeight: 700,
           lineHeight: 1.2,
-          color: ov.title?.color || '#F4F5F7',
+          color: resolvedOv.title?.color || '#F4F5F7',
           marginBottom: 24,
         }}>
-          {content.title}
+          {resolvedContent.title}
         </div>
-        <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 15, color: ov.deck?.color || '#8B95A3', lineHeight: 1.6, marginBottom: 24 }}>
-          {content.deck}
+        <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 15, color: resolvedOv.deck?.color || '#8B95A3', lineHeight: 1.6, marginBottom: 24 }}>
+          {resolvedContent.deck}
         </div>
-        {content.body && (
+        {resolvedContent.body && (
           <div style={{ padding: '12px 16px', borderLeft: `2px solid ${accentColor}`, background: `${accentColor}06`, borderRadius: '0 6px 6px 0' }}>
             <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: accentColor }}>{content.handle || '@source'}</div>
-            <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 11, color: '#8B95A3', marginTop: 2 }}>{content.body.slice(0, 120)}</div>
+            <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 11, color: '#8B95A3', marginTop: 2 }}>{resolvedContent.body.slice(0, 120)}</div>
           </div>
         )}
       </div>
@@ -534,9 +545,9 @@ function TierListLayout(props) {
       <div style={{
         fontFamily: "'Space Grotesk', sans-serif",
         fontSize: 36, fontWeight: 700, lineHeight: 1.05,
-        color: ov.title?.color || '#F4F5F7', marginBottom: 10,
-      }}>{content.title}</div>
-      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 16, fontStyle: 'italic' }}>{content.deck}</div>
+        color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 10,
+      }}>{resolvedContent.title}</div>
+      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 16, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
       <div style={{ flex: 1 }}>
         {displayTiers.map((tier) => {
           const items = hasTiers ? grouped[tier] : rows.filter((_, i) => i % TIER_ORDER.length === TIER_ORDER.indexOf(tier));
@@ -574,7 +585,7 @@ function TierListLayout(props) {
       <div style={{
         fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#5A6478',
         paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.05)', marginTop: 8,
-      }}>{content.body?.split('\n')[0] || 'Criteria: TVL × team × product × momentum'}</div>
+      }}>{resolvedContent.body?.split('\n')[0] || 'Criteria: TVL × team × product × momentum'}</div>
     </>
   );
 }
@@ -601,12 +612,12 @@ function PostmortemLayout(props) {
       <div style={{
         fontFamily: "'Space Grotesk', sans-serif",
         fontSize: 36, fontWeight: 700, lineHeight: 1.05,
-        color: ov.title?.color || '#F4F5F7', marginBottom: 8,
-      }}>{content.title}</div>
-      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 18, fontStyle: 'italic' }}>{content.deck}</div>
+        color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 8,
+      }}>{resolvedContent.title}</div>
+      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 18, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
         {SECTIONS_PM.map(({ key, label }, idx) => {
-          const value = rows[0]?.[key] || content[key] || (idx === 0 ? content.body?.split('\n')[0] : '—');
+          const value = rows[0]?.[key] || content[key] || (idx === 0 ? resolvedContent.body?.split('\n')[0] : '—');
           return (
             <div key={key} style={{
               padding: '10px 14px',
@@ -653,9 +664,9 @@ function TrustStackLayout(props) {
       <SectionHead>TRUST STACK ANALYSIS</SectionHead>
       <div style={{
         fontFamily: "'Space Grotesk', sans-serif", fontSize: 24,
-        fontWeight: 700, lineHeight: 1.1, color: ov.title?.color || '#F4F5F7', marginBottom: 6,
-      }}>{content.title}</div>
-      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 16, fontStyle: 'italic' }}>{content.deck}</div>
+        fontWeight: 700, lineHeight: 1.1, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 6,
+      }}>{resolvedContent.title}</div>
+      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 16, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-evenly' }}>
         {layers.map((layer, i) => {
           const riskAcc = RISK_COLOR[layer.risk?.toUpperCase()] || '#8B95A3';
@@ -683,11 +694,11 @@ function TrustStackLayout(props) {
           );
         })}
       </div>
-      {content.body && (
+      {resolvedContent.body && (
         <div style={{
           fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#5A6478',
           paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.05)',
-        }}>{content.body.split('\n')[0]}</div>
+        }}>{resolvedContent.body.split('\n')[0]}</div>
       )}
     </>
   );
@@ -704,8 +715,8 @@ function PitchDeckLayout(props) {
           ? <img src={content.logoUrl} alt="logo" style={{ width: 48, height: 48, borderRadius: 12, objectFit: 'contain', margin: '0 auto 10px', display: 'block' }} />
           : <div style={{ width: 48, height: 48, borderRadius: 12, background: `${accentColor}20`, border: `1px solid ${accentColor}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px', fontFamily: "'Space Grotesk', sans-serif", fontSize: 20, fontWeight: 700, color: accentColor }}>{(content.title || '?').charAt(0)}</div>
         }
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 56, fontWeight: 700, color: ov.title?.color || '#F4F5F7', lineHeight: 1, letterSpacing: '-0.02em' }}>{content.title}</div>
-        <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 18, color: '#8B95A3', marginTop: 8, fontStyle: 'italic' }}>{content.deck}</div>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 56, fontWeight: 700, color: resolvedOv.title?.color || '#F4F5F7', lineHeight: 1, letterSpacing: '-0.02em' }}>{resolvedContent.title}</div>
+        <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 18, color: '#8B95A3', marginTop: 8, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
       </div>
       {content.stats?.length > 0 && (
         <div style={{ display: 'flex', gap: 8, marginBottom: 18, flexShrink: 0 }}>
@@ -721,7 +732,7 @@ function PitchDeckLayout(props) {
         </div>
       )}
       <div style={{ flex: 1, overflow: 'hidden' }}>
-        {(content.body || '').split('\n\n').slice(0, 2).map((para, i) => (
+        {(resolvedContent.body || '').split('\n\n').slice(0, 2).map((para, i) => (
           <div key={i} style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', lineHeight: 1.65, marginBottom: 14 }}>{para}</div>
         ))}
         {content.pullQuote && (
@@ -748,9 +759,9 @@ function MechanismLayout(props) {
       <SectionHead>MECHANISM</SectionHead>
       <div style={{
         fontFamily: "'Space Grotesk', sans-serif", fontSize: 36,
-        fontWeight: 700, lineHeight: 1.05, color: ov.title?.color || '#F4F5F7', marginBottom: 6,
-      }}>{content.title}</div>
-      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 20, fontStyle: 'italic' }}>{content.deck}</div>
+        fontWeight: 700, lineHeight: 1.05, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 6,
+      }}>{resolvedContent.title}</div>
+      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 20, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-evenly' }}>
         {steps.slice(0, 6).map((step, i) => (
           <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 14, position: 'relative', paddingBottom: i < steps.length - 1 ? 12 : 0 }}>
@@ -797,7 +808,7 @@ function getTitleFontSizeForLayout(title, defaultSize) {
 }
 function ThesisLayout(props) {
   const { content, ov, accentColor, SectionHead } = props;
-  const paragraphs = (content.body || '').split('\n\n').filter(Boolean);
+  const paragraphs = (resolvedContent.body || '').split('\n\n').filter(Boolean);
   return (
     <>
       <div style={{ flexShrink: 0 }}>
@@ -809,11 +820,11 @@ function ThesisLayout(props) {
           fontFamily: "'Space Grotesk', sans-serif",
           fontSize: getTitleFontSizeForLayout(content.title, 56),
           fontWeight: 700, lineHeight: 1, letterSpacing: '-0.02em',
-          color: ov.title?.color || '#F4F5F7', marginBottom: 16,
-        }}>{content.title}</div>
+          color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 16,
+        }}>{resolvedContent.title}</div>
         <div style={{ height: 1, background: `linear-gradient(90deg, ${accentColor}, transparent)`, marginBottom: 14 }} />
         <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 18, color: '#8B95A3', fontStyle: 'italic', lineHeight: 1.4, marginBottom: 20 }}>
-          {content.deck}
+          {resolvedContent.deck}
         </div>
       </div>
       <div style={{ flex: 1, overflow: 'hidden' }}>
@@ -864,13 +875,13 @@ function CoverStoryLayout(props) {
           fontFamily: "'Space Grotesk', sans-serif",
           fontSize: getTitleFontSizeForLayout(content.title, 84),
           fontWeight: 700, lineHeight: 0.95, letterSpacing: '-0.03em',
-          color: ov.title?.color || '#F4F5F7', marginBottom: 16,
-        }}>{content.title}</div>
+          color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 16,
+        }}>{resolvedContent.title}</div>
         <div style={{ height: 2, background: accentColor, width: '40%', marginBottom: 16 }} />
         <div style={{
           fontFamily: "'Inter', sans-serif", fontSize: 18,
           color: '#8B95A3', fontStyle: 'italic', lineHeight: 1.45, maxWidth: '80%',
-        }}>{content.deck}</div>
+        }}>{resolvedContent.deck}</div>
         {content.handle && (
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: accentColor, marginTop: 12, letterSpacing: '0.1em' }}>
             {content.handle} ▸ QUARTERLY COVER
@@ -950,8 +961,8 @@ function GlossaryLayout(props) {
   return (
     <>
       <SectionHead>{content.topicTag || 'GLOSSARY'}</SectionHead>
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 36, fontWeight: 700, color: ov.title?.color || '#F4F5F7', marginBottom: 6 }}>{content.title}</div>
-      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 16, fontStyle: 'italic' }}>{content.deck}</div>
+      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 36, fontWeight: 700, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 6 }}>{resolvedContent.title}</div>
+      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 16, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
       <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 20px', overflow: 'hidden' }}>
         {[col1, col2].map((col, ci) => (
           <div key={ci}>
@@ -983,8 +994,8 @@ function MatrixLayout(props) {
   return (
     <>
       <SectionHead>{content.topicTag || 'MATRIX'}</SectionHead>
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 36, fontWeight: 700, color: ov.title?.color || '#F4F5F7', marginBottom: 4 }}>{content.title}</div>
-      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 12, fontStyle: 'italic' }}>{content.deck}</div>
+      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 36, fontWeight: 700, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 4 }}>{resolvedContent.title}</div>
+      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 12, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
       <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         {/* Quadrant grid */}
         <div style={{ position: 'relative', width: '90%', height: '90%' }}>
@@ -1063,8 +1074,8 @@ function ThreatModelLayout(props) {
   return (
     <>
       <SectionHead>THREAT MODEL</SectionHead>
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: ov.title?.color || '#F4F5F7', marginBottom: 6 }}>{content.title}</div>
-      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 14, fontStyle: 'italic' }}>{content.deck}</div>
+      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 6 }}>{resolvedContent.title}</div>
+      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 14, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
       <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
         {QUADRANTS.map(q => (
           <div key={q.key} style={{ padding: '10px 12px', background: `${q.color}08`, border: `1px solid ${q.color}20`, borderRadius: 8 }}>
@@ -1148,9 +1159,9 @@ function FounderLayout(props) {
           : <div style={{ width: 64, height: 64, borderRadius: '50%', background: `${accentColor}18`, border: `2px solid ${accentColor}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif", color: accentColor, flexShrink: 0 }}>{(content.handle || '?').charAt(0).toUpperCase()}</div>
         }
         <div>
-          <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: '#F4F5F7', lineHeight: 1 }}>{content.title}</div>
+          <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: '#F4F5F7', lineHeight: 1 }}>{resolvedContent.title}</div>
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: accentColor, marginTop: 4, letterSpacing: '0.1em' }}>{content.topicTag || 'FOUNDER'}</div>
-          <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 12, color: '#8B95A3', marginTop: 4 }}>{content.deck}</div>
+          <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 12, color: '#8B95A3', marginTop: 4 }}>{resolvedContent.deck}</div>
         </div>
       </div>
       {/* Quotes */}
@@ -1206,8 +1217,8 @@ function AnatomyLayout(props) {
   return (
     <>
       <SectionHead>ANATOMY</SectionHead>
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: ov.title?.color || '#F4F5F7', marginBottom: 6 }}>{content.title}</div>
-      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 12, fontStyle: 'italic' }}>{content.deck}</div>
+      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 6 }}>{resolvedContent.title}</div>
+      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 12, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
       <div style={{ flex: 1, position: 'relative', minHeight: 200 }}>
         {/* Center node */}
         <div style={{
@@ -1264,8 +1275,8 @@ function FlowLayout(props) {
   return (
     <>
       <SectionHead>YIELD FLOW</SectionHead>
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: ov.title?.color || '#F4F5F7', marginBottom: 6 }}>{content.title}</div>
-      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 16, fontStyle: 'italic' }}>{content.deck}</div>
+      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 6 }}>{resolvedContent.title}</div>
+      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 16, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-evenly' }}>
         {steps.map((step, i) => (
           <div key={i}>
@@ -1324,8 +1335,8 @@ function BracketLayout(props) {
   return (
     <>
       <SectionHead>BRACKET</SectionHead>
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: ov.title?.color || '#F4F5F7', marginBottom: 4 }}>{content.title}</div>
-      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 12, fontStyle: 'italic' }}>{content.deck}</div>
+      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 4 }}>{resolvedContent.title}</div>
+      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 12, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
       <div style={{ flex: 1, display: 'flex', gap: 12, alignItems: 'center' }}>
         {/* Round 1 */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-evenly' }}>
@@ -1369,8 +1380,8 @@ function ThreeLayerLayout(props) {
   ];
   return (
     <>
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 36, fontWeight: 700, color: ov.title?.color || '#F4F5F7', marginBottom: 6, flexShrink: 0 }}>{content.title}</div>
-      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 20, fontStyle: 'italic', flexShrink: 0 }}>{content.deck}</div>
+      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 36, fontWeight: 700, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 6, flexShrink: 0 }}>{resolvedContent.title}</div>
+      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 20, fontStyle: 'italic', flexShrink: 0 }}>{resolvedContent.deck}</div>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
         {TIERS.map(({ label, sublabel, color, bg, row }, i) => (
           <div key={label} style={{ flex: 1, padding: '14px 16px', background: bg, border: `1px solid rgba(255,255,255,0.06)`, borderRadius: 8 }}>
@@ -1382,7 +1393,7 @@ function ThreeLayerLayout(props) {
               </div>
             </div>
             <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 13, color: '#C8D0D8', lineHeight: 1.65 }}>
-              {row?.col1 || (content.body || '').split('\n\n')[i] || `${label.toLowerCase()} content goes here.`}
+              {row?.col1 || (resolvedContent.body || '').split('\n\n')[i] || `${label.toLowerCase()} content goes here.`}
             </div>
           </div>
         ))}
@@ -1409,8 +1420,8 @@ function LongBetLayout(props) {
   return (
     <>
       <SectionHead>LONG BETS</SectionHead>
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 36, fontWeight: 700, color: ov.title?.color || '#F4F5F7', marginBottom: 6 }}>{content.title}</div>
-      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 20, fontStyle: 'italic' }}>{content.deck}</div>
+      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 36, fontWeight: 700, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 6 }}>{resolvedContent.title}</div>
+      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 20, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
       <div style={{ flex: 1, position: 'relative' }}>
         {/* Timeline spine */}
         <div style={{ position: 'absolute', left: 38, top: 0, bottom: 0, width: 2, background: `linear-gradient(180deg, ${accentColor}, ${accentColor}10)` }} />
@@ -1457,8 +1468,8 @@ function OrgChartLayout(props) {
   return (
     <>
       <SectionHead>ECOSYSTEM HIERARCHY</SectionHead>
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: ov.title?.color || '#F4F5F7', marginBottom: 6 }}>{content.title}</div>
-      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 14, fontStyle: 'italic' }}>{content.deck}</div>
+      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 6 }}>{resolvedContent.title}</div>
+      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 14, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
       <div style={{ flex: 1, display: 'flex', gap: 8 }}>
         {(levels.length > 0 ? levels : [
           [{col1:'Ethereum'},{col1:'Solana'}],
@@ -1494,8 +1505,8 @@ function PeriodicLayout(props) {
   return (
     <>
       <SectionHead>PERIODIC TABLE</SectionHead>
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: ov.title?.color || '#F4F5F7', marginBottom: 4 }}>{content.title}</div>
-      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 12, color: '#8B95A3', marginBottom: 12, fontStyle: 'italic' }}>{content.deck}</div>
+      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 4 }}>{resolvedContent.title}</div>
+      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 12, color: '#8B95A3', marginBottom: 12, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
       <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(64px, 1fr))', gap: 5, alignContent: 'start' }}>
         {(rows.length > 0 ? rows : Array.from({length:18}, (_,i) => ({col1:`P${i+1}`, col2:`Protocol ${i+1}`, col3:'$1B', col4:'ETH'}))).slice(0,30).map((row, i) => {
           const chain = (row.col4 || 'ETH').toUpperCase();
@@ -1544,8 +1555,8 @@ function CurveLayout(props) {
   return (
     <>
       <SectionHead>{content.topicTag || 'CHART'}</SectionHead>
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: ov.title?.color || '#F4F5F7', marginBottom: 4 }}>{content.title}</div>
-      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 12, fontStyle: 'italic' }}>{content.deck}</div>
+      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 4 }}>{resolvedContent.title}</div>
+      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 12, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
       <div style={{ flex: 1, position: 'relative' }}>
         <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', overflow: 'visible' }}>
           <defs>
@@ -1589,8 +1600,8 @@ function FieldGuideLayout(props) {
   return (
     <>
       <SectionHead>FIELD GUIDE</SectionHead>
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: ov.title?.color || '#F4F5F7', marginBottom: 4 }}>{content.title}</div>
-      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 14, fontStyle: 'italic' }}>{content.deck}</div>
+      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 4 }}>{resolvedContent.title}</div>
+      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 14, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
       <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
         {species.slice(0, 4).map((s, i) => (
           <div key={i} style={{ padding: '10px 12px', background: 'rgba(255,255,255,0.02)', border: `1px solid ${accentColor}15`, borderRadius: 8 }}>
@@ -1623,8 +1634,8 @@ function MentalModelLayout(props) {
   return (
     <>
       <SectionHead>MENTAL MODEL</SectionHead>
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 36, fontWeight: 700, color: ov.title?.color || '#F4F5F7', marginBottom: 6 }}>{content.title}</div>
-      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 18, color: '#8B95A3', marginBottom: 18, fontStyle: 'italic', lineHeight: 1.45 }}>{content.deck}</div>
+      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 36, fontWeight: 700, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 6 }}>{resolvedContent.title}</div>
+      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 18, color: '#8B95A3', marginBottom: 18, fontStyle: 'italic', lineHeight: 1.45 }}>{resolvedContent.deck}</div>
       {/* Concept illustration box */}
       <div style={{
         padding: '16px', background: `${accentColor}06`, border: `1px solid ${accentColor}15`,
@@ -1632,7 +1643,7 @@ function MentalModelLayout(props) {
         display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 80,
       }}>
         <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#C8D0D8', lineHeight: 1.65, textAlign: 'center' }}>
-          {(content.body || '').split('\n\n')[0] || content.deck}
+          {(resolvedContent.body || '').split('\n\n')[0] || content.deck}
         </div>
       </div>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -1669,8 +1680,8 @@ function SubwayLayout(props) {
   return (
     <>
       <SectionHead>SUBWAY MAP</SectionHead>
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: ov.title?.color || '#F4F5F7', marginBottom: 6 }}>{content.title}</div>
-      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 16, fontStyle: 'italic' }}>{content.deck}</div>
+      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 6 }}>{resolvedContent.title}</div>
+      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 16, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 16 }}>
         {lines.map(([lineName, stations], li) => {
           const lineColor = SUBWAY_COLORS[li % SUBWAY_COLORS.length];
@@ -1747,8 +1758,8 @@ function ConstellationLayout(props) {
       ))}
       {/* Title */}
       <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 2 }}>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: ov.title?.color || '#F4F5F7', marginBottom: 4 }}>{content.title}</div>
-        <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 12, color: '#8B95A3', fontStyle: 'italic', marginBottom: 8 }}>{content.deck}</div>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 4 }}>{resolvedContent.title}</div>
+        <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 12, color: '#8B95A3', fontStyle: 'italic', marginBottom: 8 }}>{resolvedContent.deck}</div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {cats.map(cat => (
             <span key={cat} style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: CATEGORY_COLORS[cat] || accentColor, background: `${CATEGORY_COLORS[cat] || accentColor}15`, padding: '2px 6px', borderRadius: 10 }}>{cat}</span>
@@ -1805,8 +1816,8 @@ function StackLayout(props) {
   return (
     <>
       <SectionHead>TECH STACK</SectionHead>
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: ov.title?.color || '#F4F5F7', marginBottom: 4 }}>{content.title}</div>
-      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 14, fontStyle: 'italic' }}>{content.deck}</div>
+      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 4 }}>{resolvedContent.title}</div>
+      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 14, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
         {grouped.map((layer, i) => (
           <div key={i} style={{
@@ -1853,8 +1864,8 @@ function TradeRoutesLayout(props) {
   return (
     <>
       <SectionHead>TRADE ROUTES</SectionHead>
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: ov.title?.color || '#F4F5F7', marginBottom: 4 }}>{content.title}</div>
-      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 16, fontStyle: 'italic' }}>{content.deck}</div>
+      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 4 }}>{resolvedContent.title}</div>
+      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 16, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
       <div style={{ flex: 1 }}>
         {HUBS.map((route, i) => {
           const color = VOL_COLORS[i % VOL_COLORS.length];
@@ -1952,7 +1963,7 @@ function TableLayout(props) {
                     borderBottom: i < rows.length - 1 ? `1px solid ${accentColor}06` : 'none',
                     fontFamily: j === 0 ? "'Inter', sans-serif" : "'JetBrains Mono', monospace",
                     fontSize: j === 0 ? '13px' : '12px',
-                    color: j === 0 ? (ov.title?.color || '#F4F5F7') : (ov.body?.color || '#8B95A3'),
+                    color: j === 0 ? (resolvedOv.title?.color || '#F4F5F7') : (resolvedOv.body?.color || '#8B95A3'),
                     fontWeight: j === 0 ? 500 : 400,
                   }}>{v}</td>
                 ))}
@@ -2123,7 +2134,7 @@ function NetworkLayout(props) {
 
 function EditorialLayout(props) {
   const { content, ov, accentColor, SectionHead } = props;
-  const sections = content.body.split('\n').filter(Boolean);
+  const sections = resolvedContent.body.split('\n').filter(Boolean);
   return (
     <>
       <StatRibbon stats={content.stats?.slice(0, 3)} ov={ov} accentColor={accentColor} />
@@ -2144,7 +2155,7 @@ function EditorialLayout(props) {
       )}
       <SectionHead>BENEATH THE FOLD</SectionHead>
       {sections.slice(1, 3).map((p, i) => (
-        <p key={i} style={{ marginBottom: '14px', fontFamily: "'Inter', sans-serif", fontSize: `${ov.body?.fontSize || 14}px`, color: '#B0BAC8', lineHeight: 1.75 }}>{p}</p>
+        <p key={i} style={{ marginBottom: '14px', fontFamily: "'Inter', sans-serif", fontSize: `${resolvedOv.body?.fontSize || 14}px`, color: '#B0BAC8', lineHeight: 1.75 }}>{p}</p>
       ))}
       <BigNumber content={content} ov={ov} accentColor={accentColor} />
     </>
