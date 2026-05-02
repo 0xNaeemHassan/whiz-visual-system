@@ -58,6 +58,9 @@ export const FRAME_TEMPLATES = {
   },
   // Frame 16 — Leaderboard
   16: {
+    variantOf: 4,
+    inherit: ['tableHeaders', 'tableRows'],
+    override: ['deck'],
     topicTag: 'RANKINGS',
     title: 'TOP 10 PROTOCOLS BY TVL',
     deck: 'The biggest protocols by total value locked this week.',
@@ -131,8 +134,42 @@ import { createDefaultContent, hasRequiredContentShape } from '../domain/editorD
 // Merge with canonical defaults for any unspecified fields
 export function getFrameTemplate(frameId) {
   const defaultContent = createDefaultContent();
-  const template = FRAME_TEMPLATES[frameId];
-  const merged = template ? { ...defaultContent, ...template } : defaultContent;
+  const visited = new Set();
+
+  function resolveTemplate(id) {
+    const template = FRAME_TEMPLATES[id];
+    if (!template) return {};
+    if (visited.has(id)) {
+      throw new Error(`Template inheritance cycle detected while resolving frame ${frameId} at frame ${id}`);
+    }
+    visited.add(id);
+
+    const parentId = template.variantOf;
+    const parentResolved = Number.isInteger(parentId) ? resolveTemplate(parentId) : {};
+    const inheritFields = Array.isArray(template.inherit) ? template.inherit : [];
+    const overrideFields = new Set(Array.isArray(template.override) ? template.override : []);
+
+    const ownFields = Object.fromEntries(
+      Object.entries(template).filter(([key]) => !['variantOf', 'inherit', 'override'].includes(key))
+    );
+
+    const inheritedFromParent = inheritFields.reduce((acc, field) => {
+      if (field in parentResolved) acc[field] = parentResolved[field];
+      return acc;
+    }, {});
+
+    const explicitOverrides = Object.fromEntries(
+      Object.entries(ownFields).filter(([key]) => overrideFields.has(key) || !inheritFields.includes(key))
+    );
+
+    return {
+      ...parentResolved,
+      ...inheritedFromParent,
+      ...explicitOverrides,
+    };
+  }
+
+  const merged = { ...defaultContent, ...resolveTemplate(frameId) };
 
   if (!hasRequiredContentShape(merged)) {
     throw new Error(`Template merge removed required content keys for frame ${frameId}`);

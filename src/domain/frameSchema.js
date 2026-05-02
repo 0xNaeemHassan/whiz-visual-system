@@ -99,6 +99,62 @@ function validateTemplateEntry(frameId, template, frameById, errors) {
   }
 }
 
+function isMissingValue(value) {
+  if (value === undefined || value === null) return true;
+  if (typeof value === 'string') return value.trim().length === 0;
+  if (Array.isArray(value)) return value.length === 0;
+  return false;
+}
+
+function validateTemplateInheritance(templates, errors) {
+  Object.entries(templates).forEach(([rawId, template]) => {
+    const frameId = Number(rawId);
+    const prefix = `FRAME_TEMPLATES[${rawId}]`;
+    if (!template || typeof template !== 'object' || Array.isArray(template)) return;
+
+    if (template.variantOf !== undefined) {
+      assert(Number.isInteger(template.variantOf), `${prefix}: variantOf must be an integer frame id`, errors);
+      if (Number.isInteger(template.variantOf)) {
+        assert(Boolean(templates[template.variantOf]), `${prefix}: variantOf parent ${template.variantOf} must exist`, errors);
+      }
+    }
+
+    if (template.inherit !== undefined) {
+      assert(Array.isArray(template.inherit), `${prefix}: inherit must be an array when provided`, errors);
+    }
+    if (template.override !== undefined) {
+      assert(Array.isArray(template.override), `${prefix}: override must be an array when provided`, errors);
+    }
+
+    const parent = Number.isInteger(template.variantOf) ? templates[template.variantOf] : null;
+    const inheritedFields = Array.isArray(template.inherit) ? template.inherit : [];
+    inheritedFields.forEach((field, index) => {
+      assert(isNonEmptyString(field), `${prefix}: inherit[${index}] must be a non-empty string`, errors);
+      if (parent && isNonEmptyString(field)) {
+        assert(!isMissingValue(parent[field]), `${prefix}: inherit field "${field}" must exist on parent ${template.variantOf}`, errors);
+      }
+    });
+
+    const overrideFields = Array.isArray(template.override) ? template.override : [];
+    overrideFields.forEach((field, index) => {
+      assert(isNonEmptyString(field), `${prefix}: override[${index}] must be a non-empty string`, errors);
+      if (isNonEmptyString(field) && inheritedFields.includes(field)) {
+        assert(!isMissingValue(template[field]), `${prefix}: override field "${field}" cannot remove inherited required field`, errors);
+      }
+    });
+
+    inheritedFields.forEach((field) => {
+      if (overrideFields.includes(field)) {
+        assert(!isMissingValue(template[field]), `${prefix}: inherited field "${field}" must remain present after override`, errors);
+      }
+    });
+
+    if (Number.isInteger(frameId)) {
+      assert(template.variantOf !== frameId, `${prefix}: variantOf cannot reference itself`, errors);
+    }
+  });
+}
+
 function validateFooter(content, label, errors) {
   const footer = resolveFooterData(content);
   FOOTER_FIELD_ORDER.forEach((field, index) => {
@@ -135,6 +191,7 @@ export function validateFrameData({ frames, templates }) {
         validateFooter(template, `${prefix}`, errors);
       }
     });
+    validateTemplateInheritance(templates, errors);
   }
 
   if (errors.length > 0) {
