@@ -1,5 +1,5 @@
-import { coreLayouts } from './layouts/coreLayouts';
-import { extendedLayouts } from './layouts/extendedLayouts';
+import { coreLayouts } from './layouts/CoreLayouts';
+import { extendedLayouts } from './layouts/ExtendedLayouts';
 
 const registry = {
   ...coreLayouts,

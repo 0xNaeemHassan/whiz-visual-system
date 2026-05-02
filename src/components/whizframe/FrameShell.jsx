@@ -1,8 +1,9 @@
 // WhizFrame v8.0 — Complete visual overhaul with unique layouts for all frame types
-import { getLayoutComponent } from './layoutRegistry';
-import { coreLayoutKeys } from './layouts/coreLayouts';
+import { getLayoutComponent } from './LayoutRegistry';
+import { coreLayoutKeys } from './layouts/CoreLayouts';
 import { applyOverflowPolicy } from './layouts/OverflowPolicy';
 import { TICKER_CONTRACT, normalizeTickerSpeed } from '../../domain/tickerContract';
+import { SPINE_DESIGN_TOKENS } from '../../domain/spineDesignTokens';
 
 export function FrameShell({ frameRef, frame, theme, content, editMode, selectedEl, onSelectEl, styleOverrides, showGrid, aspectRatio, uploadedImages, bgGradient, patternOverlay }) {
   const ov = styleOverrides || {};
@@ -158,17 +159,17 @@ export function FrameShell({ frameRef, frame, theme, content, editMode, selected
 
       {/* Spine — 5px color bar + rotated label that sits beside it */}
       <div className={`wf-spine ${ec('spine')}`}
-        style={{ background: ov.spineColor || accentColor, position: 'absolute', left: 0, top: 0, width: '5px', height: '100%', zIndex: 5, boxShadow: `0 0 20px ${accentColor}60` }}
+        style={{ background: ov.spineColor || accentColor, position: 'absolute', left: SPINE_DESIGN_TOKENS.position.barLeftPx, top: SPINE_DESIGN_TOKENS.position.barTopPx, width: `${SPINE_DESIGN_TOKENS.geometry.barWidthPx}px`, height: '100%', zIndex: 5, boxShadow: `0 0 20px ${accentColor}60` }}
         onClick={e => sel('spine', e)} />
       <div style={{
-        position: 'absolute', left: '5px', top: 0, width: '18px', height: '100%',
+        position: 'absolute', left: `${SPINE_DESIGN_TOKENS.position.labelWrapLeftPx}px`, top: SPINE_DESIGN_TOKENS.position.labelWrapTopPx, width: `${SPINE_DESIGN_TOKENS.geometry.labelWrapWidthPx}px`, height: '100%',
         zIndex: 6, display: 'flex', alignItems: 'center', justifyContent: 'center',
         background: 'transparent', pointerEvents: 'none',
       }}>
         <span style={{
-          fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', letterSpacing: '0.16em',
-          textTransform: 'uppercase', color: ov.spineColor || accentColor, opacity: 0.35,
-          transform: 'rotate(-90deg)', whiteSpace: 'nowrap', fontWeight: 600,
+          fontFamily: "'JetBrains Mono', monospace", fontSize: `${SPINE_DESIGN_TOKENS.label.fontSizePx}px`, letterSpacing: `${SPINE_DESIGN_TOKENS.label.letterSpacingEm}em`,
+          textTransform: SPINE_DESIGN_TOKENS.label.textTransform, color: ov.spineColor || accentColor, opacity: SPINE_DESIGN_TOKENS.label.opacity,
+          transform: `rotate(${SPINE_DESIGN_TOKENS.label.rotationDeg}deg)`, whiteSpace: 'nowrap', fontWeight: SPINE_DESIGN_TOKENS.label.fontWeight,
           userSelect: 'none',
         }}>
           WHIZ DEFI DESK / VOL.{content.volume}
@@ -264,14 +265,14 @@ export function FrameShell({ frameRef, frame, theme, content, editMode, selected
 /* ─── CORNER TRIMS ─── */
 function CornerTrims({ accentColor }) {
   const mk = (pos) => {
-    const s = 16;
+    const s = SPINE_DESIGN_TOKENS.geometry.cornerSizePx;
     const base = { position: 'absolute', width: s, height: s, zIndex: 3, pointerEvents: 'none' };
-    const b = `1.5px solid ${accentColor}50`;
+    const b = `${SPINE_DESIGN_TOKENS.geometry.cornerStrokePx}px solid ${accentColor}50`;
     switch(pos) {
-      case 'tl': return { ...base, top: 14, left: 16, borderTop: b, borderLeft: b };
-      case 'tr': return { ...base, top: 14, right: 16, borderTop: b, borderRight: b };
-      case 'bl': return { ...base, bottom: 14, left: 16, borderBottom: b, borderLeft: b };
-      case 'br': return { ...base, bottom: 14, right: 16, borderBottom: b, borderRight: b };
+      case 'tl': return { ...base, top: SPINE_DESIGN_TOKENS.geometry.cornerOffsetPx, left: SPINE_DESIGN_TOKENS.geometry.cornerSizePx, borderTop: b, borderLeft: b };
+      case 'tr': return { ...base, top: SPINE_DESIGN_TOKENS.geometry.cornerOffsetPx, right: SPINE_DESIGN_TOKENS.geometry.cornerSizePx, borderTop: b, borderRight: b };
+      case 'bl': return { ...base, bottom: SPINE_DESIGN_TOKENS.geometry.cornerOffsetPx, left: SPINE_DESIGN_TOKENS.geometry.cornerSizePx, borderBottom: b, borderLeft: b };
+      case 'br': return { ...base, bottom: SPINE_DESIGN_TOKENS.geometry.cornerOffsetPx, right: SPINE_DESIGN_TOKENS.geometry.cornerSizePx, borderBottom: b, borderRight: b };
       default: return base;
     }
   };
