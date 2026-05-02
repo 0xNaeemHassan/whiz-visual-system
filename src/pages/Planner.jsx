@@ -295,7 +295,9 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
     const grouped = issues.reduce((acc, issue) => {
       const series = (issue.series || '').trim();
       const d = toDateOnly(issue.publishDate);
-      if (!series || !d) return acc;
+      const isPublished = (issue.status || '').trim() === 'published';
+      const isFutureDated = d && d.getTime() > now.getTime();
+      if (!series || !d || !isPublished || isFutureDated) return acc;
       acc[series] = acc[series] || [];
       acc[series].push({ ...issue, publishDateObj: d });
       return acc;
