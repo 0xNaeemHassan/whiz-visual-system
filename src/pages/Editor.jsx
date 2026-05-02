@@ -54,6 +54,11 @@ function WeightRow({label,value,weights,onChange}){return(<div style={{marginBot
 
 function DesignPanel({selectedEl,setSelectedEl,overrides,setOverrides,theme,bgGradient,setBgGradient,showToast,resetOverrides,setPatternOverlay,strictMode}){
   const ov=overrides,set=(k,v)=>setOverrides(p=>({...p,[k]:v})),setN=(g,k,v)=>{
+    const strictPath = `${g}.${k}`;
+    if (strictMode && !isStrictStylePathAllowed(strictPath)) {
+      showToast(getStrictStyleBlockReason(strictPath), 'warning');
+      return;
+    }
     if(strictMode&&k==='color'&&['body','deck','title'].includes(g)&&v&&!LOCKED_NEUTRALS.includes(v.toLowerCase())){
       showToast('Strict Whiz Mode locks neutral palette tokens.', 'warning');
       return;
@@ -80,7 +85,7 @@ function DesignPanel({selectedEl,setSelectedEl,overrides,setOverrides,theme,bgGr
   };
   return(<div><div className="design-section"><div className="design-section-title">Select Element</div><div className="el-select-grid">{ELEMENTS.map(el=>(<button key={el.key} className={`el-select-item ${selectedEl===el.key?'sel':''}`} onClick={()=>setSelectedEl(selectedEl===el.key?null:el.key)}><span className="el-icon">{el.icon}</span>{el.label}</button>))}</div></div>{ctrl()}<div style={{padding:'12px 14px'}}><div style={{display:'flex',gap:6,marginBottom:8}}>
       <button className="btn btn-secondary btn-sm" style={{flex:1}} onClick={()=>{try{localStorage.setItem('whiz-copied-style',JSON.stringify(overrides));showToast('Style copied');}catch(e){showToast('Copy failed','error');}}}>Copy Style</button>
-      <button className="btn btn-secondary btn-sm" style={{flex:1}} onClick={()=>{try{const s=localStorage.getItem('whiz-copied-style');if(s){setOverrides(JSON.parse(s));showToast('Style pasted');}else showToast('Nothing copied yet','info');}catch(e){showToast('Paste failed','error');}}}>Paste</button>
+      <button className="btn btn-secondary btn-sm" style={{flex:1}} onClick={()=>{try{const s=localStorage.getItem('whiz-copied-style');if(s){const parsed=JSON.parse(s);const next=strictMode?sanitizeStrictStyleOverrides(parsed):parsed;setOverrides(next);if(strictMode&&JSON.stringify(next)!==JSON.stringify(parsed)){showToast('Strict mode removed blocked style overrides.','warning');}else{showToast('Style pasted');}}else showToast('Nothing copied yet','info');}catch(e){showToast('Paste failed','error');}}}>Paste</button>
     </div>
     <button className="btn btn-danger w-full btn-sm" onClick={()=>{
       if(window.confirm('Reset all design overrides? This cannot be undone.')){
@@ -253,7 +258,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   useEffect(()=>{if(editMode||selectedEl)setRightTab('design');},[editMode,selectedEl]);
   const buildSave=()=>buildFrameSave({frameId,theme,content,overrides,aspectRatio,bgGradient,patternOverlay});
   const doSave=()=>{const n=saveName.trim()||`${content.topicTag} \u2014 ${new Date().toLocaleDateString()}`;setSaves(p=>[...p,{id:`s_${Date.now()}`,title:n,...buildSave()}]);setShowSaveModal(false);setSaveName('');showToast(`Saved "${n}"`);};
-  const loadSave=s=>{setFrameId(s.frameId);setTheme(s.theme);resetContent(s.content);s.overrides&&setOverrides(s.overrides);s.aspectRatio&&setAspectRatio(s.aspectRatio);s.bgGradient&&updateMedia(prev=>({...prev,bgGradient:s.bgGradient}));s.patternOverlay&&updateMedia(prev=>({...prev,patternOverlay:s.patternOverlay}));setShowLoadModal(false);showToast(`Loaded`);};
+  const loadSave=s=>{setFrameId(s.frameId);setTheme(s.theme);resetContent(s.content);if(s.overrides){const validation=validateEditorState({content:s.content||{},overrides:s.overrides},{strictMode:Boolean(strictMode),sanitizeStrictStyle:true});const next=validation.sanitizedOverrides||s.overrides;setOverrides(next);if(strictMode&&validation.codes.includes('STRICT_STYLE_OVERRIDE_BLOCKED')){showToast('Loaded with strict-style sanitization.','warning');}}s.aspectRatio&&setAspectRatio(s.aspectRatio);s.bgGradient&&updateMedia(prev=>({...prev,bgGradient:s.bgGradient}));s.patternOverlay&&updateMedia(prev=>({...prev,patternOverlay:s.patternOverlay}));setShowLoadModal(false);showToast(`Loaded`);};
   const confirmDel=()=>{if(showDeleteConfirm){setSaves(p=>p.filter(s=>s.id!==showDeleteConfirm));showToast('Deleted','info');setShowDeleteConfirm(null);}};
   const runNormalizationPreflight=()=>{
     const result=normalizeContentTaxonomy(content);
