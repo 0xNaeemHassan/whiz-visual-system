@@ -170,6 +170,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   useEffect(()=>{try{const r=localStorage.getItem('whiz-autosave');if(r){const d=JSON.parse(r);if(d.savedAt&&Date.now()-d.savedAt<86400000){autosaveDataRef.current=d;setShowAutosavePrompt(true);}}}catch(e){}},[]);
   const restoreAutosave=()=>{const d=autosaveDataRef.current;if(d){d.frameId&&setFrameId(d.frameId);d.theme&&(setTheme(d.theme),setActiveTheme(d.theme));d.content&&resetContent(d.content);d.overrides&&setOverrides(d.overrides);d.aspectRatio&&setAspectRatio(d.aspectRatio);d.bgGradient&&updateMedia(prev=>({...prev,bgGradient:d.bgGradient}));d.patternOverlay&&updateMedia(prev=>({...prev,patternOverlay:d.patternOverlay}));showToast('Restored');}setShowAutosavePrompt(false);};
   const selectedFrame=FRAMES.find(f=>f.id===frameId)||FRAMES[0];
+  const track = useMemo(() => createTelemetry({ frameId, layout: selectedFrame?.layout }), [frameId, selectedFrame?.layout]);
   useEffect(() => {
     const layoutBase = createTemplateForLayout(selectedFrame.layout);
     const frameTemplate = getFrameTemplate(frameId, layoutBase);
@@ -262,10 +263,11 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const confirmDel=()=>{if(showDeleteConfirm){setSaves(p=>p.filter(s=>s.id!==showDeleteConfirm));showToast('Deleted','info');setShowDeleteConfirm(null);}};
   const runNormalizationPreflight=()=>{
     const result=normalizeContentTaxonomy(content);
-    if(result.compliance.autoCorrected.length){showToast(`Auto-corrected: ${result.compliance.autoCorrected.join(' ')}`,'info');}
-    if(result.compliance.hasInvalid){showToast(`Invalid taxonomy: ${result.compliance.invalid.join(' ')}`,'error');return null;}
+    const taxonomyAutoCorrected=result.compliance.autoCorrected.length>0;
+    if(taxonomyAutoCorrected){showToast(`Auto-corrected: ${result.compliance.autoCorrected.join(' ')}`,'info');}
+    if(result.compliance.hasInvalid){track(TELEMETRY_EVENTS.VALIDATION_ERROR,{context:'export',count:result.compliance.invalid.length,issues:result.compliance.invalid,taxonomyAutoCorrected});showToast(`Invalid taxonomy: ${result.compliance.invalid.join(' ')}`,'error');return null;}
     if(result.content.topicTag!==content.topicTag||result.content.slug!==content.slug){setContent(result.content,{immediate:true});}
-    return result.content;
+    return { normalizedContent: result.content, taxonomyAutoCorrected };
   };
   const exportJSON=()=>{const normalized=runNormalizationPreflight();if(!normalized)return;const d=JSON.stringify({...buildSave(),content:{...content,...normalized}},null,2);const b=new Blob([d],{type:'application/json'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=`${normalized.slug||'whiz_export'}.json`;a.click();URL.revokeObjectURL(u);showToast('JSON exported');};
   const exportManifest=()=>{if(hasBlockingSpineContrastIssue){showToast('Publish blocked: rotated spine contrast is below threshold.','error');return;}const normalized=runNormalizationPreflight();if(!normalized)return;const payload={issueNum:content.issueNum,topic:normalized.topicTag,slug:normalized.slug,title:content.title,date:content.date,frameId,themeId:theme.id,strictMode,brandScore,complianceIssues,sources:(content.sourceLinks||'').split(',').map(s=>s.trim()).filter(Boolean),targetMetric:content.targetMetric||'',metricConfidence:content.metricConfidence||'',metricProvenance:Array.isArray(content.metricProvenance)?content.metricProvenance:(content.metricProvenance?[content.metricProvenance]:[]),exportedAt:new Date().toISOString()};const d=JSON.stringify(payload,null,2);const b=new Blob([d],{type:'application/json'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=`whiz_issue${content.issueNum||'000'}_manifest.json`;a.click();URL.revokeObjectURL(u);showToast('Manifest exported');};
@@ -275,24 +277,24 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const exportWebP=async()=>{
     if(!frameRef.current||exporting)return;
     if(hasBlockingSpineContrastIssue){showToast('Publish blocked: rotated spine contrast is below threshold.','error');return;}
-    const normalized=runNormalizationPreflight();if(!normalized)return;
+    const preflight=runNormalizationPreflight();if(!preflight)return;const { normalizedContent, taxonomyAutoCorrected }=preflight;
     const v=validateEditorState({content,overrides,uploadedImages});
     if(!v.valid){showToast(`Export blocked (${v.codes.join(', ')})`,'error');return;}
     setExporting(true);showToast('Generating WebP…');
     try{
-      const sceneModel=createSceneModel({frameId,theme,content:{...content,...normalized},overrides,aspectRatio,bgGradient});
+      const sceneModel=createSceneModel({frameId,theme,content:{...content,...normalizedContent},overrides,aspectRatio,bgGradient});
       const {canvas:cv,usedFallback}=await exportFrame({contractInput:{format:'webp',dimensions:{width:aspectRatio.w,height:aspectRatio.h},quality:0.92,background:overrides.frameBg||theme.base,version:'1.0.0'},sceneModel,sceneRenderer:renderSceneToCanvas,domFallbackRenderer:(contract)=>renderDomSnapshotToCanvas(frameRef.current,{width:contract.dimensions.width,height:contract.dimensions.height,backgroundColor:contract.background})});
       await new Promise((res,rej)=>cv.toBlob(b=>{
         if(!b){rej(new Error('WebP blob empty'));return;}
         const u=URL.createObjectURL(b);const a=document.createElement('a');
-        a.href=u;a.download=`${normalized.slug||'whiz_export'}.webp`;a.click();URL.revokeObjectURL(u);
-        showToast(`WebP exported${usedFallback?' (DOM fallback)':''}`);res();
+        a.href=u;a.download=`${normalizedContent.slug||'whiz_export'}.webp`;a.click();URL.revokeObjectURL(u);
+        track(TELEMETRY_EVENTS.EXPORT_SUCCESS,{format:'webp',strictMode,taxonomyAutoCorrected});showToast(`WebP exported${usedFallback?' (DOM fallback)':''}`);res();
       },'image/webp',0.92));
     }catch(e){track(TELEMETRY_EVENTS.EXPORT_FAILURE,{format:'webp',reason:e.message||'error',strictMode});showToast(`WebP failed: ${e.message||'error'}`,'error');}
     setExporting(false);
   };
   const mutations = useMemo(() => buildMutationDispatcher({ setContent, setOverrides, setMedia: setMediaState }), [setContent, setOverrides, setMediaState]);
-  const updateContent=(k,v,forceImmediate=false)=>mutations.content(k,c=>({...c,[k]:v}),forceImmediate);
+  const updateContent=(k,v,forceImmediate=false)=>mutations.content(k,c=>{const next={...c,[k]:v};if(k==='topicTag'||k==='slug'){return normalizeContentTaxonomy(next).content;}return next;},forceImmediate);
   const updateStyle=(updater)=>mutations.style(updater);
   const updateMedia=(updater)=>mutations.image(updater);
   const strictWhizMode = Boolean(strictMode);

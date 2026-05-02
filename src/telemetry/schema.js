@@ -14,6 +14,7 @@ export const EVENT_PAYLOAD_SHAPES = {
   [TELEMETRY_EVENTS.LOAD]: {
     source: 'manual|autosave|import',
     saveId: 'string?',
+    taxonomyAutoCorrected: 'boolean?',
   },
   [TELEMETRY_EVENTS.SAVE]: {
     saveId: 'string',
@@ -28,6 +29,7 @@ export const EVENT_PAYLOAD_SHAPES = {
   [TELEMETRY_EVENTS.EXPORT_SUCCESS]: {
     format: 'png|webp|html|json|manifest',
     strictMode: 'boolean',
+    taxonomyAutoCorrected: 'boolean?',
   },
   [TELEMETRY_EVENTS.EXPORT_FAILURE]: {
     format: 'png|webp',
@@ -38,6 +40,7 @@ export const EVENT_PAYLOAD_SHAPES = {
     context: 'export|import',
     count: 'number',
     issues: 'string[]',
+    taxonomyAutoCorrected: 'boolean?',
   },
 };
 

@@ -1,4 +1,5 @@
 import { FRAME_CONTENT_SCHEMA, EDITOR_STATE_SCHEMA } from './mappings';
+import { normalizeContentTaxonomy } from '../../utils/contentNormalization';
 
 function toString(v, fallback = '') { return v == null ? fallback : String(v); }
 function toNumber(v, fallback = 0) { const n = Number(v); return Number.isFinite(n) ? n : fallback; }
@@ -32,7 +33,8 @@ function normalizeBySchema(raw, schema) {
 }
 
 export function normalizeFrameContent(raw, defaults = {}) {
-  return { ...defaults, ...normalizeBySchema(raw, FRAME_CONTENT_SCHEMA) };
+  const merged = { ...defaults, ...normalizeBySchema(raw, FRAME_CONTENT_SCHEMA) };
+  return normalizeContentTaxonomy(merged).content;
 }
 
 export function normalizeEditorState(raw, defaults = {}) {
