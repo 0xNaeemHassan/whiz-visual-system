@@ -1,7 +1,10 @@
 // WhizFrame v8.0 — Complete visual overhaul with unique layouts for all frame types
-import { memo } from 'react';
+import { memo, useEffect, useRef } from 'react';
+import { perfMeasure, perfNow, isPerfDev } from '../utils/perfProfiler';
 
 function WhizFrameInner({ frameRef, frame, theme, content, editMode, selectedEl, onSelectEl, styleOverrides, showGrid, aspectRatio, uploadedImages, bgGradient, patternOverlay }) {
+  const renderStartRef = useRef(perfNow());
+
   const ov = styleOverrides || {};
   const tickerText = `WHIZ.DEFI ▸ ${content.date} ▸ ISSUE ${content.issueNum} ▸ ${content.topicTag} ▸ ALPHA UNLOCKED ▸ `;
   const sel = (key, e) => { if (editMode) { e?.stopPropagation(); onSelectEl?.(selectedEl === key ? null : key); } };
@@ -123,6 +126,16 @@ default:          return <BodyLayout {...layoutProps} />;
     if (len < 80) return 24;
     return 18;
   };
+
+  useEffect(() => {
+    if (!isPerfDev()) return;
+    perfMeasure('render.whiz-frame', renderStartRef.current, {
+      tier: frame?.tier,
+      metric: 'initialRenderMs',
+      extra: { frameId: frame?.id, layout: frame?.layout },
+    });
+    renderStartRef.current = perfNow();
+  });
 
   return (
     <div
