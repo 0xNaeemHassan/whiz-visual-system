@@ -1,3 +1,4 @@
+import { TICKER_CONTRACT, normalizeTickerSpeed } from '../domain/tickerContract';
 import { createTemplateForLayout, checkTemplateLayoutCompatibility, getFrameTemplate } from '../data/templates.js';
 import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
 import { FRAMES } from '../data/frames.js';
@@ -326,9 +327,9 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
           <div className="editor-section"><div className="editor-section-title">Pattern</div><PatternSelector value={patternOverlay?.id||null} onChange={p=>updateMedia(prev=>({...prev,patternOverlay:p}))}/></div>
           <div className="editor-section"><div className="editor-section-title">Metadata</div><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>{[['Issue #','issueNum'],['Date','date'],['Desk','desk'],['Volume','volume']].map(([l,k])=>(<div key={k} className="form-group" style={{marginBottom:0}}><label className="form-label">{l}</label><input value={content[k]} onChange={e=>updateContent(k,e.target.value)}/></div>))}</div><div className="form-group" style={{marginTop:8}}><label className="form-label">Topic Tag</label><input value={content.topicTag} onChange={e=>updateContent('topicTag',e.target.value)}/></div>
       <div className="form-group">
-        <label className="form-label">Ticker Speed (seconds) — {content.tickerSpeed||28}s</label>
-        <input type="range" min={10} max={60} step={2} value={content.tickerSpeed||28}
-          onChange={e=>updateContent('tickerSpeed',parseInt(e.target.value))}
+        <label className="form-label">Ticker Speed (seconds) — {normalizeTickerSpeed(content.tickerSpeed)}s</label>
+        <input type="range" min={TICKER_CONTRACT.speed.min} max={TICKER_CONTRACT.speed.max} step={TICKER_CONTRACT.speed.step} value={normalizeTickerSpeed(content.tickerSpeed)}
+          onChange={e=>updateContent('tickerSpeed',normalizeTickerSpeed(parseInt(e.target.value, 10)))}
           style={{width:'100%',accentColor:'var(--accent)'}}/>
       </div>
 <div className="form-group"><label className="form-label">Handle</label><input value={content.handle} onChange={e=>updateContent('handle',e.target.value)}/></div>

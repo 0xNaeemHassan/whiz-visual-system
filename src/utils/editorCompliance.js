@@ -1,3 +1,5 @@
+import { TICKER_CONTRACT } from '../domain/tickerContract';
+
 export const TYPE_SCALE = [10, 12, 14, 18, 24, 36, 56, 84];
 
 const HEX_RE = /^#([0-9a-f]{6}|[0-9a-f]{8})$/i;
@@ -74,10 +76,10 @@ export function getComplianceIssues({ overrides, content }) {
     if (points.length < 5 || points.length > 16) issues.push('Sparkline constraints: use 5 to 16 numeric points.');
   }
 
-  if (content?.tickerSpeed && (content.tickerSpeed < 10 || content.tickerSpeed > 60)) {
+  if (content?.tickerSpeed && (content.tickerSpeed < TICKER_CONTRACT.speed.min || content.tickerSpeed > TICKER_CONTRACT.speed.max)) {
     issues.push('Ticker speed should be between 10s and 60s.');
   }
-  if (content?.tickerSpeed && content.tickerSpeed % 2 !== 0) {
+  if (content?.tickerSpeed && content.tickerSpeed % TICKER_CONTRACT.speed.step !== 0) {
     issues.push('Ticker fidelity variance: use even-numbered ticker speed for normalized cadence.');
   }
 
