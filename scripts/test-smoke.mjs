@@ -42,3 +42,4 @@ const score = getBrandScore({
 assert.equal(score.score, 100, 'Fully compliant payload should score 100');
 
 console.log('Smoke tests passed');
+import './test-editor-mutations.mjs';
