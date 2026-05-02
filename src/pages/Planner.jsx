@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { useUIEventContext } from '../state/UIEventContext';
 import { FRAMES } from '../data/frames';
 import { THEMES } from '../data/themes';
 import { useLocalStorage } from '../hooks/useLocalStorage';
@@ -76,6 +77,7 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
   const maxMonthly = Math.max(1, ...monthlyActivity.map(m => m.count));
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [seriesFocusFilter, setSeriesFocusFilter] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [editingIssue, setEditingIssue] = useState(null);
@@ -84,15 +86,34 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
     publishDate: '', notes: '', caption: '', sourceLinks: '', confidence: 'medium', series: '',
   });
   const normalizeIssueNum = (v) => String(v || '').replace(/\D/g, '').slice(-3).padStart(3, '0');
+  const normalizeIssue = (issue) => ({
+    ...issue,
+    issueNum: normalizeIssueNum(issue.issueNum),
+    priority: issue.priority || 'medium',
+    confidence: CONFIDENCE.includes(issue.confidence) ? issue.confidence : 'medium',
+    series: issue.series || '',
+    assistantBrief: issue.assistantBrief || '',
+    targetMetric: issue.targetMetric || '',
+    metricConfidence: issue.metricConfidence || '',
+    metricSource: issue.metricSource || '',
+    metricValue: issue.metricValue || '',
+    metricUnit: issue.metricUnit || '',
+    metricProvenance: Array.isArray(issue.metricProvenance) ? issue.metricProvenance : [],
+  });
   const existingIssueNums = new Set(issues.map(i => String(i.issueNum || '').padStart(3, '0')));
 
-  // Escape handler
+  const { registerHandlers } = useUIEventContext();
+
+  // Escape handler routed via UI event context
   useEffect(() => {
-    const handler = () => { setShowModal(false); setDeleteConfirmId(null); };
-    if (!isActive) return;
-    window.addEventListener('whiz-escape', handler);
-    return () => window.removeEventListener('whiz-escape', handler);
-  }, []);
+    if (!isActive) return undefined;
+    return registerHandlers({
+      onEscape: () => {
+        setShowModal(false);
+        setDeleteConfirmId(null);
+      },
+    });
+  }, [isActive, registerHandlers]);
 
   const openNewIssue = (presetStatus) => {
     const nextN = issues.length > 0 ? Math.max(...issues.map(i => Number(i.issueNum) || 0)) + 1 : 1;
@@ -170,8 +191,13 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
 
   // F8: CSV export with sourceLinks
   const exportCSV = () => {
-    const headers = ['Issue #', 'Topic', 'Frame #', 'Theme', 'Status', 'Publish Date', 'Notes', 'Caption', 'Source Links', 'Priority', 'Confidence', 'Series'];
-    const rows = issues.map(i => [i.issueNum, i.topic, i.frameId, i.themeId, i.status, i.publishDate, i.notes, i.caption, i.sourceLinks, i.priority || 'medium', i.confidence || 'medium', i.series || ''].map(v => `"${(v||'').replace(/"/g,'""')}"`));
+    const headers = ['Issue #', 'Topic', 'Frame #', 'Theme', 'Status', 'Publish Date', 'Notes', 'Caption', 'Source Links', 'Priority', 'Confidence', 'Series', 'Assistant Brief', 'Target Metric', 'Metric Confidence', 'Metric Source', 'Metric Value', 'Metric Unit', 'Metric Provenance'];
+    const rows = issues.map(i => [
+      i.issueNum, i.topic, i.frameId, i.themeId, i.status, i.publishDate, i.notes, i.caption, i.sourceLinks,
+      i.priority || 'medium', i.confidence || 'medium', i.series || '',
+      i.assistantBrief || '', i.targetMetric || '', i.metricConfidence || '', i.metricSource || '', i.metricValue || '', i.metricUnit || '',
+      JSON.stringify(Array.isArray(i.metricProvenance) ? i.metricProvenance : []),
+    ].map(v => `"${String(v ?? '').replace(/"/g,'""')}"`));
     const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -213,22 +239,41 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
         const hasHeader = (allRows[0]?.[0] || '').toLowerCase().includes('issue');
         const lines = hasHeader ? allRows.slice(1) : allRows;
         if (lines.length < 1) { showToast('CSV has no data rows', 'error'); return; }
-        const imported = lines.map((cols, idx) => ({
-          id: `i_${Date.now()}_${idx}`,
-          issueNum: cols[0]?.trim() || '',
-          topic: cols[1]?.trim() || '',
-          frameId: cols[2]?.trim() || '',
-          themeId: cols[3]?.trim() || '',
-          status: STATUSES.includes(cols[4]?.trim()) ? cols[4].trim() : 'draft',
-          publishDate: cols[5]?.trim() || '',
-          notes: cols[6]?.trim() || '',
-          caption: cols[7]?.trim() || '',
-          sourceLinks: cols[8]?.trim() || '',
-          priority: cols[9]?.trim() || 'medium',
-          confidence: CONFIDENCE.includes(cols[10]?.trim()) ? cols[10].trim() : 'medium',
-          series: cols[11]?.trim() || '',
-          createdAt: Date.now(),
-        })).filter(i => i.issueNum || i.topic);
+        const imported = lines.map((cols, idx) => {
+          let metricProvenance = [];
+          const rawMetricProvenance = cols[18]?.trim();
+          if (rawMetricProvenance) {
+            try {
+              const parsed = JSON.parse(rawMetricProvenance);
+              metricProvenance = Array.isArray(parsed) ? parsed : [];
+            } catch {
+              metricProvenance = [];
+            }
+          }
+          return normalizeIssue({
+            id: `i_${Date.now()}_${idx}`,
+            issueNum: cols[0]?.trim() || '',
+            topic: cols[1]?.trim() || '',
+            frameId: cols[2]?.trim() || '',
+            themeId: cols[3]?.trim() || '',
+            status: STATUSES.includes(cols[4]?.trim()) ? cols[4].trim() : 'draft',
+            publishDate: cols[5]?.trim() || '',
+            notes: cols[6]?.trim() || '',
+            caption: cols[7]?.trim() || '',
+            sourceLinks: cols[8]?.trim() || '',
+            priority: cols[9]?.trim() || 'medium',
+            confidence: cols[10]?.trim() || 'medium',
+            series: cols[11]?.trim() || '',
+            assistantBrief: cols[12]?.trim() || '',
+            targetMetric: cols[13]?.trim() || '',
+            metricConfidence: cols[14]?.trim() || '',
+            metricSource: cols[15]?.trim() || '',
+            metricValue: cols[16]?.trim() || '',
+            metricUnit: cols[17]?.trim() || '',
+            metricProvenance,
+            createdAt: Date.now(),
+          });
+        }).filter(i => i.issueNum || i.topic);
         setIssues(prev => [...prev, ...imported]);
         showToast(`Imported ${imported.length} issues`);
       } catch (err) { showToast('Failed to parse CSV', 'error'); }
@@ -237,12 +282,72 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
     e.target.value = '';
   };
 
+
+  const toDateOnly = (value) => {
+    if (!value) return null;
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d;
+  };
+
+  const cadenceAlerts = useMemo(() => {
+    const now = new Date();
+    const dayMs = 1000 * 60 * 60 * 24;
+    const grouped = issues.reduce((acc, issue) => {
+      const series = (issue.series || '').trim();
+      const d = toDateOnly(issue.publishDate);
+      const isPublished = (issue.status || '').trim() === 'published';
+      const isFutureDated = d && d.getTime() > now.getTime();
+      if (!series || !d || !isPublished || isFutureDated) return acc;
+      acc[series] = acc[series] || [];
+      acc[series].push({ ...issue, publishDateObj: d });
+      return acc;
+    }, {});
+
+    return Object.entries(grouped)
+      .map(([series, seriesIssues]) => {
+        const sorted = [...seriesIssues].sort((a, b) => a.publishDateObj - b.publishDateObj);
+        const gaps = [];
+        for (let i = 1; i < sorted.length; i += 1) {
+          gaps.push((sorted[i].publishDateObj - sorted[i - 1].publishDateObj) / dayMs);
+        }
+        const avgGap = gaps.length ? gaps.reduce((sum, g) => sum + g, 0) / gaps.length : 0;
+        const lastPost = sorted[sorted.length - 1].publishDateObj;
+        const daysSinceLastPost = Math.max(0, Math.floor((now - lastPost) / dayMs));
+        const drift = avgGap > 0 ? daysSinceLastPost - avgGap : daysSinceLastPost;
+        const severity = drift >= 14 ? 'critical' : drift >= 7 ? 'warn' : 'info';
+        return {
+          series,
+          avgGapDays: avgGap,
+          daysSinceLastPost,
+          drift,
+          severity,
+          issueCount: sorted.length,
+          lowConfidenceCount: seriesIssues.filter(i => (i.confidence || 'medium') === 'low').length,
+        };
+      })
+      .filter((a) => a.issueCount >= 2)
+      .sort((a, b) => b.drift - a.drift)
+      .slice(0, 5);
+  }, [issues]);
+
+  const openNewIssueForSeries = (seriesName) => {
+    openAdd('planned');
+    setForm((prev) => ({ ...prev, series: seriesName, status: 'planned' }));
+  };
+
+  const focusLowConfidenceSeries = (seriesName) => {
+    setViewSafe('table');
+    setStatusFilter('ALL');
+    setSeriesFocusFilter(seriesName);
+  };
+
   const filtered = useMemo(() => {
     let f = issues;
     if (statusFilter !== 'ALL') f = f.filter(i => i.status === statusFilter);
     if (search) { const q = search.toLowerCase(); f = f.filter(i => i.topic?.toLowerCase().includes(q) || i.issueNum?.includes(q) || i.notes?.toLowerCase().includes(q) || i.caption?.toLowerCase().includes(q) || i.sourceLinks?.toLowerCase().includes(q)); }
+    if (seriesFocusFilter) f = f.filter(i => (i.series || '').trim() === seriesFocusFilter && (i.confidence || 'medium') === 'low');
     return f.sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0));
-  }, [issues, statusFilter, search]);
+  }, [issues, statusFilter, search, seriesFocusFilter]);
 
   const stats = STATUSES.reduce((acc, s) => { acc[s] = issues.filter(i => i.status === s).length; return acc; }, {});
 
@@ -273,6 +378,56 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
           <div style={{ fontFamily: 'var(--font-d)', fontSize: 24, fontWeight: 700, color: activeTheme.accent, lineHeight: 1 }}>{issues.length}</div>
           <div style={{ fontFamily: 'var(--font-m)', fontSize: 9, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>TOTAL<br/>ISSUES</div>
         </div>
+      </div>
+
+
+
+      {/* Intelligence Panel */}
+      <div className="card" style={{ marginBottom: 16 }} aria-label="Cadence intelligence panel">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
+          <div>
+            <div style={{ fontFamily: 'var(--font-m)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)' }}>Intelligence</div>
+            <div style={{ fontSize: 13, color: 'var(--text)' }}>Top cadence alerts by posting drift.</div>
+          </div>
+          {seriesFocusFilter && (
+            <button className="btn btn-ghost btn-sm" onClick={() => setSeriesFocusFilter(null)}>
+              Clear low-confidence filter ({seriesFocusFilter})
+            </button>
+          )}
+        </div>
+        {cadenceAlerts.length === 0 ? (
+          <div style={{ fontSize: 12, color: 'var(--muted)' }}>No cadence alerts yet. Add at least two dated posts in a series.</div>
+        ) : (
+          <div style={{ display: 'grid', gap: 8 }}>
+            {cadenceAlerts.map((alert) => {
+              const severityMeta = {
+                info: { label: 'Info', color: '#6FA8FF' },
+                warn: { label: 'Warn', color: '#E5B23A' },
+                critical: { label: 'Critical', color: '#FF5A5A' },
+              }[alert.severity];
+              return (
+                <div key={alert.series} style={{ border: '1px solid var(--border)', borderLeft: `4px solid ${severityMeta.color}`, borderRadius: 'var(--r)', padding: 10, display: 'grid', gap: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                    <strong style={{ fontSize: 12 }}>{alert.series}</strong>
+                    <span aria-label={`Severity ${severityMeta.label}`} style={{ fontSize: 10, fontFamily: 'var(--font-m)', color: severityMeta.color, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{severityMeta.label}</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: 11, color: 'var(--muted)' }}>
+                    <span>Avg gap: {Math.round(alert.avgGapDays)}d</span>
+                    <span>Days since last post: {alert.daysSinceLastPost}d</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button className="btn btn-secondary btn-sm" onClick={() => openNewIssueForSeries(alert.series)}>
+                      Create next issue in series
+                    </button>
+                    <button className="btn btn-ghost btn-sm" onClick={() => focusLowConfidenceSeries(alert.series)}>
+                      Boost confidence
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Toolbar */}

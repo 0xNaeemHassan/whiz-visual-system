@@ -1,4 +1,6 @@
+/** @typedef {import('../types/editor.js').FrameContent} FrameContent */
 // Per-frame content templates — gives users a ready-to-edit scaffold
+/** @type {Record<number, Partial<FrameContent>>} */
 export const FRAME_TEMPLATES = {
   // Frame 4 — The Watchlist
   4: {
@@ -124,11 +126,19 @@ export const FRAME_TEMPLATES = {
   },
 };
 
-// Merge with DEFAULT_CONTENT for any unspecified fields
-export function getFrameTemplate(frameId, defaultContent) {
+import { createDefaultContent, hasRequiredContentShape } from '../domain/editorDefaults.js';
+
+// Merge with canonical defaults for any unspecified fields
+export function getFrameTemplate(frameId) {
+  const defaultContent = createDefaultContent();
   const template = FRAME_TEMPLATES[frameId];
-  if (!template) return defaultContent;
-  return { ...defaultContent, ...template };
+  const merged = template ? { ...defaultContent, ...template } : defaultContent;
+
+  if (!hasRequiredContentShape(merged)) {
+    throw new Error(`Template merge removed required content keys for frame ${frameId}`);
+  }
+
+  return merged;
 }
 
 export const CONTENT_TEMPLATES = Object.entries(FRAME_TEMPLATES).map(([id, content]) => ({
@@ -137,3 +147,37 @@ export const CONTENT_TEMPLATES = Object.entries(FRAME_TEMPLATES).map(([id, conte
   desc: content.deck || content.topicTag || 'Quick-start content preset',
   content,
 }));
+
+
+const LAYOUT_REQUIRED_FIELDS = {
+  table: ['tableRows'],
+  'bull-bear': ['bullPoints', 'bearPoints'],
+  timeline: ['timelineEvents'],
+  grid: ['gridItems'],
+  stats: ['stats'],
+};
+
+export function createTemplateForLayout(layout) {
+  const base = createDefaultContent();
+  const requiredFields = LAYOUT_REQUIRED_FIELDS[layout] || [];
+  for (const field of requiredFields) {
+    if (base[field] === undefined) {
+      base[field] = Array.isArray(base[field]) ? [] : '';
+    }
+  }
+  return base;
+}
+
+export function checkTemplateLayoutCompatibility(template, layout) {
+  const requiredFields = LAYOUT_REQUIRED_FIELDS[layout] || [];
+  const missingFields = requiredFields.filter((field) => {
+    const value = template?.[field];
+    if (Array.isArray(value)) return value.length === 0;
+    return value === undefined || value === null || value === '';
+  });
+
+  return {
+    isCompatible: missingFields.length === 0,
+    missingFields,
+  };
+}
