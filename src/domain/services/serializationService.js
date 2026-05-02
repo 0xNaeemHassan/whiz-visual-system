@@ -1,10 +1,35 @@
+import { normalizeContentTaxonomy } from '../../utils/contentNormalization';
+
 export function buildFrameSave({ frameId, theme, content, overrides, aspectRatio, bgGradient, patternOverlay }) {
-  return { frameId, theme, content, overrides, aspectRatio, bgGradient, patternOverlay, savedAt: Date.now() };
+  const normalization = normalizeContentTaxonomy(content || {});
+  return {
+    frameId,
+    theme,
+    content: normalization.content,
+    overrides,
+    aspectRatio,
+    bgGradient,
+    patternOverlay,
+    savedAt: Date.now(),
+    telemetry: {
+      taxonomyAutoCorrected: normalization.compliance.autoCorrected.length > 0,
+      taxonomyInvalidCount: normalization.compliance.invalid.length,
+    },
+  };
 }
 
 export function parseImportedState(raw) {
   if (!raw || typeof raw !== 'object') {
     throw new Error('Invalid JSON');
   }
-  return raw;
+  const normalization = normalizeContentTaxonomy(raw.content || {});
+  return {
+    ...raw,
+    content: normalization.content,
+    telemetry: {
+      ...(raw.telemetry || {}),
+      taxonomyAutoCorrected: normalization.compliance.autoCorrected.length > 0,
+      taxonomyInvalidCount: normalization.compliance.invalid.length,
+    },
+  };
 }
