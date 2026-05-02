@@ -13,6 +13,12 @@ import PatternSelector from '../components/PatternSelector';
 import { CONTENT_TEMPLATES } from '../data/templates';
 import { nearestTypeScale, getComplianceIssues, getBrandScore } from '../utils/editorCompliance';
 
+/** @typedef {import('../types/editor.js').FrameContent} FrameContent */
+/** @typedef {import('../types/editor.js').StyleOverrides} StyleOverrides */
+/** @typedef {import('../types/editor.js').Theme} Theme */
+/** @typedef {import('../types/editor.js').ExportPayload} ExportPayload */
+
+/** @type {FrameContent} */
 const DEFAULT_CONTENT = {
   issueNum:'001',date:'05.01.26',desk:'YIELD',volume:'I',topicTag:'STABLECOIN RISK',
   title:'THE END OF MERCENARY YIELD',
@@ -30,6 +36,7 @@ const DEFAULT_CONTENT = {
   verdict:'Position in protocols with proven revenue. Avoid incentive-only models.',
   gridItems:[],timelineEvents:[],
 };
+/** @type {StyleOverrides} */
 const DEFAULT_OVERRIDES = {frameBg:null,spineColor:null,tickerColor:null,tickerBg:null,title:{fontSize:52,fontWeight:700,color:'#F4F5F7',italic:false,lineHeight:1.05,letterSpacing:-0.02,textAlign:'left',opacity:1},deck:{fontSize:18,fontWeight:400,color:'#8B95A3',italic:true},body:{fontSize:15,fontWeight:400,color:'#8B95A3',lineHeight:1.75,textAlign:'left',opacity:1},accent:{color:null},tag:{background:null,color:null,borderColor:null},footer:{background:null},statsColor:null,bignumColor:null,avatarColor:null,ruleBg:null,handleColor:null};
 const ELEMENTS = [{key:'frame',label:'Background',icon:'\u25A1'},{key:'spine',label:'Spine',icon:'|'},{key:'ticker',label:'Ticker',icon:'\u2014'},{key:'title',label:'Title',icon:'T'},{key:'deck',label:'Deck',icon:'D'},{key:'tag',label:'Tag',icon:'#'},{key:'body',label:'Body',icon:'B'},{key:'stats',label:'Stats',icon:'S'},{key:'bignum',label:'Big #',icon:'N'},{key:'footer',label:'Footer',icon:'F'},{key:'accent',label:'Accent',icon:'\u25CF'}];
 function ColorRow({label,value,defaultVal,onChange}){const col=value||defaultVal;return(<div className="prop-color-row"><span className="prop-label-text">{label}</span><div className="prop-color-swatch" style={{background:col,position:'relative'}}><input type="color" value={col} onChange={e=>onChange(e.target.value)} aria-label={`${label} color`} style={{position:'absolute',inset:0,opacity:0,cursor:'pointer',width:'100%',height:'100%'}}/></div><input type="text" className="prop-hex" value={col} onChange={e=>{const v=e.target.value;if(/^#[0-9A-Fa-f]{0,6}$/.test(v)||v==='')onChange(v||null);}}/><button className="btn btn-ghost btn-sm" onClick={()=>onChange(null)} style={{padding:'4px 7px',fontSize:11,color:'var(--dim)'}} title="Reset">\u21BA</button></div>);}
@@ -70,6 +77,9 @@ function DesignPanel({selectedEl,setSelectedEl,overrides,setOverrides,theme,bgGr
     }}>Reset All</button></div></div>);
 }
 
+/**
+ * @param {{ activeFontPairing?: {body?:string}|null, showToast: (message:string, kind?:string)=>void, activeTheme: Theme, setActiveTheme: (theme:Theme)=>void, editingFrame?: any, clearEditingFrame?: ()=>void, newFrameSignal:number, isActive:boolean }} props
+ */
 export default function Editor({ activeFontPairing,showToast,activeTheme,setActiveTheme,editingFrame,clearEditingFrame,newFrameSignal,isActive}){
   const[saves,setSaves]=useLocalStorage('whiz-saves',[]);
   const[frameId,setFrameId]=useState(editingFrame||4);

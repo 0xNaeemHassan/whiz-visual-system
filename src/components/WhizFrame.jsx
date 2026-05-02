@@ -1,7 +1,15 @@
 // WhizFrame v8.0 — Complete visual overhaul with unique layouts for all frame types
 import { memo } from 'react';
 
-function WhizFrameInner({ frameRef, frame, theme, content, editMode, selectedEl, onSelectEl, styleOverrides, showGrid, aspectRatio, uploadedImages, bgGradient, patternOverlay }) {
+/** @typedef {import('../types/editor.js').FrameDefinition} FrameDefinition */
+/** @typedef {import('../types/editor.js').FrameContent} FrameContent */
+/** @typedef {import('../types/editor.js').StyleOverrides} StyleOverrides */
+/** @typedef {import('../types/editor.js').Theme} Theme */
+
+/**
+ * @param {{ frameRef: import('react').RefObject<HTMLDivElement|null>, frame: FrameDefinition, theme: Theme, content: FrameContent, editMode: boolean, selectedEl: string|null, onSelectEl?: (key:string|null)=>void, styleOverrides: StyleOverrides, showGrid: boolean, aspectRatio?: {w:number,h:number}, uploadedImages?: Record<string, any>, bgGradient?: string|null, patternOverlay?: {css:string,size?:string,opacity?:number}|null, fontPairing?: {body?: string}|null }} props
+ */
+function WhizFrameInner({ frameRef, frame, theme, content, editMode, selectedEl, onSelectEl, styleOverrides, showGrid, aspectRatio, uploadedImages, bgGradient, patternOverlay, fontPairing }) {
   const ov = styleOverrides || {};
   const tickerText = `WHIZ.DEFI ▸ ${content.date} ▸ ISSUE ${content.issueNum} ▸ ${content.topicTag} ▸ ALPHA UNLOCKED ▸ `;
   const sel = (key, e) => { if (editMode) { e?.stopPropagation(); onSelectEl?.(selectedEl === key ? null : key); } };
