@@ -44,13 +44,21 @@ const DEFAULT_CONTENT = {
 };
 /** @type {StyleOverrides} */
 const DEFAULT_OVERRIDES = {frameBg:null,spineColor:null,tickerColor:null,tickerBg:null,title:{fontSize:52,fontWeight:700,color:'#F4F5F7',italic:false,lineHeight:1.05,letterSpacing:-0.02,textAlign:'left',opacity:1},deck:{fontSize:18,fontWeight:400,color:'#8B95A3',italic:true},body:{fontSize:15,fontWeight:400,color:'#8B95A3',lineHeight:1.75,textAlign:'left',opacity:1},accent:{color:null},tag:{background:null,color:null,borderColor:null},footer:{background:null},statsColor:null,bignumColor:null,avatarColor:null,ruleBg:null,handleColor:null};
+const LOCKED_NEUTRALS = ['#8b95a3', '#f4f5f7', '#d0d6de'];
+const DEFAULT_EFFECTS = { glow: true, noise: true, intenseAccent: false };
 const ELEMENTS = [{key:'frame',label:'Background',icon:'\u25A1'},{key:'spine',label:'Spine',icon:'|'},{key:'ticker',label:'Ticker',icon:'\u2014'},{key:'title',label:'Title',icon:'T'},{key:'deck',label:'Deck',icon:'D'},{key:'tag',label:'Tag',icon:'#'},{key:'body',label:'Body',icon:'B'},{key:'stats',label:'Stats',icon:'S'},{key:'bignum',label:'Big #',icon:'N'},{key:'footer',label:'Footer',icon:'F'},{key:'accent',label:'Accent',icon:'\u25CF'}];
 function ColorRow({label,value,defaultVal,onChange}){const col=value||defaultVal;return(<div className="prop-color-row"><span className="prop-label-text">{label}</span><div className="prop-color-swatch" style={{background:col,position:'relative'}}><input type="color" value={col} onChange={e=>onChange(e.target.value)} aria-label={`${label} color`} style={{position:'absolute',inset:0,opacity:0,cursor:'pointer',width:'100%',height:'100%'}}/></div><input type="text" className="prop-hex" value={col} onChange={e=>{const v=e.target.value;if(/^#[0-9A-Fa-f]{0,6}$/.test(v)||v==='')onChange(v||null);}}/><button className="btn btn-ghost btn-sm" onClick={()=>onChange(null)} style={{padding:'4px 7px',fontSize:11,color:'var(--dim)'}} title="Reset">\u21BA</button></div>);}
 function SliderRow({label,value,min,max,step,unit,onChange}){return(<div style={{marginBottom:10}}><div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:5}}><span className="prop-label-text">{label}</span><span className="size-val">{value}{unit}</span></div><input type="range" min={min} max={max} step={step||1} value={value} onChange={e=>onChange(Number(e.target.value))} aria-label={label}/></div>);}
 function WeightRow({label,value,weights,onChange}){return(<div style={{marginBottom:10}}><div className="prop-label-text" style={{marginBottom:6}}>{label}</div><div className="ww-grid">{weights.map(w=>(<button key={w} className={`ww-btn ${value===w?'on':''}`} onClick={()=>onChange(w)} style={{fontWeight:w}}>{w}</button>))}</div></div>);}
 
 function DesignPanel({selectedEl,setSelectedEl,overrides,setOverrides,theme,bgGradient,setBgGradient,showToast,resetOverrides,setPatternOverlay,strictMode}){
-  const ov=overrides,set=(k,v)=>setOverrides(p=>({...p,[k]:v})),setN=(g,k,v)=>setOverrides(p=>({...p,[g]:{...(p[g]||{}),[k]:v===''?null:v}})),resetK=k=>setOverrides(p=>({...p,[k]:DEFAULT_OVERRIDES[k]}));
+  const ov=overrides,set=(k,v)=>setOverrides(p=>({...p,[k]:v})),setN=(g,k,v)=>{
+    if(strictMode&&k==='color'&&['body','deck','title'].includes(g)&&v&&!LOCKED_NEUTRALS.includes(v.toLowerCase())){
+      showToast('Strict Whiz Mode locks neutral palette tokens.', 'warning');
+      return;
+    }
+    setOverrides(p=>({...p,[g]:{...(p[g]||{}),[k]:v===''?null:v}}));
+  },resetK=k=>setOverrides(p=>({...p,[k]:DEFAULT_OVERRIDES[k]}));
   const ta=theme.accent,tb=theme.base;
   const ctrl=()=>{
     if(!selectedEl)return<div className="hint-box">Enable Edit Mode then click a frame element.</div>;
@@ -115,6 +123,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
 
   const[showDeleteConfirm,setShowDeleteConfirm]=useState(null);const[saveSearch,setSaveSearch]=useState('');
   const[strictMode,setStrictMode]=useLocalStorage('whiz-strict-mode',true);
+  const[whizEffects,setWhizEffects]=useLocalStorage('whiz-effects',DEFAULT_EFFECTS);
   const frameRef=useRef(null);const centerRef=useRef(null);
   const { registerHandlers } = useUIEventContext();
   const[showAutosavePrompt,setShowAutosavePrompt]=useState(false);const autosaveDataRef=useRef(null);
@@ -280,6 +289,15 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const updateContent=(k,v,forceImmediate=false)=>mutations.content(k,c=>({...c,[k]:v}),forceImmediate);
   const updateStyle=(updater)=>mutations.style(updater);
   const updateMedia=(updater)=>mutations.image(updater);
+  const strictWhizMode = Boolean(strictMode);
+  const toggleEffectWithCompliance = (effectKey, nextValue) => {
+    if (strictWhizMode && nextValue) {
+      showToast('Strict Whiz Mode blocks non-essential effects.', 'warning');
+      return;
+    }
+    if (!strictWhizMode && nextValue && !window.confirm(`Enable ${effectKey}? This can trigger Whiz compliance warnings.`)) return;
+    setWhizEffects(prev => ({ ...prev, [effectKey]: nextValue }));
+  };
   useEffect(()=>{if(!isActive)return;const t=setTimeout(()=>{try{localStorage.setItem('whiz-autosave',JSON.stringify({frameId,theme,content,overrides,aspectRatio,bgGradient,patternOverlay,savedAt:Date.now()}));}catch(e){}},3000);return()=>clearTimeout(t);},[content,overrides,frameId,theme,aspectRatio,bgGradient,patternOverlay]);
   const applyTheme=t=>{setTheme(t);setActiveTheme(t);};
   const applyTemplate=t=>{
@@ -309,7 +327,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
       </div>
       {/* CENTER */}
       <div className={`editor-center ${mobileTab==='preview'?'mob-active':''}`} ref={centerRef}>
-        <div className="frame-scale-wrap" style={{transform:`scale(${zoom})`}}><WhizFrame frameRef={frameRef} frame={selectedFrame} theme={theme} content={content} editMode={editMode} selectedEl={selectedEl} onSelectEl={k=>{setSelectedEl(k);k&&setRightTab('design');}} styleOverrides={overrides} showGrid={showGrid} aspectRatio={aspectRatio} uploadedImages={uploadedImages} bgGradient={bgGradient} patternOverlay={patternOverlay}
+        <div className="frame-scale-wrap" style={{transform:`scale(${zoom})`}}><WhizFrame frameRef={frameRef} frame={selectedFrame} theme={theme} content={content} editMode={editMode} selectedEl={selectedEl} onSelectEl={k=>{setSelectedEl(k);k&&setRightTab('design');}} styleOverrides={overrides} showGrid={showGrid} aspectRatio={aspectRatio} uploadedImages={uploadedImages} bgGradient={bgGradient} patternOverlay={patternOverlay} strictWhizMode={strictWhizMode} whizEffects={whizEffects}
             fontPairing={activeFontPairing}/></div>
         <div className="zoom-bar"><button className="zoom-btn" onClick={()=>setZoom(z=>Math.max(0.1,+(z-0.05).toFixed(2)))}>−</button><span className="zoom-pct">{Math.round(zoom*100)}%</span><button className="zoom-btn" onClick={()=>setZoom(z=>Math.min(1,+(z+0.05).toFixed(2)))}>+</button><button className="zoom-btn" onClick={updateZoom} style={{fontSize:10}}>⊡</button><div style={{width:1,height:16,background:'var(--border)'}}/><button className={`zoom-btn ${showGrid?'active':''}`} onClick={()=>setShowGrid(g=>!g)} style={{color:showGrid?'var(--theme-accent)':undefined}}>▦</button><button className={`zoom-btn ${editMode?'active':''}`} onClick={()=>{setEditMode(m=>!m);editMode&&setSelectedEl(null);}} style={{color:editMode?'var(--theme-accent)':undefined}}>✎</button><div style={{width:1,height:16,background:'var(--border)'}}/><button className="zoom-btn" onClick={()=>{const did=undo();track(TELEMETRY_EVENTS.UNDO,{scope:did?'content':'overrides'});}} disabled={!canUndo} style={{opacity:canUndo?1:0.3}}>↶</button><button className="zoom-btn" onClick={()=>{const did=redo();track(TELEMETRY_EVENTS.REDO,{scope:did?'content':'overrides'});}} disabled={!canRedo} style={{opacity:canRedo?1:0.3}}>↷</button></div>
         <div style={{position:'absolute',top:10,left:10,fontFamily:'var(--font-m)',fontSize:9,color:'var(--dim)',background:'rgba(0,0,0,0.6)',padding:'4px 8px',borderRadius:'var(--r)',backdropFilter:'blur(4px)'}}>{String(frameId).padStart(2,'0')} — {selectedFrame.name} · {aspectRatio.w}×{aspectRatio.h}</div>
@@ -338,7 +356,22 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
           <div className="editor-panel-header"><span>Content</span><button className="btn btn-ghost btn-sm" onClick={()=>resetContent(DEFAULT_CONTENT)}>Reset</button></div>
           <div className="editor-section"><div className="editor-section-title">Quick Start</div><div className="template-list">{CONTENT_TEMPLATES.map(t=>(<div key={t.id} className="template-item" onClick={()=>applyTemplate(t)}><div className="template-item-name">{t.name}</div><div className="template-item-desc">{t.desc}</div></div>))}</div></div>
           <div className="editor-section"><div className="editor-section-title">Aspect Ratio</div><AspectRatioSelector value={aspectRatio.id} onChange={r=>{setAspectRatio(r);showToast(`${r.w}×${r.h}`);}}/></div>
-          <div className="editor-section"><div className="editor-section-title">Pattern</div><PatternSelector value={patternOverlay?.id||null} onChange={p=>updateMedia(prev=>({...prev,patternOverlay:p}))}/></div>
+          <div className="editor-section"><div className="editor-section-title">Pattern</div>{strictWhizMode?<div style={{fontSize:10,color:'var(--dim)',marginBottom:6}}>Strict Whiz Mode hides non-essential pattern styling.</div>:<PatternSelector value={patternOverlay?.id||null} onChange={p=>updateMedia(prev=>({...prev,patternOverlay:p}))}/>}</div>
+          <div className="editor-section"><div className="editor-section-title">Effects</div>
+            <div style={{display:'grid',gap:6}}>
+              {[
+                ['glow', 'Glow'],
+                ['noise', 'Noise'],
+                ['intenseAccent', 'Intense Accent'],
+              ].map(([key, label]) => (
+                <label key={key} style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:11,color:'var(--muted)'}}>
+                  <span>{label}</span>
+                  <input type="checkbox" checked={strictWhizMode ? false : !!whizEffects[key]} disabled={strictWhizMode} onChange={e=>toggleEffectWithCompliance(key,e.target.checked)} />
+                </label>
+              ))}
+            </div>
+            {strictWhizMode && <div style={{fontSize:10,color:'var(--dim)',marginTop:6}}>Effects are disabled in Strict Whiz Mode.</div>}
+          </div>
           <div className="editor-section"><div className="editor-section-title">Metadata</div><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>{[['Issue #','issueNum'],['Date','date'],['Desk','desk'],['Volume','volume']].map(([l,k])=>(<div key={k} className="form-group" style={{marginBottom:0}}><label className="form-label">{l}</label><input value={content[k]} onChange={e=>updateContent(k,e.target.value)}/></div>))}</div><div className="form-group" style={{marginTop:8}}><label className="form-label">Topic Tag</label><input value={content.topicTag} onChange={e=>{const next=normalizeContentTaxonomy({...content,topicTag:e.target.value});updateContent('topicTag',next.content.topicTag);updateContent('slug',next.content.slug);if(next.compliance.autoCorrected.length)showToast('Topic/slug normalized on input.','info');if(next.compliance.hasInvalid)showToast(next.compliance.invalid.join(' '),'error');}}/></div>
       <div className="form-group">
         <label className="form-label">Ticker Speed (seconds) — {normalizeTickerSpeed(content.tickerSpeed)}s</label>
