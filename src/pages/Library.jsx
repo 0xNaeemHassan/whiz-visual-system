@@ -1,5 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { FRAMES, TIER_NAMES } from '../data/frames';
+import { FRAME_TEMPLATES } from '../data/templates';
+import { computeTierCoverageMetrics } from '../domain/services/tierCoverageService';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { SemanticChip } from '../components/primitives';
 const FRAME_GUIDES = {4: 'Best for weekly yield data. Use TICKER/EVENT/TIME/IMPACT columns.', 8: 'Investment memo format. Set a pull quote and 4 key stats.', 13: "3 bullet points per side. End with a WHIZ'S CALL in the deck.", 21: 'S/A/B/C/D rows. Set col2 to the tier letter for each item.', 25: 'One row: col1=what happened, col2=root cause, col3=recovery, col4=lesson.', 42: 'Long-form. Put 3 paragraphs in body, split by double newline.', 49: "col1=item, col2=method, col3=cost (use + for benefits), col4='benefit'/'risk'", 50: 'Quarterly only. Set volume number and a single powerful headline.'};
@@ -65,6 +67,7 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
   const [tierFilter, setTierFilter] = useState('ALL');
   const [tagFilter, setTagFilter] = useState('');
   const [layoutFilter, setLayoutFilter] = useState('');
+  const [structureFilter, setStructureFilter] = useState('all');
   const [view, setView] = useState('grid');
   const [previewFrame, setPreviewFrame] = useState(null); // Fix #61: preview modal
   const [sortBy, setSortBy] = useLocalStorage('whiz-library-sort', 'id'); // Fix #36: persisted
@@ -79,6 +82,7 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
     let f = FRAMES;
     if (tierFilter !== 'ALL') f = f.filter(fr => fr.tier === tierFilter);
     if (layoutFilter) f = f.filter(fr => fr.layout === layoutFilter);
+    if (structureFilter !== 'all') f = f.filter(fr => fr.structureClass === structureFilter);
     if (search) { const q = search.toLowerCase(); f = f.filter(fr => fr.name.toLowerCase().includes(q) || fr.desc.toLowerCase().includes(q) || fr.tags.some(t => t.includes(q)) || fr.layout.includes(q)); }
     if (tagFilter) f = f.filter(fr => fr.tags.includes(tagFilter));
     if (showFavOnly) f = f.filter(fr => favorites.includes(fr.id)); // Fix #59
@@ -87,7 +91,7 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
     else if (sortBy === 'layout') f = [...f].sort((a,b) => a.layout.localeCompare(b.layout));
     else if (sortBy === 'tier') f = [...f].sort((a,b) => a.tier.localeCompare(b.tier));
     return f;
-  }, [search, tierFilter, tagFilter, layoutFilter, sortBy]);
+  }, [search, tierFilter, tagFilter, layoutFilter, structureFilter, sortBy, showFavOnly, favorites]);
 
   const allTags = useMemo(() => {
     const s = new Set(); FRAMES.forEach(f => f.tags.forEach(t => s.add(t))); return Array.from(s).sort();
@@ -95,11 +99,56 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
 
   const toggleFav = (id) => setFavorites(prev => prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id]);
 
+  const tierCoverage = useMemo(() => computeTierCoverageMetrics({
+    frames: FRAMES,
+    frameTemplates: FRAME_TEMPLATES,
+    tierNames: TIER_NAMES,
+    minTemplateCoverage: 0.5,
+  }), []);
+
   return (
     <>
       <div className="page-header">
         <div className="page-title">Frame Library</div>
         <div className="page-desc">50 templates across 8 tiers — your complete DeFi infographic system.</div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div style={{ fontFamily: 'var(--font-m)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--dim)', marginBottom: 10 }}>
+          Tier Coverage Summary
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginBottom: 12 }}>
+          {tierCoverage.byTier.map((tierRow) => (
+            <div
+              key={tierRow.tier}
+              style={{
+                border: `1px solid ${tierRow.isUnderCovered ? 'rgba(220,80,80,0.6)' : 'var(--border)'}`,
+                background: tierRow.isUnderCovered ? 'rgba(220,80,80,0.08)' : 'var(--bg-2)',
+                borderRadius: 'var(--r)',
+                padding: 10,
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                <strong style={{ fontSize: 12 }}>Tier {tierRow.tier}</strong>
+                {tierRow.isUnderCovered && <span style={{ color: '#dc5050', fontSize: 10 }}>Under-covered</span>}
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 6 }}>{tierRow.tierName}</div>
+              <div style={{ fontSize: 11, lineHeight: 1.5 }}>
+                <div>Frames: <strong>{tierRow.frameCount}</strong></div>
+                <div>Template coverage: <strong>{Math.round(tierRow.templateCoverageRatio * 100)}%</strong></div>
+                <div>Layout diversity: <strong>{Math.round(tierRow.layoutDiversityRatio * 100)}%</strong></div>
+              </div>
+            </div>
+          ))}
+        </div>
+        {tierCoverage.orphanWarnings.length > 0 && (
+          <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+            <div style={{ fontSize: 10, color: '#dc5050', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Orphan tier warnings</div>
+            <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--muted)', fontSize: 11 }}>
+              {tierCoverage.orphanWarnings.map((warning) => <li key={warning}>{warning}</li>)}
+            </ul>
+          </div>
+        )}
       </div>
 
       <div className="lib-toolbar">
@@ -160,6 +209,13 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
         {layouts.map(l => (
           <button key={l} className={`filter-btn ${layoutFilter===l?'active':''}`} onClick={() => setLayoutFilter(layoutFilter===l?'':l)} style={{ fontSize: 9 }}>{l}</button>
         ))}
+      </div>
+
+      <div className="filter-group" style={{ marginBottom: 12 }}>
+        <span style={{ fontFamily: 'var(--font-m)', fontSize: 9, color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: '0.1em', alignSelf: 'center' }}>STRUCTURE:</span>
+        <button className={`filter-btn ${structureFilter==='all'?'active':''}`} onClick={() => setStructureFilter('all')}>All</button>
+        <button className={`filter-btn ${structureFilter==='structural'?'active':''}`} onClick={() => setStructureFilter('structural')}>Canonical</button>
+        <button className={`filter-btn ${structureFilter==='variant'?'active':''}`} onClick={() => setStructureFilter('variant')}>Variant</button>
       </div>
 
       {/* E6: Tag filters with active count */}
@@ -223,6 +279,9 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
                   <SemanticChip kind="category" value={`tier-${frame.tier}`}>T{frame.tier}</SemanticChip>
                   <SemanticChip kind="category" value={frame.layout}>{frame.layout}</SemanticChip>
+                  <SemanticChip kind="category" value={`structure-${frame.structureClass}`}>
+                    {frame.structureClass === 'variant' ? 'Variant' : 'Canonical'}
+                  </SemanticChip>
                 </div>
                 <div className="frame-name">{frame.name}</div>
                 <div className="frame-desc-text">{frame.desc}</div>
@@ -253,7 +312,7 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
         <div className="card" style={{ padding: 0 }}>
           <div className="data-table-wrap">
           <table className="data-table">
-            <thead><tr><th>#</th><th>Tier</th><th>Name</th><th>Layout</th><th>Tags</th><th></th></tr></thead>
+            <thead><tr><th>#</th><th>Tier</th><th>Name</th><th>Layout</th><th>Structure</th><th>Tags</th><th></th></tr></thead>
             <tbody>
               {filtered.map(frame => (
                 <tr key={frame.id}>
@@ -261,6 +320,7 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
                   <td><SemanticChip kind="category" value={`tier-${frame.tier}`}>T{frame.tier}</SemanticChip></td>
                   <td><strong style={{ fontSize: 13 }}>{frame.name}</strong></td>
                   <td><SemanticChip kind="category" value={frame.layout}>{frame.layout}</SemanticChip></td>
+                  <td><SemanticChip kind="category" value={`structure-${frame.structureClass}`}>{frame.structureClass === 'variant' ? 'Variant' : 'Canonical'}</SemanticChip></td>
                   <td><div style={{ display: 'flex', gap: 4 }}>{frame.tags.slice(0,2).map(t => (<span key={t} style={{ fontFamily: 'var(--font-m)', fontSize: 9, color: 'var(--dim)', background: 'var(--bg-3)', padding: '1px 5px', borderRadius: 8, border: '1px solid var(--border)' }}>{t}</span>))}</div></td>
                   <td><button className="btn btn-secondary btn-sm" onClick={() => {
                     setRecentlyUsed(prev => [frame.id, ...prev.filter(id => id !== frame.id)].slice(0, 20));

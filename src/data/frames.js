@@ -1,7 +1,7 @@
 /** @typedef {import('../types/editor.js').FrameDefinition} FrameDefinition */
 // All 50 frames data
 /** @type {FrameDefinition[]} */
-export const FRAMES = [
+const BASE_FRAMES = [
   // TIER A — Weekly Recaps (1-7)
   { id: 1, tier: 'A', tierName: 'Weekly Recaps', name: 'The Ticker Tape', desc: 'Full-width scrolling-style header listing every event of the week as ticker symbols. Below, 6-9 mini cards in a 3×3 grid expanding each tag.', tags: ['weekly', 'recap', 'events'], layout: 'grid' },
   { id: 2, tier: 'A', tierName: 'Weekly Recaps', name: 'The Order Book', desc: 'Two columns BIDS (bullish) and ASKS (bearish) side-by-side. Center spread shows the week\'s headline story.', tags: ['weekly', 'analysis', 'comparison'], layout: 'bull-bear' },
@@ -68,6 +68,21 @@ export const FRAMES = [
   { id: 49, tier: 'H', tierName: 'Specialty', name: 'The Receipt', desc: 'Looks like a printed paper receipt. Lists "what you paid" (gas, fees, slippage) for a specific user journey. Mono throughout.', tags: ['specialty', 'creative', 'shareable'], layout: 'receipt' },
   { id: 50, tier: 'H', tierName: 'Specialty', name: 'The Cover Story', desc: 'Once a quarter. Magazine-cover treatment: full-bleed hero illustration, single massive headline, VOL.III ISSUE badge.', tags: ['specialty', 'quarterly', 'flagship'], layout: 'cover-story' },
 ];
+
+const FRAME_RELATION_META = Object.freeze({
+  36: { structureClass: 'variant', variantOf: 20, archetypeId: 20 },
+});
+
+export const FRAMES = BASE_FRAMES.map((frame) => {
+  const relationMeta = FRAME_RELATION_META[frame.id] || {};
+  const variantOf = relationMeta.variantOf ?? null;
+  return {
+    ...frame,
+    archetypeId: relationMeta.archetypeId ?? (variantOf ?? frame.id),
+    variantOf,
+    structureClass: relationMeta.structureClass ?? 'structural',
+  };
+});
 
 export const TIER_NAMES = {
   A: 'Weekly Recaps', B: 'Project Deep-Dives', C: 'Comparative Tables',
