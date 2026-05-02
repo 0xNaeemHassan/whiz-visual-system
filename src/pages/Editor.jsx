@@ -16,7 +16,7 @@ import { CONTENT_TEMPLATES } from '../data/templates';
 import { createDefaultContent, createDefaultOverrides, createDefaultEditorState } from '../domain/editorDefaults.js';
 import { nearestTypeScale, getComplianceIssues, getBrandScore } from '../utils/editorCompliance';
 import { normalizeContentTaxonomy } from '../utils/contentNormalization';
-import { buildMutationDispatcher } from './editorMutations';
+import { buildMutationDispatcher } from './EditorMutations';
 
 /** @typedef {import('../types/editor.js').FrameContent} FrameContent */
 /** @typedef {import('../types/editor.js').StyleOverrides} StyleOverrides */

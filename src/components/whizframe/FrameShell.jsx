@@ -1,6 +1,6 @@
 // WhizFrame v8.0 — Complete visual overhaul with unique layouts for all frame types
-import { getLayoutComponent } from './layoutRegistry';
-import { coreLayoutKeys } from './layouts/coreLayouts';
+import { getLayoutComponent } from './LayoutRegistry';
+import { coreLayoutKeys } from './layouts/CoreLayouts';
 import { applyOverflowPolicy } from './layouts/OverflowPolicy';
 import { TICKER_CONTRACT, normalizeTickerSpeed } from '../../domain/tickerContract';
 import { SPINE_DESIGN_TOKENS } from '../../domain/spineDesignTokens';
