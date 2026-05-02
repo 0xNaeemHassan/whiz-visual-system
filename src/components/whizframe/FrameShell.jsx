@@ -4,6 +4,7 @@ import { coreLayoutKeys } from './layouts/CoreLayouts';
 import { applyOverflowPolicy } from './layouts/OverflowPolicy';
 import { TICKER_CONTRACT, normalizeTickerSpeed } from '../../domain/tickerContract';
 import { SPINE_DESIGN_TOKENS } from '../../domain/spineDesignTokens';
+import { Sparkline, SemanticChip } from '../primitives';
 
 export function FrameShell({ frameRef, frame, theme, content, editMode, selectedEl, onSelectEl, styleOverrides, showGrid, aspectRatio, uploadedImages, bgGradient, patternOverlay }) {
   const ov = styleOverrides || {};
@@ -281,37 +282,6 @@ function CornerTrims({ accentColor }) {
 
 /* ─── SHARED COMPONENTS ─── */
 
-
-// P2-04: Sparkline — 60px tall, single color, no grid, no labels — shape only
-function Sparkline({ values = [], color, width = 80, height = 36 }) {
-  if (!values.length) return null;
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = max - min || 1;
-  const pad = 2;
-  const pts = values.map((v, i) => {
-    const x = pad + (i / (values.length - 1)) * (width - pad * 2);
-    const y = pad + (1 - (v - min) / range) * (height - pad * 2);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(' ');
-  const lastPt = pts.split(' ').pop().split(',');
-  return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ overflow: 'visible', display: 'block' }}>
-      <polyline
-        points={pts}
-        fill="none"
-        stroke={color}
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      />
-      <circle
-        cx={lastPt[0]} cy={lastPt[1]} r="2.5"
-        fill={color} stroke="none"
-      />
-    </svg>
-  );
-}
 
 // P2-04b: Parse sparkline data from a comma-separated string like "4.2,3.8,5.1,4.9,6.2"
 function parseSparkData(str) {
@@ -1986,7 +1956,7 @@ function TableLayout(props) {
                   }}>{v}</td>
                 ))}
               
-                {row.sparkData && <td style={{padding:'4px 8px',verticalAlign:'middle'}}><Sparkline values={parseSparkData(row.sparkData)} color={accentColor} width={56} height={22}/></td>}</tr>
+                {row.sparkData && <td style={{padding:'4px 8px',verticalAlign:'middle'}}><Sparkline values={parseSparkData(row.sparkData)} accentColor={accentColor} colorRole="accent" strokeWidth="thin" baseline="none" marker="last" width={56} height={22}/></td>}</tr>
             ))}
           </tbody>
         </table>
