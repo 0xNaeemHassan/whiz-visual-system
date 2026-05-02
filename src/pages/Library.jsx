@@ -1,5 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { FRAMES, TIER_NAMES } from '../data/frames';
+import { FRAME_TEMPLATES } from '../data/templates';
+import { computeTierCoverageMetrics } from '../domain/services/tierCoverageService';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { SemanticChip } from '../components/primitives';
 const FRAME_GUIDES = {4: 'Best for weekly yield data. Use TICKER/EVENT/TIME/IMPACT columns.', 8: 'Investment memo format. Set a pull quote and 4 key stats.', 13: "3 bullet points per side. End with a WHIZ'S CALL in the deck.", 21: 'S/A/B/C/D rows. Set col2 to the tier letter for each item.', 25: 'One row: col1=what happened, col2=root cause, col3=recovery, col4=lesson.', 42: 'Long-form. Put 3 paragraphs in body, split by double newline.', 49: "col1=item, col2=method, col3=cost (use + for benefits), col4='benefit'/'risk'", 50: 'Quarterly only. Set volume number and a single powerful headline.'};
@@ -95,11 +97,56 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
 
   const toggleFav = (id) => setFavorites(prev => prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id]);
 
+  const tierCoverage = useMemo(() => computeTierCoverageMetrics({
+    frames: FRAMES,
+    frameTemplates: FRAME_TEMPLATES,
+    tierNames: TIER_NAMES,
+    minTemplateCoverage: 0.5,
+  }), []);
+
   return (
     <>
       <div className="page-header">
         <div className="page-title">Frame Library</div>
         <div className="page-desc">50 templates across 8 tiers — your complete DeFi infographic system.</div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div style={{ fontFamily: 'var(--font-m)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--dim)', marginBottom: 10 }}>
+          Tier Coverage Summary
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginBottom: 12 }}>
+          {tierCoverage.byTier.map((tierRow) => (
+            <div
+              key={tierRow.tier}
+              style={{
+                border: `1px solid ${tierRow.isUnderCovered ? 'rgba(220,80,80,0.6)' : 'var(--border)'}`,
+                background: tierRow.isUnderCovered ? 'rgba(220,80,80,0.08)' : 'var(--bg-2)',
+                borderRadius: 'var(--r)',
+                padding: 10,
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                <strong style={{ fontSize: 12 }}>Tier {tierRow.tier}</strong>
+                {tierRow.isUnderCovered && <span style={{ color: '#dc5050', fontSize: 10 }}>Under-covered</span>}
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 6 }}>{tierRow.tierName}</div>
+              <div style={{ fontSize: 11, lineHeight: 1.5 }}>
+                <div>Frames: <strong>{tierRow.frameCount}</strong></div>
+                <div>Template coverage: <strong>{Math.round(tierRow.templateCoverageRatio * 100)}%</strong></div>
+                <div>Layout diversity: <strong>{Math.round(tierRow.layoutDiversityRatio * 100)}%</strong></div>
+              </div>
+            </div>
+          ))}
+        </div>
+        {tierCoverage.orphanWarnings.length > 0 && (
+          <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+            <div style={{ fontSize: 10, color: '#dc5050', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Orphan tier warnings</div>
+            <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--muted)', fontSize: 11 }}>
+              {tierCoverage.orphanWarnings.map((warning) => <li key={warning}>{warning}</li>)}
+            </ul>
+          </div>
+        )}
       </div>
 
       <div className="lib-toolbar">
