@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { FRAMES, TIER_NAMES } from '../data/frames';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { TICKER_CONTRACT } from '../domain/tickerContract';
+import SemanticChip from '../components/SemanticChip';
 
 export default function Dashboard({ navigateTo, showToast, activeTheme }) {
   const [saves] = useLocalStorage('whiz-saves', []);
@@ -117,7 +118,7 @@ export default function Dashboard({ navigateTo, showToast, activeTheme }) {
                 onClick={() => navigateTo('library')}
                 onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--border-2)'}
                 onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}>
-                <span className={`tier-pill tier-${tier}`}>TIER {tier}</span>
+                <SemanticChip role="tier" tone={tier}>Tier {tier}</SemanticChip>
                 <span style={{ flex: 1, fontSize: 13 }}>{name}</span>
                 <span style={{ fontFamily: 'var(--font-m)', fontSize: 10, color: 'var(--dim)' }}>{count} frames</span>
               </div>

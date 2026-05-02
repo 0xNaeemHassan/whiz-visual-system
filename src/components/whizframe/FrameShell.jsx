@@ -5,6 +5,7 @@ import { applyOverflowPolicy } from './layouts/OverflowPolicy';
 import { TICKER_CONTRACT, normalizeTickerSpeed } from '../../domain/tickerContract';
 import { SPINE_DESIGN_TOKENS } from '../../domain/spineDesignTokens';
 import { FrameFooter } from './FrameFooter';
+import SemanticChip from '../SemanticChip';
 
 export function FrameShell({ frameRef, frame, theme, content, editMode, selectedEl, onSelectEl, styleOverrides, showGrid, aspectRatio, uploadedImages, bgGradient, patternOverlay, strictWhizMode = false, whizEffects = { glow: true, noise: true, intenseAccent: false } }) {
   const ov = styleOverrides || {};
@@ -180,8 +181,10 @@ export function FrameShell({ frameRef, frame, theme, content, editMode, selected
           <span className="wf-slug-line"><span style={{ color: '#5A6478' }}>FILED /</span> {content.date}</span>
           <span className="wf-slug-line"><span style={{ color: '#5A6478' }}>DESK /</span> {content.desk}</span>
         </div>
-        <div className={`wf-topic-tag ${ec('tag')}`} style={tagStyle} onClick={e => sel('tag', e)}>
-          <span style={{ fontSize: '10px', marginRight: '4px' }}>&#9654;</span> {resolvedContent.topicTag}
+        <div className={ec('tag')} onClick={e => sel('tag', e)}>
+          <SemanticChip role="topic" tone="frame" className="wf-topic-tag" style={tagStyle}>
+            <span style={{ fontSize: '10px', marginRight: '4px' }}>&#9654;</span> {resolvedContent.topicTag}
+          </SemanticChip>
         </div>
       </div>
 
