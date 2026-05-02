@@ -278,6 +278,15 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
               <div className="frame-thumb">
                 <MiniFrame accent={activeTheme.accent} layout={frame.layout} />
                 <span className="frame-num">{String(frame.id).padStart(2, '0')}</span>
+                {getFramePitfalls(frame.id).length > 0 && (
+                  <span style={{
+                    position: 'absolute', top: 6, left: 6, fontFamily: 'var(--font-m)', fontSize: 8,
+                    background: 'rgba(229,178,58,0.15)', color: '#E5B23A', border: '1px solid rgba(229,178,58,0.45)',
+                    borderRadius: 3, padding: '2px 5px', letterSpacing: '0.06em', textTransform: 'uppercase',
+                  }}>
+                    ⚠ {getFramePitfalls(frame.id).length}
+                  </span>
+                )}
                 <span style={{
                   position: 'absolute', bottom: 6, left: 6,
                   fontFamily: 'var(--font-m)', fontSize: 7, letterSpacing: '0.08em',
