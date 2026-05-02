@@ -209,11 +209,13 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
         if(e.key==='z'&&!e.shiftKey){e.preventDefault();
           // Undo content history first; if nothing left, undo overrides
           const didUndo=undoRef.current?.();
-          if(!didUndo)undoOverrideRef.current?.();
+          if(!didUndo){undoOverrideRef.current?.();track(TELEMETRY_EVENTS.UNDO,{scope:'overrides'});}
+          else track(TELEMETRY_EVENTS.UNDO,{scope:'content'});
         }
         if((e.key==='z'&&e.shiftKey)||e.key==='y'){e.preventDefault();
           const didRedo=redoRef.current?.();
-          if(!didRedo)redoOverrideRef.current?.();
+          if(!didRedo){redoOverrideRef.current?.();track(TELEMETRY_EVENTS.REDO,{scope:'overrides'});}
+          else track(TELEMETRY_EVENTS.REDO,{scope:'content'});
         }
       }
     };
@@ -256,7 +258,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
         a.href=u;a.download='whiz_export.webp';a.click();URL.revokeObjectURL(u);
         showToast(`WebP exported${usedFallback?' (DOM fallback)':''}`);res();
       },'image/webp',0.92));
-    }catch(e){showToast(`WebP failed: ${e.message||'error'}`,'error');}
+    }catch(e){track(TELEMETRY_EVENTS.EXPORT_FAILURE,{format:'webp',reason:e.message||'error',strictMode});showToast(`WebP failed: ${e.message||'error'}`,'error');}
     setExporting(false);
   };
   const mutations = useMemo(() => buildMutationDispatcher({ setContent, setOverrides, setMedia: setMediaState }), [setContent, setOverrides, setMediaState]);
@@ -294,7 +296,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
       <div className={`editor-center ${mobileTab==='preview'?'mob-active':''}`} ref={centerRef}>
         <div className="frame-scale-wrap" style={{transform:`scale(${zoom})`}}><WhizFrame frameRef={frameRef} frame={selectedFrame} theme={theme} content={content} editMode={editMode} selectedEl={selectedEl} onSelectEl={k=>{setSelectedEl(k);k&&setRightTab('design');}} styleOverrides={overrides} showGrid={showGrid} aspectRatio={aspectRatio} uploadedImages={uploadedImages} bgGradient={bgGradient} patternOverlay={patternOverlay}
             fontPairing={activeFontPairing}/></div>
-        <div className="zoom-bar"><button className="zoom-btn" onClick={()=>setZoom(z=>Math.max(0.1,+(z-0.05).toFixed(2)))}>−</button><span className="zoom-pct">{Math.round(zoom*100)}%</span><button className="zoom-btn" onClick={()=>setZoom(z=>Math.min(1,+(z+0.05).toFixed(2)))}>+</button><button className="zoom-btn" onClick={updateZoom} style={{fontSize:10}}>⊡</button><div style={{width:1,height:16,background:'var(--border)'}}/><button className={`zoom-btn ${showGrid?'active':''}`} onClick={()=>setShowGrid(g=>!g)} style={{color:showGrid?'var(--theme-accent)':undefined}}>▦</button><button className={`zoom-btn ${editMode?'active':''}`} onClick={()=>{setEditMode(m=>!m);editMode&&setSelectedEl(null);}} style={{color:editMode?'var(--theme-accent)':undefined}}>✎</button><div style={{width:1,height:16,background:'var(--border)'}}/><button className="zoom-btn" onClick={()=>undo()} disabled={!canUndo} style={{opacity:canUndo?1:0.3}}>↶</button><button className="zoom-btn" onClick={()=>redo()} disabled={!canRedo} style={{opacity:canRedo?1:0.3}}>↷</button></div>
+        <div className="zoom-bar"><button className="zoom-btn" onClick={()=>setZoom(z=>Math.max(0.1,+(z-0.05).toFixed(2)))}>−</button><span className="zoom-pct">{Math.round(zoom*100)}%</span><button className="zoom-btn" onClick={()=>setZoom(z=>Math.min(1,+(z+0.05).toFixed(2)))}>+</button><button className="zoom-btn" onClick={updateZoom} style={{fontSize:10}}>⊡</button><div style={{width:1,height:16,background:'var(--border)'}}/><button className={`zoom-btn ${showGrid?'active':''}`} onClick={()=>setShowGrid(g=>!g)} style={{color:showGrid?'var(--theme-accent)':undefined}}>▦</button><button className={`zoom-btn ${editMode?'active':''}`} onClick={()=>{setEditMode(m=>!m);editMode&&setSelectedEl(null);}} style={{color:editMode?'var(--theme-accent)':undefined}}>✎</button><div style={{width:1,height:16,background:'var(--border)'}}/><button className="zoom-btn" onClick={()=>{const did=undo();track(TELEMETRY_EVENTS.UNDO,{scope:did?'content':'overrides'});}} disabled={!canUndo} style={{opacity:canUndo?1:0.3}}>↶</button><button className="zoom-btn" onClick={()=>{const did=redo();track(TELEMETRY_EVENTS.REDO,{scope:did?'content':'overrides'});}} disabled={!canRedo} style={{opacity:canRedo?1:0.3}}>↷</button></div>
         <div style={{position:'absolute',top:10,left:10,fontFamily:'var(--font-m)',fontSize:9,color:'var(--dim)',background:'rgba(0,0,0,0.6)',padding:'4px 8px',borderRadius:'var(--r)',backdropFilter:'blur(4px)'}}>{String(frameId).padStart(2,'0')} — {selectedFrame.name} · {aspectRatio.w}×{aspectRatio.h}</div>
         <div style={{position:'absolute',top:12,right:12,display:'flex',gap:6,background:'var(--glass)',padding:'6px 10px',borderRadius:'var(--r)',border:'1px solid var(--glass-border)',backdropFilter:'blur(12px)'}}><button className="btn btn-ghost btn-sm" onClick={exportJSON} style={{fontSize:10}}>JSON</button><button className="btn btn-ghost btn-sm" onClick={exportManifest} style={{fontSize:10}}>Manifest</button><button className="btn btn-secondary btn-sm" onClick={exportHTML} style={{fontSize:10}}>HTML</button><button className="btn btn-secondary btn-sm" onClick={applyStrictPolish} style={{fontSize:10}}>Polish</button><button className="btn btn-primary btn-sm" data-format="png" onClick={exportPNG} disabled={exporting} style={{fontSize:10}}>{exporting?'⟳':'↓'} PNG</button></div>
         {complianceIssues.length>0&&<div style={{position:'absolute',top:52,right:12,fontFamily:'var(--font-m)',fontSize:10,color:'#FFB3B3',background:'rgba(42,10,10,.9)',padding:'6px 8px',borderRadius:6,border:'1px solid #FF5A5A66',maxWidth:300}}>Compliance: {complianceIssues[0]}{complianceIssues.length>1?` +${complianceIssues.length-1} more`:''}</div>}
