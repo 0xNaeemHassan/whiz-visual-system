@@ -74,3 +74,12 @@ export const TIER_NAMES = {
   D: 'Risk & Explainers', E: 'Ecosystem Maps', F: 'Yield & Data',
   G: 'Macro & Thesis', H: 'Specialty'
 };
+
+
+export const LAYOUTS = getRegisteredLayouts();
+const LAYOUT_IDS = new Set(LAYOUTS.map((layout) => layout.id));
+const unknownLayouts = FRAMES.filter((frame) => !LAYOUT_IDS.has(frame.layout));
+if (unknownLayouts.length > 0) {
+  const ids = unknownLayouts.map((frame) => frame.layout).join(', ');
+  throw new Error(`Unregistered layouts detected: ${ids}`);
+}
