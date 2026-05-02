@@ -28,53 +28,31 @@ function LazyCard({ children, height = 240 }) {
 
 // E1: Unique MiniFrame thumbnails per layout type
 function MiniFrame({ accent, layout }) {
-  const lines = {
-    body: <><div className="mini-line h" style={{ background: `${accent}30` }} /><div className="mini-line" /><div className="mini-line s" /><div className="mini-line" /><div className="mini-line" /></>,
-    table: <><div className="mini-line h" style={{ background: `${accent}30`, width: '100%' }} />{[1,2,3].map(i => <div key={i} style={{ display: 'flex', gap: 3 }}><div className="mini-line" style={{ flex: 1 }} /><div className="mini-line s" style={{ flex: 1 }} /><div className="mini-line" style={{ flex: 1 }} /></div>)}</>,
-    'bull-bear': <><div className="mini-line h" style={{ background: `${accent}30` }} /><div style={{ display: 'flex', gap: 3 }}><div style={{ flex: 1, padding: 3, border: `1px solid ${accent}30`, borderRadius: 2 }}><div className="mini-line s" style={{ background: accent }} /></div><div style={{ flex: 1, padding: 3, border: '1px solid rgba(255,90,90,0.3)', borderRadius: 2 }}><div className="mini-line s" style={{ background: '#FF5A5A' }} /></div></div></>,
-    stats: <><div style={{ display: 'flex', gap: 2, marginBottom: 4 }}>{[1,2,3].map(i => <div key={i} style={{ flex: 1, height: 12, background: `${accent}15`, borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><div style={{ width: 8, height: 2, background: accent, borderRadius: 1 }} /></div>)}</div><div className="mini-line h" style={{ background: `${accent}30` }} /><div className="mini-line" /></>,
-    heatmap: <><div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1 }}>{Array.from({length:28},(_,i)=><div key={i} style={{height:5,background:i%3===0?`${accent}50`:i%2===0?'rgba(255,90,90,0.3)':'var(--bg-3,#1a1d22)',borderRadius:1}}/>)}</div></>,
-    compare: <><div style={{display:'flex',gap:2}}><div style={{flex:1,padding:3,border:`1px solid ${accent}30`,borderRadius:2}}><div className="mini-line s" style={{background:accent}}/><div className="mini-line"/><div className="mini-line"/></div><div style={{flex:1,padding:3,border:'1px solid rgba(139,149,163,0.2)',borderRadius:2}}><div className="mini-line s"/><div className="mini-line"/><div className="mini-line"/></div></div></>,
-    scorecard: <><div className="mini-line h" style={{background:`${accent}30`}}/>{[1,2,3,4].map(i=><div key={i} style={{display:'flex',gap:2,marginBottom:2,alignItems:'center'}}><div style={{width:6,height:6,fontSize:5,color:accent,fontFamily:'monospace'}}>{i}</div><div className="mini-line" style={{flex:1}}/><div style={{width:8,height:6,background:`${accent}20`,borderRadius:1}}/></div>)}</>,
-    quote: <><div style={{width:10,height:10,fontSize:12,color:accent,lineHeight:1,fontFamily:'serif',opacity:0.7}}>"</div><div className="mini-line h" style={{background:`${accent}30`}}/><div className="mini-line"/><div className="mini-line s"/></>,
-    grid: <><div className="mini-line h" style={{ background: `${accent}30` }} /><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>{[1,2,3,4].map(i => <div key={i} style={{ height: 10, background: `${accent}08`, border: `1px solid ${accent}15`, borderRadius: 2 }} />)}</div></>,
-    timeline: <><div className="mini-line h" style={{ background: `${accent}30` }} />{[1,2,3].map(i => <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 3, marginBottom: 2 }}><div style={{ width: 4, height: 4, borderRadius: '50%', background: accent, flexShrink: 0 }} /><div className="mini-line" style={{ flex: 1 }} /></div>)}</>,
-    network: <><div className="mini-line h" style={{ background: `${accent}30` }} /><div style={{ position: 'relative', height: 20 }}><div style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%,-50%)', width: 10, height: 10, borderRadius: '50%', border: `1px solid ${accent}`, background: `${accent}20` }} />{[0,1,2].map(i => <div key={i} style={{ position: 'absolute', left: `${20+i*30}%`, top: `${i%2?20:70}%`, width: 6, height: 6, borderRadius: '50%', background: `${accent}30` }} />)}</div></>,
-    editorial: <><div className="mini-line h" style={{ background: `${accent}30` }} /><div className="mini-line" style={{ height: 6 }} /><div style={{ borderLeft: `2px solid ${accent}40`, paddingLeft: 4, marginBottom: 3 }}><div className="mini-line s" /></div><div className="mini-line" /></>,
-  
-    'tier-list':    <><div style={{flex:1,display:'flex',flexDirection:'column',gap:2}}>{['S','A','B','C'].map((t,i)=><div key={t} style={{display:'flex',gap:2,alignItems:'center'}}><div style={{width:10,height:8,background:i===0?accent:`${accent}30`,borderRadius:1,display:'flex',alignItems:'center',justifyContent:'center',fontSize:6,color:i===0?'#090D10':accent,fontWeight:700}}>{t}</div><div className="mini-line" style={{flex:1}}/></div>)}</>,
-    'postmortem':   <><div className="mini-line h" style={{background:'rgba(255,90,90,0.4)',marginBottom:3}}/>{[1,2,3].map(i=><div key={i} style={{padding:'2px 3px',background:'rgba(255,90,90,0.06)',borderRadius:1,marginBottom:2}}><div className="mini-line s"/></div>)}</>,
-    'trust-stack':  <><div style={{flex:1,display:'flex',flexDirection:'column',gap:2}}>{[100,85,70,55,40].map((w,i)=><div key={i} style={{height:7,width:`${w}%`,alignSelf:'flex-end',background:`${accent}${i===0?'40':'18'}`,borderRadius:2}}/>)}</>,
-    'pitch-deck':   <><div style={{textAlign:'center',marginBottom:3}}><div style={{width:10,height:10,borderRadius:'50%',background:`${accent}20`,border:`1px solid ${accent}`,margin:'0 auto 2px'}}/><div className="mini-line h" style={{background:`${accent}60`,width:'60%',margin:'0 auto'}}/></div><div style={{display:'flex',gap:2}}>{[1,2,3,4].map(i=><div key={i} style={{flex:1,height:10,background:`${accent}10`,borderRadius:1}}/>)}</>,
-    'mechanism':    <><div style={{flex:1,display:'flex',flexDirection:'column',gap:2}}>{[1,2,3,4].map(i=><div key={i} style={{display:'flex',gap:3,alignItems:'center'}}><div style={{width:8,height:8,borderRadius:'50%',border:`1px solid ${accent}`,background:i===0?accent:'transparent',flexShrink:0}}/><div className="mini-line" style={{flex:1}}/></div>)}</>,
-    'thesis':       <><div className="mini-line h" style={{background:`${accent}70`,marginBottom:3}}/><div className="mini-line s" style={{marginBottom:4}}/><div className="mini-line"/><div className="mini-line"/></>,
-    'cover-story':  <><div style={{flex:1,background:`${accent}06`,border:`1px solid ${accent}18`,borderRadius:2,display:'flex',flexDirection:'column',justifyContent:'flex-end',padding:3}}><div style={{height:2,width:'40%',background:accent,marginBottom:3}}/><div className="mini-line h" style={{background:accent}}/></>,
-    'receipt':      <><div style={{textAlign:'center',marginBottom:2,fontFamily:'monospace',fontSize:7,color:accent}}>***</div>{[1,2,3].map(i=><div key={i} style={{display:'flex',justifyContent:'space-between',marginBottom:2}}><div className="mini-line" style={{flex:1,marginRight:4}}/><div style={{width:10,height:4,background:`${accent}25`,borderRadius:1}}/></div>)}</>,
-    'glossary':     <><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:2}}>{[1,2,3,4,5,6].map(i=><div key={i} style={{display:'flex',gap:2}}><div style={{width:8,height:4,background:`${accent}50`,borderRadius:1}}/><div className="mini-line" style={{flex:1}}/></div>)}</>,
-    'matrix':       <><div style={{flex:1,position:'relative'}}><div style={{position:'absolute',left:'50%',top:0,bottom:0,width:1,background:'rgba(255,255,255,0.08)'}}/><div style={{position:'absolute',top:'50%',left:0,right:0,height:1,background:'rgba(255,255,255,0.08)'}}/>{[{l:'20%',t:'25%'},{l:'70%',t:'30%'},{l:'30%',t:'65%'},{l:'75%',t:'70%'}].map((p,i)=><div key={i} style={{position:'absolute',left:p.l,top:p.t,width:5,height:5,borderRadius:'50%',background:accent,opacity:0.8}}/>)}</>,
-    'threat-model': <><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:2,flex:1}}>{['SC','EC','GO','OP'].map((l,i)=><div key={l} style={{padding:2,background:'rgba(255,90,90,0.06)',borderRadius:1}}><div style={{fontSize:5,color:'rgba(255,90,90,0.6)',fontFamily:'monospace',marginBottom:1}}>{l}</div><div className="mini-line s"/></div>)}</>,
-    'failure-tree': <><div style={{textAlign:'center',marginBottom:2}}><div style={{display:'inline-block',padding:'1px 4px',background:'rgba(255,90,90,0.12)',border:'1px solid rgba(255,90,90,0.3)',borderRadius:2,fontSize:6,color:'rgba(255,90,90,0.8)',fontFamily:'monospace'}}>ROOT</div></div><div style={{display:'flex',gap:2}}>{[1,2,3].map(i=><div key={i} style={{flex:1,padding:2,background:`${accent}08`,borderRadius:1}}><div className="mini-line s"/></div>)}</>,
-    'founder':      <><div style={{display:'flex',gap:3,marginBottom:3}}><div style={{width:14,height:14,borderRadius:'50%',background:`${accent}20`,border:`1px solid ${accent}50`,flexShrink:0}}/><div><div className="mini-line h" style={{background:`${accent}60`,marginBottom:1}}/><div className="mini-line s"/></div></div><div style={{flex:1,borderLeft:`2px solid ${accent}40`,paddingLeft:3}}><div className="mini-line"/><div className="mini-line s"/></div></>,
-    'anatomy':      <><div style={{flex:1,position:'relative'}}><div style={{position:'absolute',left:'50%',top:'50%',transform:'translate(-50%,-50%)',width:16,height:16,borderRadius:'50%',border:`1.5px solid ${accent}`}}/>{[{t:'15%',l:'60%'},{t:'45%',l:'65%'},{t:'15%',l:'5%'},{t:'45%',l:'0%'}].map((p,i)=><div key={i} style={{position:'absolute',top:p.t,left:p.l,width:'28%',height:5,background:`${accent}12`,borderRadius:1}}/>)}</>,
-    'flow':         <><div style={{flex:1,display:'flex',flexDirection:'column',gap:2}}>{[1,2,3,4].map(i=><div key={i} style={{display:'flex',gap:2,alignItems:'center'}}><div style={{width:10,height:8,background:i===3?accent:`${accent}18`,borderRadius:2}}/><div className="mini-line" style={{flex:1}}/></div>)}</>,
-    'bracket':      <><div style={{flex:1,display:'flex',gap:2,alignItems:'center'}}>{[8,4,2,1].map((n,ci)=><div key={ci} style={{flex:1,display:'flex',flexDirection:'column',gap:1,justifyContent:'space-evenly'}}>{Array.from({length:n},(_,i)=><div key={i} style={{height:4,background:ci===3?accent:`${accent}30`,borderRadius:1}}/>)}</div>)}</>,
-    'three-layer':  <><div style={{flex:1,display:'flex',flexDirection:'column',gap:3}}>{['rgba(255,255,255,0.15)',accent,'rgba(255,255,255,0.3)'].map((c,i)=><div key={i} style={{flex:1,padding:'2px 4px',background:'rgba(255,255,255,0.03)',border:`1px solid ${c}20`,borderRadius:2}}><div className="mini-line h" style={{background:c,marginBottom:1}}/><div className="mini-line s"/></div>)}</>,
-    'long-bet':     <><div style={{flex:1,position:'relative'}}><div style={{position:'absolute',left:8,top:0,bottom:0,width:1,background:`${accent}30`}}/>{[20,40,60,80].map((top,i)=><div key={i} style={{position:'absolute',left:4,top:`${top}%`,display:'flex',gap:4,alignItems:'center'}}><div style={{width:8,height:8,borderRadius:'50%',border:`1px solid ${accent}60`,background:'#0F1318',zIndex:1}}/><div className="mini-line" style={{width:36}}/></div>)}</>,
-    'org-chart':    <><div style={{flex:1,display:'flex',gap:3}}>{[1,2,3].map(c=><div key={c} style={{flex:1,display:'flex',flexDirection:'column',gap:2,justifyContent:'space-evenly'}}>{Array.from({length:c===1?1:c===2?2:3},(_,i)=><div key={i} style={{padding:'2px 3px',background:c===1?`${accent}18`:'rgba(255,255,255,0.04)',border:`1px solid ${c===1?accent:'rgba(255,255,255,0.08)'}`,borderRadius:2}}><div className="mini-line s"/></div>)}</div>)}</>,
-    'periodic':     <><div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:1}}>{Array.from({length:20},(_,i)=><div key={i} style={{aspectRatio:'1',background:`${accent}0A`,borderTop:`2px solid ${accent}40`,borderRadius:1}}/>)}</>,
-    'curve':        <><div style={{flex:1,display:'flex',alignItems:'flex-end',position:'relative'}}><svg width="100%" height="100%" viewBox="0 0 60 40" style={{overflow:'visible'}}><polyline points="0,35 10,28 20,15 30,22 40,10 50,12 60,8" fill="none" stroke={accent} strokeWidth="1.5"/><circle cx="40" cy="10" r="2.5" fill={accent}/></svg></>,
-    'field-guide':  <><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:2}}>{[1,2,3,4].map(i=><div key={i} style={{padding:'2px 3px',background:`${accent}08`,border:`1px solid ${accent}15`,borderRadius:2}}><div className="mini-line h" style={{background:`${accent}60`,marginBottom:1}}/><div className="mini-line s"/></div>)}</>,
-    'mental-model': <><div className="mini-line h" style={{background:accent,marginBottom:3}}/><div style={{padding:'3px 4px',background:`${accent}08`,borderRadius:2,marginBottom:4}}><div className="mini-line"/></div>{[1,2,3].map(i=><div key={i} style={{display:'flex',gap:2,marginBottom:2}}><div style={{width:6,height:6,borderRadius:'50%',border:`1px solid ${accent}`,background:`${accent}15`}}/><div className="mini-line" style={{flex:1}}/></div>)}</>,
-    'subway':       <><div style={{flex:1,display:'flex',flexDirection:'column',gap:3}}>{['#3CE6A6','#7B8EF8','#E5B23A'].map((c,i)=><div key={i} style={{display:'flex',alignItems:'center',gap:2}}><div style={{width:12,height:6,background:`${c}18`,border:`1px solid ${c}30`,borderRadius:1}}/><div style={{flex:1,height:1,background:`${c}40`}}/></div>)}</>,
-    'constellation':<><div style={{flex:1,position:'relative'}}>{[{l:'20%',t:'30%'},{l:'65%',t:'22%'},{l:'15%',t:'62%'},{l:'70%',t:'57%'},{l:'45%',t:'42%'}].map((p,i)=><div key={i} style={{position:'absolute',left:p.l,top:p.t,width:10,height:10,borderRadius:'50%',background:`${accent}18`,border:`1px solid ${accent}50`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:5,color:accent}}>{i+1}</div>)}</>,
-    'stack':        <><div style={{flex:1,display:'flex',flexDirection:'column',gap:2}}>{['#E5B23A','#7B8EF8',accent,'#3FE2D6','#9DB4D0'].map((c,i)=><div key={i} style={{padding:'2px 5px',background:`${c}06`,borderLeft:`2px solid ${c}`,borderRadius:'0 3px 3px 0'}}><div className="mini-line s" style={{background:`${c}40`}}/></div>)}</>,
-    'trade-routes': <><div style={{flex:1,display:'flex',flexDirection:'column',justifyContent:'space-evenly'}}>{[1,2,3,4].map(i=><div key={i} style={{display:'flex',alignItems:'center',gap:2}}><div style={{width:14,height:5,background:'rgba(255,255,255,0.05)',borderRadius:1}}/><div style={{flex:1,height:1,background:`${accent}50`}}/><div style={{width:14,height:5,background:'rgba(255,255,255,0.05)',borderRadius:1}}/></div>)}</>,
-};
+  const isTable = ['table', 'scorecard', 'compare', 'tier-list'].includes(layout);
+  const isGraph = ['timeline', 'network', 'matrix', 'curve', 'constellation', 'trade-routes'].includes(layout);
   return (
     <div className={`mini-whiz-frame layout-${layout || 'body'}`}>
       <div className="mini-ticker" />
       <div className="mini-spine" style={{ background: accent }} />
-      <div className="mini-body">{lines[layout] || lines.body}</div>
+      <div className="mini-body">
+        <div className="mini-line h" style={{ background: `${accent}35` }} />
+        {isTable && [1,2,3,4].map(i => (
+          <div key={i} style={{ display: 'flex', gap: 3, marginBottom: 2 }}>
+            <div className="mini-line" style={{ flex: 1 }} />
+            <div className="mini-line s" style={{ width: '30%' }} />
+          </div>
+        ))}
+        {isGraph && (
+          <div style={{ height: 28, border: `1px solid ${accent}25`, borderRadius: 3, background: `${accent}08` }} />
+        )}
+        {!isTable && !isGraph && (
+          <>
+            <div className="mini-line" />
+            <div className="mini-line s" />
+            <div className="mini-line" />
+          </>
+        )}
+      </div>
       <div className="mini-footer" />
       <div className="mini-c tl" /><div className="mini-c tr" /><div className="mini-c bl" /><div className="mini-c br" />
     </div>
@@ -251,7 +229,7 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
                   <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                     {frame.tags.slice(0, 2).map(t => (
                       <span key={t} style={{ fontFamily: 'var(--font-m)', fontSize: 9, color: 'var(--dim)', background: 'var(--bg-3)', padding: '2px 6px', borderRadius: 10, border: '1px solid var(--border)' }}>{t}</span>
-                    </LazyCard>))}
+                    ))}
                   </div>
                   {/* E4: Always visible button, not hover-only */}
                   <button className="btn btn-ghost btn-sm" onClick={e => { e.stopPropagation(); setPreviewFrame(frame); }} title="Quick preview">Preview</button>
