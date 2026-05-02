@@ -5,6 +5,7 @@ import TopBar from './components/TopBar';
 import Toast from './components/Toast';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { DEFAULT_THEME } from './data/themes';
+import { UIEventProvider, useUIEventContext } from './state/UIEventContext';
 
 // K4: Code splitting — lazy load pages
 const Dashboard  = lazy(() => import('./pages/Dashboard'));
@@ -46,17 +47,6 @@ const BOTTOM_NAV = [
   { id: 'themes',    label: 'Themes' },
 ];
 
-// Fix #5: Docs page was writing #doc-* hashes that conflicted with app routing.
-// Now we use state-based routing internally; URL uses only app-level hashes (#/page).
-function getPageFromHash() {
-  const hash = window.location.hash;
-  // Handle #/page and legacy bare #page; ignore #doc-* (docs internal)
-  const clean = hash.replace('#/', '').replace(/^#/, '').split('?')[0];
-  // Strip doc-internal sub-hashes
-  if (clean.startsWith('doc-')) return 'docs';
-  return PAGES[clean] ? clean : 'dashboard';
-}
-
 // K1: Real React Error Boundary per page (class component)
 class PageErrorBoundary extends Component {
   constructor(props) {
@@ -95,47 +85,11 @@ function PageLoader() {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 300, color: 'var(--dim)' }}>
       <div className="spinner" />
-    {/* M-13: First-run onboarding modal */}
-      {showOnboarding && (
-        <div className="modal-overlay open" onClick={() => { setShowOnboarding(false); setHasSeenOnboarding(true); }} style={{ zIndex: 9999 }}>
-          <div className="modal" style={{ maxWidth: 440 }} onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <span className="modal-title" style={{ fontSize: 18 }}>Welcome to Whiz ✦</span>
-            </div>
-            <div style={{ padding: '4px 0 16px', color: 'var(--muted)', fontSize: 13, lineHeight: 1.7 }}>
-              <p style={{ marginBottom: 12 }}>Whiz is a visual system for creating <strong style={{ color: 'var(--fg)' }}>DeFi infographic frames</strong> — ready to post on X, Farcaster, or Substack.</p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
-                {[
-                  ['✦', 'Frame Library', 'Browse 50 templates across 8 layouts'],
-                  ['◐', 'Editor', 'Edit content, style, and export to PNG or WebP'],
-                  ['☰', 'Planner', 'Plan your content calendar with CSV import/export'],
-                  ['◉', 'Themes', 'Switch or create custom color themes'],
-                ].map(([icon, name, desc]) => (
-                  <div key={name} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                    <span style={{ fontFamily: 'var(--font-m)', fontSize: 16, color: 'var(--accent)', lineHeight: 1, marginTop: 2, flexShrink: 0 }}>{icon}</span>
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg)', marginBottom: 2 }}>{name}</div>
-                      <div style={{ fontSize: 11, color: 'var(--dim)' }}>{desc}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div style={{ fontSize: 11, color: 'var(--dim)', fontFamily: 'var(--font-m)', padding: '8px 12px', background: 'var(--bg-3)', borderRadius: 'var(--r)', border: '1px solid var(--border)' }}>
-                Tip: ⌘S saves your work · ⌘Z undoes content changes · ⌘⇧Z redoes
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => { setShowOnboarding(false); setHasSeenOnboarding(true); navigateTo('docs'); }}>Read Docs</button>
-              <button className="btn btn-primary" onClick={() => { setShowOnboarding(false); setHasSeenOnboarding(true); navigateTo('library'); }}>Browse Frames →</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
 
-export default function App() {
+function AppContent() {
   const [page, setPage] = useState(getPageFromHash);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [toast, setToast] = useState(null);
@@ -151,6 +105,7 @@ export default function App() {
   // M-13: Onboarding — show once for new users
   const [hasSeenOnboarding, setHasSeenOnboarding] = useLocalStorage('whiz-onboarding-done', false);
   const [showOnboarding, setShowOnboarding] = useState(!hasSeenOnboarding);
+  const { dispatchEscape, dispatchGlobalAction } = useUIEventContext();
 
   // Fix #63: newFrameSignal — bump this to tell Editor to reset to a blank new frame
   const [newFrameSignal, setNewFrameSignal] = useState(0);
@@ -180,7 +135,7 @@ export default function App() {
       setLibraryPreFilter(null);
     }
     setSidebarOpen(false);
-    window.history.pushState({ page: p }, '', `#/${p}`);
+    pushRoute(p, {}, { page: p });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
@@ -190,7 +145,7 @@ export default function App() {
   // Listen for browser back/forward
   useEffect(() => {
     const handler = () => {
-      setPage(getPageFromHash());
+      setPage(readRouteFromWindow().route);
       window.scrollTo({ top: 0 });
     };
     window.addEventListener('popstate', handler);
@@ -200,7 +155,7 @@ export default function App() {
   // Set initial hash
   useEffect(() => {
     if (!window.location.hash || window.location.hash === '#') {
-      window.history.replaceState({ page: 'dashboard' }, '', '#/dashboard');
+      replaceRoute(DEFAULT_ROUTE, {}, { page: DEFAULT_ROUTE });
     }
   }, []);
 
@@ -209,19 +164,19 @@ export default function App() {
     const handler = (e) => {
       if (e.key === 'Escape') {
         setSidebarOpen(false);
-        // Only dispatch to active page to avoid ghost events on hidden pages
-        window.dispatchEvent(new CustomEvent('whiz-escape', { detail: { page } }));
+        dispatchEscape();
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [page]);
+  }, [dispatchEscape]);
 
   const pageProps = {
     showToast, activeTheme, setActiveTheme, navigateTo,
     editingFrame, clearEditingFrame, newFrameSignal,
     libraryPreFilter, setLibraryPreFilter,
     activeFontPairing, setActiveFontPairing,
+    uiEvents: { dispatchGlobalAction },
   };
 
   const pageStyle = {
@@ -339,5 +294,14 @@ export default function App() {
         </div>
       )}
     </div>
+  );
+}
+
+
+export default function App() {
+  return (
+    <UIEventProvider>
+      <AppContent />
+    </UIEventProvider>
   );
 }

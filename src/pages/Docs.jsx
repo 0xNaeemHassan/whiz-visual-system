@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { parseHashLocation, buildHash } from '../router/hashRouter';
 
 const SECTIONS = [
   { id: 'intro', label: 'Introduction', group: 'OVERVIEW' },
@@ -26,13 +27,14 @@ export default function Docs({ activeTheme }) {
   const [tocOpen, setTocOpen] = useState(false); // I3: Mobile TOC toggle
   const contentRef = useRef(null);
 
-  // I2: Deep links — read hash on mount
+  // Docs-local navigation: read ?section=... from current app hash route
   useEffect(() => {
-    const hash = window.location.hash.replace('#doc-', '');
-    if (SECTIONS.find(s => s.id === hash)) {
-      setActiveSection(hash);
+    const { query } = parseHashLocation(window.location.hash);
+    const section = query.get('section');
+    if (section && SECTIONS.find((s) => s.id === section)) {
+      setActiveSection(section);
       setTimeout(() => {
-        const el = document.getElementById(`doc-${hash}`);
+        const el = document.getElementById(`doc-${section}`);
         if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }, 100);
     }
@@ -47,7 +49,9 @@ export default function Docs({ activeTheme }) {
             const id = entry.target.id.replace('doc-', '');
             setActiveSection(id);
             // I2: Update URL hash without scroll
-            // Fix #5: do not write to URL hash — conflicts with app routing
+            const { route, query } = parseHashLocation(window.location.hash);
+    query.set('section', id);
+    window.history.replaceState(window.history.state, '', buildHash(route, query));
           }
         }
       },
@@ -65,7 +69,9 @@ export default function Docs({ activeTheme }) {
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     setActiveSection(id);
     setTocOpen(false);
-    // Fix #5: do not write to URL hash — conflicts with app routing
+    const { route, query } = parseHashLocation(window.location.hash);
+    query.set('section', id);
+    window.history.replaceState(window.history.state, '', buildHash(route, query));
   }, []);
 
   // L15: Use proper heading tags
