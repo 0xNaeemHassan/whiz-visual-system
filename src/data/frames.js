@@ -69,63 +69,20 @@ const BASE_FRAMES = [
   { id: 50, tier: 'H', tierName: 'Specialty', name: 'The Cover Story', desc: 'Once a quarter. Magazine-cover treatment: full-bleed hero illustration, single massive headline, VOL.III ISSUE badge.', tags: ['specialty', 'quarterly', 'flagship'], layout: 'cover-story' },
 ];
 
-
-const TIER_DIFFICULTY = Object.freeze({
-  A: 'easy',
-  B: 'medium',
-  C: 'easy',
-  D: 'medium',
-  E: 'hard',
-  F: 'medium',
-  G: 'hard',
-  H: 'medium',
+const FRAME_RELATION_META = Object.freeze({
+  36: { structureClass: 'variant', variantOf: 20, archetypeId: 20 },
 });
 
-const LAYOUT_EFFORT_MINUTES = Object.freeze({
-  table: 30,
-  grid: 35,
-  timeline: 45,
-  'bull-bear': 40,
-  editorial: 55,
-  network: 70,
-  'pitch-deck': 65,
-  anatomy: 80,
-  stats: 45,
-  mechanism: 60,
-  founder: 55,
-  scorecard: 40,
-  matrix: 55,
-  'tier-list': 35,
-  'threat-model': 60,
-  'failure-tree': 75,
-  postmortem: 75,
-  'mental-model': 55,
-  'trust-stack': 50,
-  heatmap: 65,
-  constellation: 85,
-  stack: 60,
-  subway: 85,
-  periodic: 90,
-  'org-chart': 60,
-  'trade-routes': 110,
-  bracket: 65,
-  curve: 70,
-  flow: 65,
-  thesis: 95,
-  'three-layer': 70,
-  'long-bet': 75,
-  quote: 40,
-  glossary: 45,
-  'field-guide': 75,
-  receipt: 40,
-  'cover-story': 105,
+export const FRAMES = BASE_FRAMES.map((frame) => {
+  const relationMeta = FRAME_RELATION_META[frame.id] || {};
+  const variantOf = relationMeta.variantOf ?? null;
+  return {
+    ...frame,
+    archetypeId: relationMeta.archetypeId ?? (variantOf ?? frame.id),
+    variantOf,
+    structureClass: relationMeta.structureClass ?? 'structural',
+  };
 });
-
-export const FRAMES = BASE_FRAMES.map((frame) => ({
-  ...frame,
-  difficulty: TIER_DIFFICULTY[frame.tier] ?? 'medium',
-  effortMinutes: LAYOUT_EFFORT_MINUTES[frame.layout] ?? 60,
-}));
 
 export const TIER_NAMES = {
   A: 'Weekly Recaps', B: 'Project Deep-Dives', C: 'Comparative Tables',

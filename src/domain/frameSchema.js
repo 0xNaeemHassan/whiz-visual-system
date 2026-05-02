@@ -1,3 +1,5 @@
+import { resolveFrameContract } from './frameContracts';
+
 const VALID_TIERS = new Set(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']);
 const VALID_DIFFICULTIES = new Set(['easy', 'medium', 'hard']);
 export const FOOTER_FIELD_ORDER = Object.freeze(['source', 'timestamp', 'issueId', 'status']);
@@ -62,6 +64,29 @@ function validateFrame(frame, index, ids, errors) {
       assert(isNonEmptyString(tag), `${prefix}: tags[${tagIndex}] must be a non-empty string`, errors);
     });
   }
+
+  const isStructural = frame.structureClass === 'structural';
+  const isVariant = frame.structureClass === 'variant';
+  assert(isStructural || isVariant, `${prefix}: structureClass must be "structural" or "variant"`, errors);
+  assert(Number.isInteger(frame.archetypeId) && frame.archetypeId > 0, `${prefix}: archetypeId must be a positive integer`, errors);
+  if (isStructural) {
+    assert(frame.variantOf === null || frame.variantOf === undefined, `${prefix}: structural frame cannot define variantOf`, errors);
+  }
+  if (isVariant) {
+    assert(Number.isInteger(frame.variantOf) && frame.variantOf > 0, `${prefix}: variant frame must define a valid variantOf id`, errors);
+  }
+}
+
+function validateFrameRelationships(frame, frameById, errors) {
+  if (frame.structureClass !== 'variant') return;
+  const target = frameById.get(frame.variantOf);
+  const prefix = `FRAMES[${frame.id}]`;
+  assert(Boolean(target), `${prefix}: variantOf ${frame.variantOf} must reference an existing frame`, errors);
+  if (!target) return;
+  const allowVariantParent = frame.allowVariantOfVariant === true;
+  if (!allowVariantParent) {
+    assert(target.structureClass !== 'variant', `${prefix}: variants cannot target another variant unless allowVariantOfVariant=true`, errors);
+  }
 }
 
 function validateTemplateEntry(frameId, template, frameById, errors) {
@@ -110,6 +135,71 @@ function validateTemplateEntry(frameId, template, frameById, errors) {
   }
 }
 
+
+function validateTemplateAgainstContract(frameId, frame, template, errors) {
+  const contract = resolveFrameContract(frame);
+  const layoutLabel = frame?.layout || 'unknown-layout';
+  const prefix = `FRAME_TEMPLATES[${frameId}] (layout: ${layoutLabel})`;
+
+  contract.requiredMetadataFields.forEach((field) => {
+    if (!isNonEmptyString(template[field])) {
+      errors.push(`${prefix}: missing required metadata field "${field}" (expected non-empty string)`);
+    }
+  });
+
+  contract.requiredContent.forEach((rule) => {
+    const value = rule.path === 'tableRows[].col1' || rule.path === 'stats[].label' || rule.path === 'stats[].value' ? null : template[rule.path];
+
+    if (rule.type === 'array') {
+      if (!Array.isArray(value)) {
+        errors.push(`${prefix}: missing required content "${rule.path}" (expected array)`);
+        return;
+      }
+      if (typeof rule.minItems === 'number' && value.length < rule.minItems) {
+        errors.push(`${prefix}: content rule "${rule.path}" requires at least ${rule.minItems} item(s), found ${value.length}`);
+      }
+      return;
+    }
+
+    if (rule.path === 'tableRows[].col1' && Array.isArray(template.tableRows)) {
+      template.tableRows.forEach((row, idx) => {
+        if (!isNonEmptyString(row?.col1)) errors.push(`${prefix}: content rule "tableRows[].col1" failed at row ${idx} (missing/non-empty col1)`);
+      });
+      return;
+    }
+
+    if (rule.path === 'stats[].label' && Array.isArray(template.stats)) {
+      template.stats.forEach((stat, idx) => {
+        if (!isNonEmptyString(stat?.label)) errors.push(`${prefix}: content rule "stats[].label" failed at index ${idx}`);
+      });
+      return;
+    }
+
+    if (rule.path === 'stats[].value' && Array.isArray(template.stats)) {
+      template.stats.forEach((stat, idx) => {
+        if (!isNonEmptyString(stat?.value)) errors.push(`${prefix}: content rule "stats[].value" failed at index ${idx}`);
+      });
+    }
+  });
+
+  Object.entries(contract.limits || {}).forEach(([field, limit]) => {
+    const value = template[field];
+    if (value === undefined || value === null || value === '') return;
+    if (limit.type === 'string') {
+      if (typeof value !== 'string') {
+        errors.push(`${prefix}: field "${field}" must be a string`);
+        return;
+      }
+      if (limit.nonEmpty && !isNonEmptyString(value)) {
+        errors.push(`${prefix}: field "${field}" must be non-empty`);
+      }
+      if (typeof limit.maxLength === 'number' && value.length > limit.maxLength) {
+        errors.push(`${prefix}: field "${field}" exceeds ${limit.maxLength} characters (found ${value.length})`);
+      }
+    }
+  });
+}
+
 function validateFooter(content, label, errors) {
   const footer = resolveFooterData(content);
   FOOTER_FIELD_ORDER.forEach((field, index) => {
@@ -129,6 +219,7 @@ export function validateFrameData({ frames, templates }) {
       validateFrame(frame, index, ids, errors);
       if (Number.isInteger(frame.id) && !frameById.has(frame.id)) frameById.set(frame.id, frame);
     });
+    frames.forEach((frame) => validateFrameRelationships(frame, frameById, errors));
   }
 
   assert(templates && typeof templates === 'object' && !Array.isArray(templates), 'FRAME_TEMPLATES must be an object', errors);
@@ -143,9 +234,11 @@ export function validateFrameData({ frames, templates }) {
       }
       if (template && typeof template === 'object' && !Array.isArray(template)) {
         validateTemplateEntry(frameId, template, frameById, errors);
+        validateTemplateAgainstContract(frameId, frameById.get(frameId), template, errors);
         validateFooter(template, `${prefix}`, errors);
       }
     });
+    validateTemplateInheritance(templates, errors);
   }
 
   if (errors.length > 0) {
