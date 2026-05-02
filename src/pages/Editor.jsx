@@ -112,13 +112,12 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   // Fix #38/63: True "New Frame" action — reset all state
   useEffect(()=>{
     if(newFrameSignal===0)return;
-    setFrameId(4);
+    const nextFrameId=4;
+    setFrameId(nextFrameId);
     resetContent(DEFAULT_CONTENT);
     // P3-05: Load frame-specific content template
-    if(selectedFrameId){
-      const tmpl=getFrameTemplate(selectedFrameId,DEFAULT_CONTENT);
-      setContent(tmpl);
-    }
+    const tmpl=getFrameTemplate(nextFrameId,DEFAULT_CONTENT);
+    resetContent(tmpl);
     resetOverrides(DEFAULT_OVERRIDES);
     setBgGradient(null);setPatternOverlay(null);
     setTheme(activeTheme);
