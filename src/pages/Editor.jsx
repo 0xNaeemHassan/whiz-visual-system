@@ -17,13 +17,13 @@ import { CONTENT_TEMPLATES } from '../data/templates';
 import { createDefaultContent, createDefaultOverrides, createDefaultEditorState } from '../domain/editorDefaults.js';
 import { nearestTypeScale, getComplianceIssues, getBrandScore, getEditorValidationReport } from '../utils/editorCompliance';
 import { normalizeContentTaxonomy } from '../utils/contentNormalization';
-import { buildMutationDispatcher } from './EditorMutations';
+import { buildMutationDispatcher } from './EditorMutations.js';
 import { normalizeDateInput, normalizeTimelineEvents } from '../domain/services/dateNormalizationService';
 import { SemanticChip } from '../components/primitives';
 import { getFramePitfalls } from '../data/framePitfalls';
 
-/** @typedef {import('../types/editor.js').FrameContent} FrameContent */
-/** @typedef {import('../types/editor.js').StyleOverrides} StyleOverrides */
+/** @typedef {import('../types/canonical').FrameContent} FrameContent */
+/** @typedef {import('../types/canonical').StyleOverrides} StyleOverrides */
 /** @typedef {import('../types/editor.js').Theme} Theme */
 /** @typedef {import('../types/editor.js').ExportPayload} ExportPayload */
 
@@ -62,39 +62,43 @@ function SliderRow({label,value,min,max,step,unit,onChange}){return(<div classNa
 function WeightRow({label,value,weights,onChange}){return(<div className="editor-panel-row"><div className="prop-label-text editor-panel-label">{label}</div><div className="ww-grid">{weights.map(w=>(<button key={w} className={`ww-btn ${value===w?'on':''}`} onClick={()=>onChange(w)} style={{fontWeight:w}}>{w}</button>))}</div></div>);}
 
 function DesignPanel({selectedEl,setSelectedEl,overrides,setOverrides,theme,bgGradient,setBgGradient,showToast,resetOverrides,setPatternOverlay,strictMode}){
-  const ov=overrides,set=(k,v)=>setOverrides(p=>({...p,[k]:v})),setN=(g,k,v)=>{
-    const strictPath = `${g}.${k}`;
+  const currentOverrides = overrides;
+  const setOverrideValue = (key, value) => setOverrides((previousOverrides) => ({ ...previousOverrides, [key]: value }));
+  const setNestedOverrideValue = (group, key, value) => {
+    const strictPath = `${group}.${key}`;
     if (strictMode && !isStrictStylePathAllowed(strictPath)) {
       showToast(getStrictStyleBlockReason(strictPath), 'warning');
       return;
     }
-    if(strictMode&&k==='color'&&['body','deck','title'].includes(g)&&v&&!LOCKED_NEUTRALS.includes(v.toLowerCase())){
+    if (strictMode && key === 'color' && ['body', 'deck', 'title'].includes(group) && value && !LOCKED_NEUTRALS.includes(value.toLowerCase())) {
       showToast('Strict Whiz Mode locks neutral palette tokens.', 'warning');
       return;
     }
-    setOverrides(p=>({...p,[g]:{...(p[g]||{}),[k]:v===''?null:v}}));
-  },resetK=k=>setOverrides(p=>({...p,[k]:DEFAULT_OVERRIDES[k]}));
-  const ta=theme.accent,tb=theme.base;
-  const ctrl=()=>{
-    if(!selectedEl)return<div className="hint-box">Enable Edit Mode then click a frame element.</div>;
+    setOverrides((previousOverrides) => ({ ...previousOverrides, [group]: { ...(previousOverrides[group] || {}), [key]: value === '' ? null : value } }));
+  };
+  const resetOverrideSection = (key) => setOverrides((previousOverrides) => ({ ...previousOverrides, [key]: DEFAULT_OVERRIDES[key] }));
+  const themeAccent = theme.accent;
+  const themeBase = theme.base;
+  const renderSelectedElementControls = () => {
+    if (!selectedEl) return <div className="hint-box">Enable Edit Mode then click a frame element.</div>;
     switch(selectedEl){
-      case'frame':return<div className="design-section"><div className="design-section-title">Background</div><ColorRow label="Solid" value={ov.frameBg} defaultVal={tb} onChange={v=>{set('frameBg',v);setBgGradient(null);}}/><div className="editor-stack-gap"><GradientEditor value={bgGradient} onChange={setBgGradient} themeBase={tb}/></div><button className="btn btn-ghost btn-sm w-full editor-mt-sm" onClick={()=>{set('frameBg',null);setBgGradient(null);}}>↺ Reset</button></div>;
-      case'spine':return<div className="design-section"><div className="design-section-title">Spine</div>{strictMode?<ColorRow label="Color" value={ov.spineColor} defaultVal={ta} onChange={v=>set('spineColor',v)}/>:<div className="hint-box">Spine primitives are immutable in normal mode. Enable Strict mode to edit spine color only.</div>}</div>;
-      case'ticker':return<div className="design-section"><div className="design-section-title">Ticker</div><ColorRow label="Text" value={ov.tickerColor} defaultVal={ta} onChange={v=>set('tickerColor',v)}/><ColorRow label="BG" value={ov.tickerBg} defaultVal="rgba(0,0,0,0.35)" onChange={v=>set('tickerBg',v)}/></div>;
-      case'title':return<div className="design-section"><div className="design-section-title">Title</div><ColorRow label="Color" value={ov.title?.color} defaultVal="#F4F5F7" onChange={v=>setN('title','color',v)}/><SliderRow label="Size" value={ov.title?.fontSize||52} min={28} max={80} unit="px" onChange={v=>setN('title','fontSize',v)}/><WeightRow label="Weight" value={ov.title?.fontWeight||700} weights={[300,400,500,600,700]} onChange={v=>setN('title','fontWeight',v)}/><SliderRow label="Line Height" value={ov.title?.lineHeight||1.1} min={0.8} max={2} step={0.05} unit="" onChange={v=>setN('title','lineHeight',v)}/><SliderRow label="Spacing" value={ov.title?.letterSpacing||-0.03} min={-0.05} max={0.15} step={0.01} unit="em" onChange={v=>setN('title','letterSpacing',v)}/><div className="editor-panel-row"><div className="prop-label-text editor-panel-label">Align</div><div className="ww-grid">{['left','center','right'].map(a=>(<button key={a} className={`ww-btn ${(ov.title?.textAlign||'left')===a?'on':''}`} onClick={()=>setN('title','textAlign',a)}>{a}</button>))}</div></div><SliderRow label="Opacity" value={ov.title?.opacity??1} min={0} max={1} step={0.05} unit="" onChange={v=>setN('title','opacity',v)}/><button className="btn btn-ghost btn-sm w-full editor-mt-sm" onClick={()=>resetK('title')}>↺ Reset</button></div>;
-      case'deck':return<div className="design-section"><div className="design-section-title">Deck</div><ColorRow label="Color" value={ov.deck?.color} defaultVal="#8B95A3" onChange={v=>setN('deck','color',v)}/><SliderRow label="Size" value={ov.deck?.fontSize||18} min={12} max={32} unit="px" onChange={v=>setN('deck','fontSize',v)}/><WeightRow label="Weight" value={ov.deck?.fontWeight||400} weights={[300,400,500,600]} onChange={v=>setN('deck','fontWeight',v)}/><button className="btn btn-ghost btn-sm w-full" onClick={()=>resetK('deck')}>↺ Reset</button></div>;
-      case'body':return<div className="design-section"><div className="design-section-title">Body</div><ColorRow label="Color" value={ov.body?.color} defaultVal="#8B95A3" onChange={v=>setN('body','color',v)}/><SliderRow label="Size" value={ov.body?.fontSize||15} min={11} max={22} unit="px" onChange={v=>setN('body','fontSize',v)}/><SliderRow label="Height" value={ov.body?.lineHeight||1.7} min={1} max={2.5} step={0.1} unit="" onChange={v=>setN('body','lineHeight',v)}/><SliderRow label="Opacity" value={ov.body?.opacity??1} min={0} max={1} step={0.05} unit="" onChange={v=>setN('body','opacity',v)}/><button className="btn btn-ghost btn-sm w-full" onClick={()=>resetK('body')}>↺ Reset</button></div>;
-      case'tag':return<div className="design-section"><div className="design-section-title">Tag</div><ColorRow label="Text" value={ov.tag?.color} defaultVal={ta} onChange={v=>setN('tag','color',v)}/><ColorRow label="Border" value={ov.tag?.borderColor} defaultVal={ta} onChange={v=>setN('tag','borderColor',v)}/><ColorRow label="BG" value={ov.tag?.background} defaultVal={`${ta}20`} onChange={v=>setN('tag','background',v)}/><button className="btn btn-ghost btn-sm w-full" onClick={()=>resetK('tag')}>↺ Reset</button></div>;
-      case'stats':return<div className="design-section"><div className="design-section-title">Stats</div><ColorRow label="Color" value={ov.statsColor} defaultVal={ta} onChange={v=>set('statsColor',v)}/></div>;
-      case'bignum':return<div className="design-section"><div className="design-section-title">Big Number</div><ColorRow label="Color" value={ov.bignumColor} defaultVal={ta} onChange={v=>set('bignumColor',v)}/></div>;
-      case'footer':return<div className="design-section"><div className="design-section-title">Footer</div><ColorRow label="BG" value={ov.footer?.background} defaultVal="rgba(0,0,0,0.3)" onChange={v=>setN('footer','background',v)}/><ColorRow label="Avatar" value={ov.avatarColor} defaultVal={ta} onChange={v=>set('avatarColor',v)}/><button className="btn btn-ghost btn-sm w-full" onClick={()=>{resetK('footer');set('avatarColor',null);}}>↺ Reset</button></div>;
-      case'accent':return<div className="design-section"><div className="design-section-title">Accent</div><p className="editor-muted-note">Global accent override.</p><ColorRow label="Accent" value={ov.accent?.color} defaultVal={ta} onChange={v=>setN('accent','color',v)}/><button className="btn btn-ghost btn-sm w-full" onClick={()=>set('accent',{color:null})}>↺ Reset</button></div>;
+      case'frame':return<div className="design-section"><div className="design-section-title">Background</div><ColorRow label="Solid" value={currentOverrides.frameBg} defaultVal={themeBase} onChange={v=>{setOverrideValue('frameBg',v);setBgGradient(null);}}/><div style={{marginTop:12}}><GradientEditor value={bgGradient} onChange={setBgGradient} themeBase={themeBase}/></div><button className="btn btn-ghost btn-sm w-full" style={{marginTop:6}} onClick={()=>{setOverrideValue('frameBg',null);setBgGradient(null);}}>↺ Reset</button></div>;
+      case'spine':return<div className="design-section"><div className="design-section-title">Spine</div>{strictMode?<ColorRow label="Color" value={currentOverrides.spineColor} defaultVal={themeAccent} onChange={v=>setOverrideValue('spineColor',v)}/>:<div className="hint-box">Spine primitives are immutable in normal mode. Enable Strict mode to edit spine color only.</div>}</div>;
+      case'ticker':return<div className="design-section"><div className="design-section-title">Ticker</div><ColorRow label="Text" value={currentOverrides.tickerColor} defaultVal={themeAccent} onChange={v=>setOverrideValue('tickerColor',v)}/><ColorRow label="BG" value={currentOverrides.tickerBg} defaultVal="rgba(0,0,0,0.35)" onChange={v=>setOverrideValue('tickerBg',v)}/></div>;
+      case'title':return<div className="design-section"><div className="design-section-title">Title</div><ColorRow label="Color" value={currentOverrides.title?.color} defaultVal="#F4F5F7" onChange={v=>setNestedOverrideValue('title','color',v)}/><SliderRow label="Size" value={currentOverrides.title?.fontSize||52} min={28} max={80} unit="px" onChange={v=>setNestedOverrideValue('title','fontSize',v)}/><WeightRow label="Weight" value={currentOverrides.title?.fontWeight||700} weights={[300,400,500,600,700]} onChange={v=>setNestedOverrideValue('title','fontWeight',v)}/><SliderRow label="Line Height" value={currentOverrides.title?.lineHeight||1.1} min={0.8} max={2} step={0.05} unit="" onChange={v=>setNestedOverrideValue('title','lineHeight',v)}/><SliderRow label="Spacing" value={currentOverrides.title?.letterSpacing||-0.03} min={-0.05} max={0.15} step={0.01} unit="em" onChange={v=>setNestedOverrideValue('title','letterSpacing',v)}/><div style={{marginBottom:10}}><div className="prop-label-text" style={{marginBottom:6}}>Align</div><div className="ww-grid">{['left','center','right'].map(a=>(<button key={a} className={`ww-btn ${(currentOverrides.title?.textAlign||'left')===a?'on':''}`} onClick={()=>setNestedOverrideValue('title','textAlign',a)}>{a}</button>))}</div></div><SliderRow label="Opacity" value={currentOverrides.title?.opacity??1} min={0} max={1} step={0.05} unit="" onChange={v=>setNestedOverrideValue('title','opacity',v)}/><button className="btn btn-ghost btn-sm w-full" style={{marginTop:6}} onClick={()=>resetOverrideSection('title')}>↺ Reset</button></div>;
+      case'deck':return<div className="design-section"><div className="design-section-title">Deck</div><ColorRow label="Color" value={currentOverrides.deck?.color} defaultVal="#8B95A3" onChange={v=>setNestedOverrideValue('deck','color',v)}/><SliderRow label="Size" value={currentOverrides.deck?.fontSize||18} min={12} max={32} unit="px" onChange={v=>setNestedOverrideValue('deck','fontSize',v)}/><WeightRow label="Weight" value={currentOverrides.deck?.fontWeight||400} weights={[300,400,500,600]} onChange={v=>setNestedOverrideValue('deck','fontWeight',v)}/><button className="btn btn-ghost btn-sm w-full" onClick={()=>resetOverrideSection('deck')}>↺ Reset</button></div>;
+      case'body':return<div className="design-section"><div className="design-section-title">Body</div><ColorRow label="Color" value={currentOverrides.body?.color} defaultVal="#8B95A3" onChange={v=>setNestedOverrideValue('body','color',v)}/><SliderRow label="Size" value={currentOverrides.body?.fontSize||15} min={11} max={22} unit="px" onChange={v=>setNestedOverrideValue('body','fontSize',v)}/><SliderRow label="Height" value={currentOverrides.body?.lineHeight||1.7} min={1} max={2.5} step={0.1} unit="" onChange={v=>setNestedOverrideValue('body','lineHeight',v)}/><SliderRow label="Opacity" value={currentOverrides.body?.opacity??1} min={0} max={1} step={0.05} unit="" onChange={v=>setNestedOverrideValue('body','opacity',v)}/><button className="btn btn-ghost btn-sm w-full" onClick={()=>resetOverrideSection('body')}>↺ Reset</button></div>;
+      case'tag':return<div className="design-section"><div className="design-section-title">Tag</div><ColorRow label="Text" value={currentOverrides.tag?.color} defaultVal={themeAccent} onChange={v=>setNestedOverrideValue('tag','color',v)}/><ColorRow label="Border" value={currentOverrides.tag?.borderColor} defaultVal={themeAccent} onChange={v=>setNestedOverrideValue('tag','borderColor',v)}/><ColorRow label="BG" value={currentOverrides.tag?.background} defaultVal={`${themeAccent}20`} onChange={v=>setNestedOverrideValue('tag','background',v)}/><button className="btn btn-ghost btn-sm w-full" onClick={()=>resetOverrideSection('tag')}>↺ Reset</button></div>;
+      case'stats':return<div className="design-section"><div className="design-section-title">Stats</div><ColorRow label="Color" value={currentOverrides.statsColor} defaultVal={themeAccent} onChange={v=>setOverrideValue('statsColor',v)}/></div>;
+      case'bignum':return<div className="design-section"><div className="design-section-title">Big Number</div><ColorRow label="Color" value={currentOverrides.bignumColor} defaultVal={themeAccent} onChange={v=>setOverrideValue('bignumColor',v)}/></div>;
+      case'footer':return<div className="design-section"><div className="design-section-title">Footer</div><ColorRow label="BG" value={currentOverrides.footer?.background} defaultVal="rgba(0,0,0,0.3)" onChange={v=>setNestedOverrideValue('footer','background',v)}/><ColorRow label="Avatar" value={currentOverrides.avatarColor} defaultVal={themeAccent} onChange={v=>setOverrideValue('avatarColor',v)}/><button className="btn btn-ghost btn-sm w-full" onClick={()=>{resetOverrideSection('footer');setOverrideValue('avatarColor',null);}}>↺ Reset</button></div>;
+      case'accent':return<div className="design-section"><div className="design-section-title">Accent</div><p style={{fontSize:11,color:'var(--muted)',marginBottom:12,lineHeight:1.6}}>Global accent override.</p><ColorRow label="Accent" value={currentOverrides.accent?.color} defaultVal={themeAccent} onChange={v=>setNestedOverrideValue('accent','color',v)}/><button className="btn btn-ghost btn-sm w-full" onClick={()=>setOverrideValue('accent',{color:null})}>↺ Reset</button></div>;
       default:return null;
     }
   };
-  return(<div><div className="design-section"><div className="design-section-title">Select Element</div><div className="el-select-grid">{ELEMENTS.map(el=>(<button key={el.key} className={`el-select-item ${selectedEl===el.key?'sel':''}`} onClick={()=>setSelectedEl(selectedEl===el.key?null:el.key)}><span className="el-icon">{el.icon}</span>{el.label}</button>))}</div></div>{ctrl()}<div className="editor-compact-action-bar"><div className="editor-action-row">
-      <button className="btn btn-secondary btn-sm editor-action-btn" onClick={()=>{try{localStorage.setItem('whiz-copied-style',JSON.stringify(overrides));showToast('Style copied');}catch(e){showToast('Copy failed','error');}}}>Copy Style</button>
-      <button className="btn btn-secondary btn-sm editor-action-btn" onClick={()=>{try{const s=localStorage.getItem('whiz-copied-style');if(s){const parsed=JSON.parse(s);const next=strictMode?sanitizeStrictStyleOverrides(parsed):parsed;setOverrides(next);if(strictMode&&JSON.stringify(next)!==JSON.stringify(parsed)){showToast('Strict mode removed blocked style overrides.','warning');}else{showToast('Style pasted');}}else showToast('Nothing copied yet','info');}catch(e){showToast('Paste failed','error');}}}>Paste</button>
+  return(<div><div className="design-section"><div className="design-section-title">Select Element</div><div className="el-select-grid">{ELEMENTS.map(el=>(<button key={el.key} className={`el-select-item ${selectedEl===el.key?'sel':''}`} onClick={()=>setSelectedEl(selectedEl===el.key?null:el.key)}><span className="el-icon">{el.icon}</span>{el.label}</button>))}</div></div>{renderSelectedElementControls()}<div style={{padding:'12px 14px'}}><div style={{display:'flex',gap:6,marginBottom:8}}>
+      <button className="btn btn-secondary btn-sm" style={{flex:1}} onClick={()=>{try{localStorage.setItem('whiz-copied-style',JSON.stringify(overrides));showToast('Style copied');}catch(e){showToast('Copy failed','error');}}}>Copy Style</button>
+      <button className="btn btn-secondary btn-sm" style={{flex:1}} onClick={()=>{try{const s=localStorage.getItem('whiz-copied-style');if(s){const parsed=JSON.parse(s);const next=strictMode?sanitizeStrictStyleOverrides(parsed):parsed;setOverrides(next);if(strictMode&&JSON.stringify(next)!==JSON.stringify(parsed)){showToast('Strict mode removed blocked style overrides.','warning');}else{showToast('Style pasted');}}else showToast('Nothing copied yet','info');}catch(e){showToast('Paste failed','error');}}}>Paste</button>
     </div>
     <button className="btn btn-danger w-full btn-sm" onClick={()=>{
       if(window.confirm('Reset all design overrides? This cannot be undone.')){
@@ -116,9 +120,9 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const[saves,setSaves]=useLocalStorage('whiz-saves',[]);
   const[frameId,setFrameId]=useState(editingFrame||4);
   const[theme,setTheme]=useState(activeTheme);
-  const{state:content,set:setContent,undo,redo,canUndo,canRedo,reset:resetContent}=useUndoRedo(DEFAULT_CONTENT);
+  const{state:content,set:setContent,undo,redo,canUndo,canRedo,reset:resetContent,commit:commitContent}=useUndoRedo(DEFAULT_CONTENT);
   const[_savedOverrides,_persistOverrides]=useLocalStorage('whiz-overrides',DEFAULT_OVERRIDES);
-  const{state:overrides,set:setOverrides,undo:undoOverride,redo:redoOverride,reset:resetOverrides}=useUndoRedo(_savedOverrides);
+  const{state:overrides,set:setOverrides,undo:undoOverride,redo:redoOverride,reset:resetOverrides,commit:commitOverrides}=useUndoRedo(_savedOverrides);
   // Persist overrides to localStorage whenever they change
   useEffect(()=>{ _persistOverrides(overrides); },[overrides]);
   const[zoom,setZoom]=useState(0.35);const[saveName,setSaveName]=useState('');
@@ -128,7 +132,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const[selectedEl,setSelectedEl]=useState(null);const[rightTab,setRightTab]=useState('content');
   const[mobileTab,setMobileTab]=useState('preview');const[aspectRatio,setAspectRatio]=useState(RATIOS[0]);
   const [_savedMedia, persistMedia] = useLocalStorage('whiz-media',{uploadedImages:{logo:null,hero:null,badge:null},bgGradient:null,patternOverlay:null});
-  const { state: mediaState, set: setMediaState, reset: resetMediaState } = useUndoRedo(_savedMedia);
+  const { state: mediaState, set: setMediaState, reset: resetMediaState, commit: commitMedia } = useUndoRedo(_savedMedia);
   const uploadedImages = mediaState.uploadedImages;
   const bgGradient = mediaState.bgGradient;
   const patternOverlay = mediaState.patternOverlay;
@@ -143,11 +147,11 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const { registerHandlers } = useUIEventContext();
   const[showAutosavePrompt,setShowAutosavePrompt]=useState(false);const autosaveDataRef=useRef(null);
 
-  // Fix #3/11: editingFrame is now {frameId, serial, issue}; compare serial to detect re-opens
+  // NOTE: editingFrame is now {frameId, serial, issue}; compare serial to detect re-opens
   useEffect(()=>{
     if(!editingFrame)return;
     setFrameId(editingFrame.frameId);
-    // Fix #21: Pre-fill content from issue if provided
+    // NOTE: Pre-fill content from issue if provided
     if(editingFrame.issue){
       const iss=editingFrame.issue;
       const base=createDefaultContent();
@@ -160,13 +164,13 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     }
     clearEditingFrame?.();
   },[editingFrame?.serial]);
-  // Fix #38/63: True "New Frame" action — reset all state
+  // NOTE: True "New Frame" action — reset all state
   useEffect(()=>{
     if(newFrameSignal===0)return;
     const nextFrameId=4;
     setFrameId(nextFrameId);
     resetContent(DEFAULT_CONTENT);
-    // P3-05: Load frame-specific content template
+    // NOTE: Load frame-specific content template
     const tmpl=getFrameTemplate(nextFrameId,DEFAULT_CONTENT);
     resetContent(tmpl);
     resetOverrides(DEFAULT_OVERRIDES);
@@ -241,10 +245,10 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   };
   const updateZoom=useCallback(()=>{if(!centerRef.current)return;const{width:w,height:h}=centerRef.current.getBoundingClientRect();if(w<10||h<10)return;const p=w<640?16:40;setZoom(+(Math.min((w-p)/(aspectRatio?.w||1080),(h-p)/(aspectRatio?.h||1350),1)).toFixed(3));},[aspectRatio]);
   useEffect(()=>{updateZoom();const ro=new ResizeObserver(updateZoom);centerRef.current&&ro.observe(centerRef.current);return()=>ro.disconnect();},[updateZoom]);
-  // Fix #32: re-trigger zoom when Editor tab becomes visible
+  // NOTE: re-trigger zoom when Editor tab becomes visible
   useEffect(()=>{if(isActive)setTimeout(updateZoom,50);},[isActive,updateZoom]);
   const doSaveRef=useRef(null);const undoRef=useRef(null);const redoRef=useRef(null);const undoOverrideRef=useRef(null);const redoOverrideRef=useRef(null);
-  // Fix C-01/C-02: useLayoutEffect runs after every render commit (post-render) so
+  // NOTE: useLayoutEffect runs after every render commit (post-render) so
   // doSave/undo/redo are already defined and stable before refs are assigned.
   // This also works correctly in React Strict Mode and concurrent features.
   useLayoutEffect(()=>{
@@ -326,7 +330,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     }catch(e){track(TELEMETRY_EVENTS.EXPORT_FAILURE,{format:'webp',reason:e.message||'error',strictMode});showToast(`WebP failed: ${e.message||'error'}`,'error');}
     setExporting(false);
   };
-  const mutations = useMemo(() => buildMutationDispatcher({ setContent, setOverrides, setMedia: setMediaState }), [setContent, setOverrides, setMediaState]);
+  const mutations = useMemo(() => buildMutationDispatcher({ setContent, setOverrides, setMedia: setMediaState, commitContent, commitOverrides, commitMedia }), [setContent, setOverrides, setMediaState, commitContent, commitOverrides, commitMedia]);
   const updateContent=(k,v,forceImmediate=false)=>mutations.content(k,c=>{const next={...c,[k]:v};if(k==='date'){const normalized=normalizeDateInput(v);if(normalized.valid)return{...next,date:normalized.displayDate};}if(k==='timelineEvents'){return{...next,timelineEvents:normalizeTimelineEvents(v)};}if(k==='topicTag'||k==='slug'){return normalizeContentTaxonomy(next).content;}return next;},forceImmediate);
   const updateStyle=(updater)=>mutations.style(updater);
   const updateMedia=(updater)=>mutations.image(updater);
@@ -353,7 +357,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     showToast(`Template: ${t.name}`);
   };
   const filteredFrames=useMemo(()=>{if(!frameSearch)return FRAMES;const q=frameSearch.toLowerCase();return FRAMES.filter(f=>f.name.toLowerCase().includes(q)||f.tags.some(t=>t.includes(q))||f.layout.includes(q));},[frameSearch]);
-  // Fix #33: scroll frame list to top when search changes
+  // NOTE: Scroll frame list to top when search changes
   useEffect(()=>{if(frameListRef.current)frameListRef.current.scrollTop=0;},[frameSearch,filteredFrames]);
 
   return(
@@ -436,7 +440,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
           style={{width:'100%',accentColor:'var(--accent)'}}/>
       </div>
 <div className="form-group"><label className="form-label">Handle</label><input value={content.handle} onChange={e=>updateContent('handle',e.target.value)}/></div>
-      {/* P3-07: Extended metadata fields */}
+      {/* NOTE: Extended metadata fields */}
       <div className="form-group">
         <label className="form-label">Status</label>
         <select className="form-control" value={content.status||'PUBLISHED'} onChange={e=>updateContent('status',e.target.value)}>
@@ -483,7 +487,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
           <div className="editor-section"><div className="editor-section-title">Stats</div><div role="list">{content.stats.map((s,i)=>(<DragItem key={`s-${i}`} index={i} id={`s-${i}`} onMove={(f,t)=>{const a=[...content.stats];const[it]=a.splice(f,1);a.splice(t,0,it);updateContent('stats',a);}}><div style={{display:'grid',gridTemplateColumns:'auto 1fr 1fr auto',gap:6,marginBottom:4,alignItems:'center'}}><span style={{color:'var(--dim)',fontSize:10,cursor:'grab',padding:'0 4px'}}>⋮⋮</span><input value={s.label} placeholder="LABEL" style={{fontSize:11}} onChange={e=>{const a=[...content.stats];a[i]={...a[i],label:e.target.value};updateContent('stats',a);}}/><input value={s.value} placeholder="VALUE" style={{fontSize:11}} onChange={e=>{const a=[...content.stats];a[i]={...a[i],value:e.target.value};updateContent('stats',a);}}/><button className="btn btn-danger btn-sm" style={{padding:'0 6px',height:28}} onClick={()=>updateContent('stats',content.stats.filter((_,r)=>r!==i))}>✕</button></div></DragItem>))}</div><button className="btn btn-secondary btn-sm w-full" style={{marginTop:4}} onClick={()=>updateContent('stats',[...content.stats,{label:'',value:''}])}>+ Stat</button></div>
           <div className="editor-section"><div className="editor-section-title">Bull / Bear</div><div className="form-label" style={{marginBottom:6,color:'var(--theme-accent)'}}>BULL</div>{(content.bullPoints||[]).map((p,i)=>(<DragItem key={`bu-${i}`} index={i} id={`bu-${i}`} onMove={(f,t)=>{const a=[...content.bullPoints];const[it]=a.splice(f,1);a.splice(t,0,it);updateContent('bullPoints',a);}}><div style={{display:'flex',gap:4,marginBottom:4,alignItems:'center'}}><span style={{color:'var(--dim)',fontSize:10,cursor:'grab'}}>⋮⋮</span><input value={p} style={{fontSize:11}} onChange={e=>{const a=[...content.bullPoints];a[i]=e.target.value;updateContent('bullPoints',a);}}/><button className="btn btn-danger btn-sm" style={{padding:'0 8px'}} onClick={()=>updateContent('bullPoints',content.bullPoints.filter((_,r)=>r!==i))}>✕</button></div></DragItem>))}<button className="btn btn-secondary btn-sm w-full" style={{marginBottom:10}} onClick={()=>updateContent('bullPoints',[...(content.bullPoints||[]),''])}>+ Bull</button><div className="form-label" style={{marginBottom:6,color:'#FF5A5A'}}>BEAR</div>{(content.bearPoints||[]).map((p,i)=>(<DragItem key={`be-${i}`} index={i} id={`be-${i}`} onMove={(f,t)=>{const a=[...content.bearPoints];const[it]=a.splice(f,1);a.splice(t,0,it);updateContent('bearPoints',a);}}><div style={{display:'flex',gap:4,marginBottom:4,alignItems:'center'}}><span style={{color:'var(--dim)',fontSize:10,cursor:'grab'}}>⋮⋮</span><input value={p} style={{fontSize:11}} onChange={e=>{const a=[...content.bearPoints];a[i]=e.target.value;updateContent('bearPoints',a);}}/><button className="btn btn-danger btn-sm" style={{padding:'0 8px'}} onClick={()=>updateContent('bearPoints',content.bearPoints.filter((_,r)=>r!==i))}>✕</button></div></DragItem>))}<button className="btn btn-secondary btn-sm w-full" style={{marginBottom:10}} onClick={()=>updateContent('bearPoints',[...(content.bearPoints||[]),''])}>+ Bear</button><div className="form-group"><label className="form-label">Verdict</label><textarea value={content.verdict||''} onChange={e=>updateContent('verdict',e.target.value)} rows={2}/></div></div>
           
-      {/* P3-03: Table Column Headers */}
+      {/* NOTE: Table Column Headers */}
       <div className="editor-section">
         <div className="editor-section-title">Column Headers</div>
         <div style={{ display: 'flex', gap: 4 }}>

@@ -1,7 +1,24 @@
 import { memo } from 'react';
 import { FrameShell } from './whizframe/FrameShell';
+import type { FrameContent, StyleOverrides } from '../types/canonical';
 
-function WhizFrame(props) {
+type WhizFrameProps = {
+  frame?: { id?: number };
+  theme?: { accent?: string; base?: string };
+  content: FrameContent;
+  styleOverrides: StyleOverrides;
+  uploadedImages?: unknown;
+  whizEffects?: unknown;
+  editMode?: boolean;
+  selectedEl?: string | null;
+  showGrid?: boolean;
+  aspectRatio?: { w: number; h: number };
+  bgGradient?: string | null;
+  patternOverlay?: { id?: string } | null;
+  strictWhizMode?: boolean;
+} & Record<string, unknown>;
+
+function WhizFrame(props: WhizFrameProps) {
   return <FrameShell {...props} />;
 }
 

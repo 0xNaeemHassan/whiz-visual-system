@@ -1,8 +1,6 @@
 // WhizFrame v8.0 — Complete visual overhaul with unique layouts for all frame types
 import { getLayoutComponent } from './LayoutRegistry';
-import { coreLayoutKeys } from './layouts/CoreLayouts';
-import { applyOverflowPolicy } from './layouts/OverflowPolicy';
-import { ensureMinEdgeSpacing, getLayoutTuning, placeNodes } from './layouts/layoutUtils';
+import { prepareLayoutPayload } from './layouts/layoutOrchestrator';
 import { TICKER_CONTRACT, normalizeTickerSpeed } from '../../domain/tickerContract';
 import { SPINE_DESIGN_TOKENS } from '../../domain/spineDesignTokens';
 import { calculateReceiptSummary } from '../../domain/services/receiptCalcService';
@@ -68,29 +66,12 @@ export function FrameShell({ frameRef, frame, theme, content, editMode, selected
     });
   };
 
-  // B16: Auto-scale title font size
-  // P2-06: Quantized type scale: 84/56/36/24/18
-  const getTitleFontSize = () => {
-    if (ov.title?.fontSize) return ov.title.fontSize;
-    const len = (content.title || '').length;
-    if (len < 18) return 84;
-    if (len < 30) return 56;
-    if (len < 50) return 36;
-    if (len < 80) return 24;
-    return 18;
-  };
-
-  const layoutFamily = coreLayoutKeys.has(frame?.layout) ? 'core' : 'extended';
-  const overflowResult = applyOverflowPolicy({
-    family: layoutFamily,
-    aspectRatio,
-    content,
-    ov,
-    baseTitleSize: getTitleFontSize(),
-  });
-  const resolvedContent = { ...overflowResult.content, overflowPolicy: { actions: overflowResult.actions, budget: overflowResult.budget, primitiveBudgets: overflowResult.primitiveBudgets } };
-  const resolvedOv = overflowResult.ov;
-  const resolvedTagText = resolvedContent?.chips?.[0] || resolvedContent.topicTag;
+  const {
+    resolvedContent,
+    resolvedOv,
+    resolvedTagText,
+    baseTitleSize,
+  } = prepareLayoutPayload({ frame, aspectRatio, content, styleOverrides: ov });
   const sep = TICKER_CONTRACT.separator;
   const tickerText = `WHIZ.DEFI${sep}${resolvedContent.date}${sep}ISSUE ${resolvedContent.issueNum}${sep}${resolvedContent.topicTag}${sep}ALPHA UNLOCKED${sep}`;
   const layoutProps = { theme, content: resolvedContent, SectionHead, ov: resolvedOv, editMode, selectedEl, sel, ec, accentColor };
@@ -196,7 +177,7 @@ export function FrameShell({ frameRef, frame, theme, content, editMode, selected
         <div className={`wf-title ${ec('title')}`}
           style={{
             fontFamily: "'Space Grotesk', sans-serif",
-            fontSize: `${resolvedOv.title?.fontSize || getTitleFontSize()}px`,
+            fontSize: `${resolvedOv.title?.fontSize || baseTitleSize}px`,
             fontWeight: resolvedOv.title?.fontWeight || 700,
             color: resolvedOv.title?.color || '#F4F5F7',
             fontStyle: resolvedOv.title?.italic ? 'italic' : 'normal',
