@@ -1,0 +1,69 @@
+{
+  "bracketRound1": [
+    {
+      "leftSeed": "1",
+      "leftName": "Alpha",
+      "leftScore": "90",
+      "rightSeed": "8",
+      "rightName": "Theta",
+      "rightScore": "70"
+    },
+    {
+      "leftSeed": "4",
+      "leftName": "Delta",
+      "leftScore": "66",
+      "rightSeed": "5",
+      "rightName": "Epsilon",
+      "rightScore": "72"
+    },
+    {
+      "leftSeed": "2",
+      "leftName": "Beta",
+      "leftScore": "88",
+      "rightSeed": "7",
+      "rightName": "Eta",
+      "rightScore": "77"
+    },
+    {
+      "leftSeed": "3",
+      "leftName": "Gamma",
+      "leftScore": "81",
+      "rightSeed": "6",
+      "rightName": "Zeta",
+      "rightScore": "79"
+    }
+  ],
+  "bracketRound2": [
+    {
+      "leftScore": "73",
+      "rightScore": "76",
+      "leftName": "Alpha",
+      "leftSeed": "1",
+      "rightName": "Epsilon",
+      "rightSeed": "5"
+    },
+    {
+      "leftScore": "84",
+      "rightScore": "79",
+      "leftName": "Beta",
+      "leftSeed": "2",
+      "rightName": "Gamma",
+      "rightSeed": "3"
+    }
+  ],
+  "bracketRound3": [
+    {
+      "leftScore": "92",
+      "rightScore": "85",
+      "leftName": "Epsilon",
+      "leftSeed": "5",
+      "rightName": "Beta",
+      "rightSeed": "2"
+    }
+  ],
+  "bracketWinner": {
+    "name": "Epsilon",
+    "seed": "5",
+    "score": "92"
+  }
+}

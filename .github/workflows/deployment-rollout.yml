@@ -1,0 +1,185 @@
+name: Deployment Rollout
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      rollout_mode:
+        description: Rollout strategy
+        required: true
+        type: choice
+        options:
+          - canary
+          - full
+        default: canary
+      canary_percent:
+        description: Initial canary percentage
+        required: false
+        type: choice
+        options:
+          - '5'
+          - '10'
+          - '20'
+        default: '10'
+      canary_duration_minutes:
+        description: Canary observation window in minutes
+        required: false
+        default: '30'
+      error_budget_burn_limit:
+        description: Max error budget burn rate during canary
+        required: false
+        default: '1.0'
+      force_full_rollout:
+        description: Approve full rollout when canary health is inconclusive
+        required: false
+        type: boolean
+        default: false
+
+env:
+  # Blast radius controls.
+  MAX_CANARY_PERCENT: '20'
+  MAX_IMPACTED_REGIONS: '1'
+
+jobs:
+  plan-rollout:
+    name: Plan Canary Stages and Blast Radius
+    runs-on: ubuntu-latest
+    outputs:
+      stage_1: ${{ steps.plan.outputs.stage_1 }}
+      stage_2: ${{ steps.plan.outputs.stage_2 }}
+      stage_3: ${{ steps.plan.outputs.stage_3 }}
+      canary_percent: ${{ steps.plan.outputs.canary_percent }}
+    steps:
+      - name: Define canary stages and blast-radius limits
+        id: plan
+        run: |
+          REQUESTED_CANARY='${{ github.event.inputs.canary_percent || '10' }}'
+          if [ "$REQUESTED_CANARY" -gt "$MAX_CANARY_PERCENT" ]; then
+            echo "Requested canary percent exceeds blast-radius limit (${MAX_CANARY_PERCENT}%)." >&2
+            exit 1
+          fi
+
+          echo "canary_percent=$REQUESTED_CANARY" >> "$GITHUB_OUTPUT"
+          echo "stage_1=${REQUESTED_CANARY}% traffic, ${MAX_IMPACTED_REGIONS} region" >> "$GITHUB_OUTPUT"
+          echo "stage_2=50% traffic after healthy canary" >> "$GITHUB_OUTPUT"
+          echo "stage_3=100% traffic after approval or healthy metrics" >> "$GITHUB_OUTPUT"
+
+  deploy-canary:
+    name: Deploy Canary
+    needs: plan-rollout
+    runs-on: ubuntu-latest
+    if: github.event.inputs.rollout_mode != 'full'
+    outputs:
+      health: ${{ steps.evaluate.outputs.health }}
+      error_budget_burn: ${{ steps.evaluate.outputs.error_budget_burn }}
+      error_rate: ${{ steps.evaluate.outputs.error_rate }}
+      latency_p95_ms: ${{ steps.evaluate.outputs.latency_p95_ms }}
+    steps:
+      - name: Partial rollout to canary stage
+        run: |
+          echo "Deploying canary: ${{ needs.plan-rollout.outputs.stage_1 }}"
+          echo "Monitoring for ${{ github.event.inputs.canary_duration_minutes || '30' }} minutes"
+
+      - name: Monitor health signals and evaluate auto-promotion/abort
+        id: evaluate
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Replace with real telemetry queries (Datadog/Prometheus/New Relic/etc.).
+            const telemetry = {
+              error_rate: Number(process.env.CANARY_ERROR_RATE || '0.7'),
+              latency_p95_ms: Number(process.env.CANARY_P95_MS || '280'),
+              error_budget_burn: Number(process.env.CANARY_BURN_RATE || '0.9')
+            };
+
+            const thresholds = {
+              healthy_error_rate: 1.0,
+              healthy_latency_p95_ms: 300,
+              abort_error_rate: 2.0,
+              abort_latency_p95_ms: 500,
+              error_budget_burn_limit: Number('${{ github.event.inputs.error_budget_burn_limit || '1.0' }}')
+            };
+
+            let health = 'inconclusive';
+            if (
+              telemetry.error_rate <= thresholds.healthy_error_rate &&
+              telemetry.latency_p95_ms <= thresholds.healthy_latency_p95_ms &&
+              telemetry.error_budget_burn <= thresholds.error_budget_burn_limit
+            ) {
+              health = 'healthy';
+            }
+
+            if (
+              telemetry.error_rate >= thresholds.abort_error_rate ||
+              telemetry.latency_p95_ms >= thresholds.abort_latency_p95_ms ||
+              telemetry.error_budget_burn > thresholds.error_budget_burn_limit * 1.5
+            ) {
+              health = 'unhealthy';
+            }
+
+            core.info(`Canary telemetry: ${JSON.stringify(telemetry)}`);
+            core.info(`Canary health: ${health}`);
+
+            core.setOutput('health', health);
+            core.setOutput('error_budget_burn', telemetry.error_budget_burn.toString());
+            core.setOutput('error_rate', telemetry.error_rate.toString());
+            core.setOutput('latency_p95_ms', telemetry.latency_p95_ms.toString());
+
+      - name: Auto-abort on unhealthy canary
+        if: steps.evaluate.outputs.health == 'unhealthy'
+        run: |
+          echo "Canary unhealthy, aborting rollout and triggering rollback."
+          exit 1
+
+  promote-partial:
+    name: Auto-Promote to 50%
+    needs:
+      - plan-rollout
+      - deploy-canary
+    if: needs.deploy-canary.outputs.health == 'healthy'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Promote canary to partial rollout
+        run: echo "Promoting deployment to ${{ needs.plan-rollout.outputs.stage_2 }}"
+
+  require-approval-when-inconclusive:
+    name: Approval Gate for Inconclusive Canary
+    needs:
+      - deploy-canary
+    if: needs.deploy-canary.outputs.health == 'inconclusive'
+    runs-on: ubuntu-latest
+    environment: production-rollout-approval
+    steps:
+      - name: Require explicit approval before full rollout
+        run: |
+          if [ "${{ github.event.inputs.force_full_rollout }}" != "true" ]; then
+            echo "Canary health inconclusive. Explicit approval is required to continue."
+            exit 1
+          fi
+          echo "Explicit approval received; proceeding to full rollout."
+
+  full-rollout:
+    name: Rollout to 100%
+    needs:
+      - plan-rollout
+      - deploy-canary
+      - promote-partial
+      - require-approval-when-inconclusive
+    if: |
+      always() &&
+      (
+        github.event.inputs.rollout_mode == 'full' ||
+        needs.deploy-canary.outputs.health == 'healthy' ||
+        (needs.deploy-canary.outputs.health == 'inconclusive' && github.event.inputs.force_full_rollout == 'true')
+      ) &&
+      needs.deploy-canary.result != 'failure'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Full deployment
+        run: echo "Deploying to ${{ needs.plan-rollout.outputs.stage_3 }}"
