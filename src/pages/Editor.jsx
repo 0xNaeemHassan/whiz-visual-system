@@ -25,6 +25,7 @@ import { detectRowSeriesDeltas, inferMetricType } from '../domain/services/rowDe
 import { SemanticChip, AccessibleIconButton, LabeledField, IconButton } from '../components/primitives';
 import { getFramePitfalls } from '../data/framePitfalls';
 import { createEditorCommandRegistry, filterCommands, matchesShortcut } from '../domain/editorCommands';
+import { optimizeCanvasForExport } from '../domain/services/imageOptimizationService';
 import { buildSaveDiff } from '../utils/saveDiff';
 import { generateExportSummary, buildSummaryText } from '../domain/export/summaryGenerator';
 import { shouldBlockStrictExportForUnsnapshottedEdits } from '../domain/export/exportGuards';
