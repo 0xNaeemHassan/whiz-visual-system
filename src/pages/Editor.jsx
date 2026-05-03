@@ -31,6 +31,7 @@ import { shouldBlockStrictExportForUnsnapshottedEdits } from '../domain/export/e
 import { useDialogFocus } from '../utils/focusTrap';
 import { validateCriticalNumericFields } from '../domain/criticalFieldValidator';
 import { createDefaultEvidenceLedger, normalizeEvidenceLedger, validateEvidenceLedger } from '../domain/evidenceLedger';
+import { evaluateEditorComplexity } from '../domain/services/editorComplexityService';
 
 /** @typedef {import('../types/canonical').FrameContent} FrameContent */
 /** @typedef {import('../types/canonical').StyleOverrides} StyleOverrides */
@@ -784,6 +785,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     () => getBrandScore({ overrides, content }),
     [overrides, content],
   );
+  const complexityDiagnostics = useMemo(() => evaluateEditorComplexity({ content, uploadedImages, whizEffects, overflowMeta }), [content, uploadedImages, whizEffects, overflowMeta]);
   const freshnessReport = useMemo(() => evaluateContentFreshness({ stats: content.stats, tableRows: content.tableRows }), [content.stats, content.tableRows]);
   const freshnessByKey = useMemo(() => {
     const map = {};
@@ -1242,6 +1244,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
         <div style={{position:'absolute',top:34,left:10,fontFamily:'var(--font-m)',fontSize:9,color:trustTone.fg,background:trustTone.bg,padding:'4px 8px',borderRadius:'var(--r)',border:`1px solid ${trustTone.border}`,backdropFilter:'blur(4px)'}}>Trust: {trustLevel}</div>
         <div style={{position:'absolute',top:12,right:12,display:'flex',gap:6,background:'var(--glass)',padding:'6px 10px',borderRadius:'var(--r)',border:'1px solid var(--glass-border)',backdropFilter:'blur(12px)'}}><button className="btn btn-ghost btn-sm" onClick={exportJSON} style={{fontSize:'var(--font-min-body)'}}>JSON</button><button className="btn btn-ghost btn-sm" onClick={exportManifest} style={{fontSize:'var(--font-min-body)'}}>Manifest</button><button className="btn btn-secondary btn-sm" onClick={launchCorrectionFlow} style={{fontSize:'var(--font-min-body)'}}>Correction</button><button className="btn btn-secondary btn-sm" onClick={exportHTML} style={{fontSize:'var(--font-min-body)'}}>HTML</button><button className="btn btn-secondary btn-sm" onClick={applyStrictPolish} style={{fontSize:'var(--font-min-body)'}}>Polish</button><button className="btn btn-primary btn-sm" data-format="png" onClick={exportPNG} disabled={exporting} style={{fontSize:'var(--font-min-body)'}}>{exporting?'⟳':'↓'} PNG</button></div>
         <div style={{position:'absolute',top:52,right:12,fontFamily:'var(--font-m)',fontSize:10,color:readinessSummary.ready?'#8EF0B0':'#FFB3B3',background:readinessSummary.ready?'rgba(11,36,20,.9)':'rgba(42,10,10,.9)',padding:'6px 8px',borderRadius:6,border:`1px solid ${readinessSummary.ready?'#2BAE6666':'#FF5A5A66'}`,maxWidth:320}}>Readiness: {readinessSummary.ready?'Ready to publish':`${readinessSummary.failed}/${readinessSummary.total} checks failing`} {readinessSummary.blocking>0?`· ${readinessSummary.blocking} blocking`:''}</div>
+        {complexityDiagnostics.exceedsThreshold && <div style={{position:'absolute',top:90,right:12,maxWidth:340,padding:'8px 10px',borderRadius:8,border:'1px solid rgba(229,178,58,.55)',background:'rgba(61,44,5,.88)',color:'#FFE3B3',fontFamily:'var(--font-m)',fontSize:10,display:'grid',gap:6}}><div style={{display:'flex',justifyContent:'space-between',gap:8}}><strong>Complexity diagnostics</strong><span>{complexityDiagnostics.score}/{complexityDiagnostics.threshold}</span></div>{complexityDiagnostics.causes.map((cause)=><div key={cause.key}><div style={{fontWeight:700}}>• {cause.label}</div><div style={{opacity:0.9}}>{cause.detail}</div></div>)}<div style={{display:'flex',gap:6,flexWrap:'wrap'}}><button className="btn btn-ghost btn-sm" style={{fontSize:9,padding:'2px 8px'}} onClick={()=>{setWhizEffects(DEFAULT_EFFECTS);showToast('Effects reduced.');}}>Reduce effects</button><button className="btn btn-ghost btn-sm" style={{fontSize:9,padding:'2px 8px'}} onClick={()=>{setStrictMode(true);applyStrictPolish();showToast('Simplified preset/profile applied.');}}>Use simplified preset/profile</button></div></div>}
         {editMode&&<div style={{position:'absolute',bottom:52,left:'50%',transform:'translateX(-50%)',fontFamily:'var(--font-m)',fontSize:9,color:'var(--theme-accent)',background:'rgba(0,0,0,0.75)',padding:'4px 10px',borderRadius:20,whiteSpace:'nowrap'}}>{selectedEl?`Selected: ${selectedEl}`:'Click any element'}</div>}
       </div>
       {/* RIGHT */}
@@ -1501,8 +1504,8 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
           <div className="editor-section" style={{opacity:isSectionLocked('timeline')?0.55:1}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}><div className="editor-section-title" style={{marginBottom:0}}>Timeline Events</div><button className="btn btn-ghost btn-sm" onClick={()=>toggleSectionLock('timeline')}>{isSectionLocked('timeline')?'🔒 Locked':'🔓 Unlock'}</button>
               <button className="btn btn-secondary btn-sm" style={{fontSize:9,padding:'2px 8px'}} disabled={isSectionLocked('timeline')} onClick={()=>updateContent('timelineEvents',[...(content.timelineEvents||[]),{date:'',label:'',sub:'',provenance:createDefaultProvenance()}])}>+ Event</button>
             </div>
-            {(content.timelineEvents||[]).map((ev,i)=>(
-              <div key={i} style={{display:'grid',gridTemplateColumns:'80px 1fr 1fr auto auto auto',gap:4,marginBottom:4,alignItems:'center'}}>
+            {(content.timelineEvents||[]).map((ev,i)=>(<div key={i}>
+              <div style={{display:'grid',gridTemplateColumns:'80px 1fr 1fr auto auto auto',gap:4,marginBottom:4,alignItems:'center'}}>
                 <input disabled={isSectionLocked('timeline')} value={ev.date||''} placeholder="Date" style={{fontSize:10,padding:'4px 6px'}} onChange={e=>{const raw=e.target.value;const normalized=normalizeDateInput(raw);const a=[...(content.timelineEvents||[])];a[i]={...a[i],date:normalized.valid?normalized.displayDate:raw};updateContent('timelineEvents',a);if(raw&&!normalized.valid){showToast(`Invalid timeline date. ${normalized.suggestions.join(' ')}`,'warning');}}}/>
                 <input disabled={isSectionLocked('timeline')} value={ev.label||''} placeholder="Event" style={{fontSize:10,padding:'4px 6px'}} onChange={e=>{const a=[...(content.timelineEvents||[])];a[i]={...a[i],label:e.target.value};updateContent('timelineEvents',a);}}/>
                 <input disabled={isSectionLocked('timeline')} value={ev.sub||''} placeholder="Note" style={{fontSize:10,padding:'4px 6px'}} onChange={e=>{const a=[...(content.timelineEvents||[])];a[i]={...a[i],sub:e.target.value};updateContent('timelineEvents',a);}}/>
@@ -1511,7 +1514,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
                 <button className="btn btn-danger btn-sm" style={{padding:'0 6px',height:28}} disabled={isSectionLocked('timeline')} onClick={()=>updateContent('timelineEvents',(content.timelineEvents||[]).filter((_,r)=>r!==i))}>✕</button>
               </div>
               <ProvenanceEditor disabled={isSectionLocked('timeline')} value={ev?.provenance} collapsed={false} onToggle={()=>{}} onChange={(provenance)=>{const a=[...(content.timelineEvents||[])];a[i]={...a[i],provenance:normalizeProvenance(provenance)};updateContent('timelineEvents',a);}}/>
-            ))}
+            </div>))}
             {(content.timelineEvents||[]).length===0&&<div style={{fontFamily:'var(--font-m)',fontSize:10,color:'var(--dim)',padding:'8px 0'}}>No events yet — click + Event to add</div>}
           </div>
           <div className="editor-section"><div className="editor-section-title">Big Number</div><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}><div className="form-group" style={{marginBottom:0}}><label className="form-label">Label</label><input value={content.bigLabel||''} onChange={e=>updateContent('bigLabel',e.target.value)}/></div><div className="form-group" style={{marginBottom:0}}><label className="form-label">Value</label><input value={content.bigNumber||''} onChange={e=>updateContent('bigNumber',e.target.value)}/></div></div></div>
