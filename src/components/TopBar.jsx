@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useUIEventContext } from '../state/UIEventContext';
 import { AccessibleIconButton } from './primitives';
 import { useDialogFocus } from '../utils/focusTrap';
@@ -29,6 +29,16 @@ export default function TopBar({ title, page, onHamburger, showToast, activeThem
     const nextIndex = Math.min(entries.length - 1, Math.max(0, currentIndex + offset));
     entries[nextIndex]?.focus();
   };
+  useEffect(() => {
+    if (!showLog) return undefined;
+    const onKeyDown = (event) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      setShowLog(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [showLog]);
 
   return (
     <div className="topbar">
