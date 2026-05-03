@@ -9,6 +9,7 @@ const CODES = {
   IMAGES_INVALID: 'IMAGES_INVALID',
   ISSUE_NUM_INVALID: 'ISSUE_NUM_INVALID',
   DATE_INVALID: 'DATE_INVALID',
+  TIMELINE_DATE_INVALID: 'TIMELINE_DATE_INVALID',
   STATS_INVALID: 'STATS_INVALID',
   TABLE_ROWS_INVALID: 'TABLE_ROWS_INVALID',
   TABLE_HEADERS_INVALID: 'TABLE_HEADERS_INVALID',
@@ -58,8 +59,22 @@ export function validateEditorState(state, options = {}) {
     if (content.issueNum && !/^\d{3}$/.test(String(content.issueNum))) {
       push(errors, CODES.ISSUE_NUM_INVALID, 'content.issueNum', 'Issue number must be 3 digits.');
     }
-    if (content.date && !/^\d{2}\.\d{2}\.\d{2}$/.test(String(content.date))) {
-      push(errors, CODES.DATE_INVALID, 'content.date', 'Date must use MM.DD.YY format.');
+    if (content.date) {
+      const normalizedDate = normalizeDateInput(content.date);
+      if (!normalizedDate.valid) {
+        push(errors, CODES.DATE_INVALID, 'content.date', 'Date is invalid or ambiguous.', { suggestions: normalizedDate.suggestions });
+      }
+    }
+
+    if ('timelineEvents' in content && Array.isArray(content.timelineEvents)) {
+      content.timelineEvents.forEach((event, index) => {
+        const rawDate = String(event?.date || '').trim();
+        if (!rawDate) return;
+        const normalizedDate = normalizeDateInput(rawDate);
+        if (!normalizedDate.valid) {
+          push(errors, CODES.TIMELINE_DATE_INVALID, `content.timelineEvents[${index}].date`, 'Timeline event date is invalid or ambiguous.', { suggestions: normalizedDate.suggestions });
+        }
+      });
     }
 
     if (content.tickerSpeed != null && !inRange(Number(content.tickerSpeed), TICKER_CONTRACT.speed.min, TICKER_CONTRACT.speed.max)) {
