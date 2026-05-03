@@ -28,6 +28,7 @@ export function parseImportedState(raw) {
   return {
     ...raw,
     content: normalization.content,
+    sectionLocks: raw.sectionLocks || null,
     telemetry: {
       ...(raw.telemetry || {}),
       taxonomyAutoCorrected: normalization.compliance.autoCorrected.length > 0,
