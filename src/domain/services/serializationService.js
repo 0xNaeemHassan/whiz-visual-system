@@ -49,9 +49,15 @@ export function parseImportedState(raw) {
     throw new Error('Invalid JSON');
   }
   const normalization = normalizeContentTaxonomy(raw.content || {});
+  const immutableLedgerRef = raw.immutableLedgerRef || raw?.manifest?.immutableLedgerRef || raw?.signoff?.immutableLedgerRef || null;
+  const nextContent = {
+    ...normalization.content,
+    evidenceLedger: normalizeEvidenceLedger(immutableLedgerRef?.evidenceLedger || normalization.content?.evidenceLedger, normalization.content?.issueNum || raw?.issueNum),
+  };
   return {
     ...raw,
-    content: normalization.content,
+    immutableLedgerRef,
+    content: nextContent,
     sectionLocks: raw.sectionLocks || null,
     auditTrail: Array.isArray(raw.auditTrail) ? raw.auditTrail : [],
     telemetry: {

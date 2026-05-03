@@ -29,6 +29,7 @@ import { buildSaveDiff } from '../utils/saveDiff';
 import { generateExportSummary, buildSummaryText } from '../domain/export/summaryGenerator';
 import { useDialogFocus } from '../utils/focusTrap';
 import { validateCriticalNumericFields } from '../domain/criticalFieldValidator';
+import { createDefaultEvidenceLedger, normalizeEvidenceLedger, validateEvidenceLedger } from '../domain/evidenceLedger';
 
 /** @typedef {import('../types/canonical').FrameContent} FrameContent */
 /** @typedef {import('../types/canonical').StyleOverrides} StyleOverrides */
@@ -804,12 +805,13 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     missingProvenance: missingStatProvenance || missingTableProvenance,
   }), [workflowPhase, stateValidation, editorValidation, complianceIssues, missingStatProvenance, missingTableProvenance]);
   const trustTone = TRUST_LEVEL_TONE[trustLevel] || TRUST_LEVEL_TONE[TRUST_LEVELS.DRAFT];
+  const ledgerValidation = useMemo(() => validateEvidenceLedger(content?.evidenceLedger, content?.issueNum), [content?.evidenceLedger, content?.issueNum]);
   const canTransitionTo=(phase)=> (phaseCriteria[phase]||[]).every((c)=>c.done);
   const attemptPhaseTransition=(phase)=>{if(!canTransitionTo(phase)){showToast(`Cannot move to ${phase} until checklist criteria are met.`,'warning');return;}setWorkflowPhase(phase);setPhaseChecklist(prev=>({...prev,lastTransitionAt:Date.now(),reviewAt:phase==='review'||phase==='publish-ready'?(prev.reviewAt||Date.now()):prev.reviewAt,publishReadyAt:phase==='publish-ready'?(prev.publishReadyAt||Date.now()):prev.publishReadyAt}));showToast(`Workflow phase set to ${phase}`);};
 
   const downloadFile=(name,blob)=>{const u=URL.createObjectURL(blob);const a=document.createElement('a');a.href=u;a.download=name;a.click();URL.revokeObjectURL(u);};
   const buildExportSummary=(normalizedContent)=>generateExportSummary({frame:activeFrame,content:{...content,...normalizedContent},complianceIssues,validationWarnings:editorValidation.warnings});
-  const exportSummarySidecars=(baseName,summary,imageFileName)=>{const payload={...summary,imageFileName};downloadFile(`${baseName}.summary.json`,new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));downloadFile(`${baseName}.summary.txt`,new Blob([buildSummaryText(payload)],{type:'text/plain'}));downloadFile(`${baseName}.manifest.signoff.json`,new Blob([JSON.stringify({reviewState,signoffRecord,savedAt:new Date().toISOString()},null,2)],{type:'application/json'}));};
+  const exportSummarySidecars=(baseName,summary,imageFileName)=>{const payload={...summary,imageFileName};const immutableLedgerRef=Object.freeze({issueNum:content.issueNum,hash:`ledger:${content.issueNum}:${ledgerValidation.total}:${ledgerValidation.complete}`,savedAt:new Date().toISOString(),evidenceLedger:normalizeEvidenceLedger(content?.evidenceLedger,content?.issueNum)});downloadFile(`${baseName}.summary.json`,new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));downloadFile(`${baseName}.summary.txt`,new Blob([buildSummaryText(payload)],{type:'text/plain'}));downloadFile(`${baseName}.manifest.signoff.json`,new Blob([JSON.stringify({reviewState,signoffRecord,immutableLedgerRef,savedAt:new Date().toISOString()},null,2)],{type:'application/json'}));};
 
   const ensureActionAllowed=(action)=>{if(action==='publish'&&workflowPhase!=='publish-ready'){showToast('Publish actions require publish-ready phase.','error');return false;}if(action==='publish'){const requiresApproval=collaborationMode==='collaborative'||requireSignoffInSolo;if(requiresApproval&&reviewState!=='approved'){showToast('Publish blocked: approval sign-off is required first.','error');return false;}}if(action==='export'&&workflowPhase==='draft'){showToast('Export actions require review or publish-ready phase.','error');return false;}if(!stateValidation.valid){showToast(`Blocked by validation: ${stateValidation.codes.join(', ')}`,'error');return false;}if(action==='publish'&&complianceIssues.length){showToast(`Blocked by compliance: ${complianceIssues[0]}`,'error');return false;}if(action==='publish'&&strictMode&&unacknowledgedOutlierFlags.length){showToast(`Strict publish blocked: acknowledge ${unacknowledgedOutlierFlags.length} outlier flag(s) first.`,'error');return false;}return true;};
 
