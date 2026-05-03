@@ -89,6 +89,7 @@ const DESTRUCTIVE_ACTION_POLICY = {
   resetDesign: { actionId: 'reset-design-overrides', title: 'Reset design overrides?', message: 'This clears all design overrides for the current frame.', danger: true, confirmLabel: 'Reset overrides' },
   exportWarnings: { actionId: 'export-with-warnings', title: 'Export with warnings?' },
 };
+const EXPORT_GUARD_BLOCK_UNSNAPSHOTTED_EDITS = false;
 
 const createDefaultProvenance = () => normalizeProvenanceShape({ confidence: 'medium', sourceType: 'unknown' });
 
@@ -324,6 +325,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const [reviewState, setReviewState] = useState('draft');
   const [signoffRecord, setSignoffRecord] = useState(createEmptySignoff());
   const [sectionLocks, setSectionLocks] = useLocalStorage('whiz-section-locks', {});
+  const [datasetSnapshotRecord, setDatasetSnapshotRecord] = useLocalStorage('whiz-dataset-snapshot', null);
   const frameRef=useRef(null);const centerRef=useRef(null);
   const { registerHandlers } = useUIEventContext();
   const[showAutosavePrompt,setShowAutosavePrompt]=useState(false);const autosaveDataRef=useRef(null);const[showShortcutHelp,setShowShortcutHelp]=useState(false);
@@ -741,7 +743,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     const v=validateEditorState({frameId,theme,content,overrides,uploadedImages});
     if(!v.valid){showToast(`Export blocked (${v.codes.join(', ')})`,'error');return;}
     setExporting(true);showToast('Generating WebP…');
-    try{
+    try{setDatasetSnapshotRecord({snapshotId:currentDatasetSnapshot.snapshotId,hash:currentDatasetSnapshot.hash,schemaVersion:currentDatasetSnapshot.schemaVersion,savedAt:Date.now()});
       const sceneModel=createSceneModel({frameId,theme,content:{...content,...normalizedContent},overrides,aspectRatio,bgGradient});
       const {canvas:cv,usedFallback}=await exportFrame({contractInput:{format:'webp',dimensions:{width:aspectRatio.w,height:aspectRatio.h},quality:0.92,background:overrides.frameBg||theme.base,citationMode:content.exportCitationMode||content.citationMode||'off',version:'1.0.0'},sceneModel,sceneRenderer:renderSceneToCanvas,domFallbackRenderer:(contract)=>renderDomSnapshotToCanvas(frameRef.current,{width:contract.dimensions.width,height:contract.dimensions.height,backgroundColor:contract.background})});
       await new Promise((res,rej)=>cv.toBlob(b=>{
@@ -1131,6 +1133,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
         <input className="form-control" type="url" value={content.heroUrl||content.logoUrl||''} onChange={e=>{updateContent('heroUrl',e.target.value);updateContent('logoUrl',e.target.value);}} placeholder="https://example.com/logo.png" />
       </div>
 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}><div className="form-group" style={{marginBottom:0}}><label className="form-label">@X</label><input value={content.socialX||''} onChange={e=>updateContent('socialX',e.target.value)}/></div><div className="form-group" style={{marginBottom:0}}><label className="form-label">@Sub</label><input value={content.socialSub||''} onChange={e=>updateContent('socialSub',e.target.value)}/></div></div>
+          </div>
           <div className="editor-section"><div className="editor-section-title">Editorial</div><div className="form-group"><label className="form-label">Title</label><textarea id="field-title" value={content.title} onChange={e=>updateContent('title',e.target.value)} rows={2}/><div className={`char-count ${content.title.length>60?'warn':''} ${content.title.length>80?'over':''}`}>{content.title.length}/60</div>{renderFieldCompliance('field-title')}</div><div className="form-group"><label className="form-label">Deck</label><textarea value={content.deck} onChange={e=>updateContent('deck',e.target.value)} rows={2}/><div className={`char-count ${content.deck.length>120?'warn':''}`}>{content.deck.length}/120</div></div><div className="form-group"><label className="form-label">Body</label><textarea value={content.body} onChange={e=>updateContent('body',e.target.value)} rows={4}/><div className={`char-count ${content.body.length>400?'warn':''}`}>{content.body.length}/400</div></div></div>
           <div className="editor-section">
             <div className="editor-section-title">Truncation &amp; Overflow Policy</div>
