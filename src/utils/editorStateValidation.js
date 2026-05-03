@@ -1,6 +1,8 @@
 import { TICKER_CONTRACT } from '../domain/tickerContract';
 import { collectStrictStyleViolations, sanitizeStrictStyleOverrides } from '../domain/strictStylePolicy';
 import { resolveRiskAccent } from '../domain/riskAccentPolicy';
+import { FRAMES } from '../data/frames';
+import { LAYOUT_DATASET_CONSTRAINTS } from '../data/frameDatasetShapes';
 
 const CODES = {
   ROOT_INVALID: 'ROOT_INVALID',
@@ -32,6 +34,69 @@ const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 const push = (errors, code, path, message, meta) => errors.push({ code, path, message, ...(meta ? { meta } : {}) });
 const inRange = (v, min, max) => typeof v === 'number' && v >= min && v <= max;
 
+const toNum = (value) => {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  const m = String(value ?? '').replace(/,/g, '').match(/-?\d+(\.\d+)?/);
+  return m ? Number(m[0]) : null;
+};
+
+function evaluateLayoutConstraints({ layout, content }) {
+  const findings = [];
+  const constraints = LAYOUT_DATASET_CONSTRAINTS[layout] || [];
+  const rows = Array.isArray(content?.tableRows) ? content.tableRows : [];
+  const stats = Array.isArray(content?.stats) ? content.stats : [];
+  constraints.forEach((rule) => {
+    if (rule.type === 'sum') {
+      rows.forEach((row, idx) => {
+        const total = toNum(row?.[rule.totalField]);
+        const parts = rule.partFields.map((f) => toNum(row?.[f]));
+        if (total == null || parts.some((v) => v == null)) return;
+        const actual = parts.reduce((a, b) => a + b, 0);
+        if (Math.abs(total - actual) > (rule.tolerance ?? 0)) findings.push({ severity: rule.severity, path: `content.tableRows[${idx}]`, message: `Sum consistency failed at content.tableRows[${idx}]: expected ${rule.totalField}=${actual}, actual=${total}.` });
+      });
+    }
+    if (rule.type === 'percentage') {
+      rows.forEach((row, idx) => {
+        const pct = toNum(row?.[rule.field]);
+        const denom = toNum(row?.[rule.denominatorField]);
+        if (pct == null || denom == null) return;
+        if (denom <= 0) findings.push({ severity: rule.severity, path: `content.tableRows[${idx}].${rule.denominatorField}`, message: `Percentage denominator sanity failed at content.tableRows[${idx}].${rule.denominatorField}: expected > 0, actual=${denom}.` });
+      });
+    }
+    if (rule.type === 'rank') {
+      let previous = -1;
+      rows.forEach((row, idx) => {
+        const rank = String(row?.[rule.field] || '').trim().toUpperCase();
+        if (!rank) return;
+        const orderIndex = rule.order.indexOf(rank);
+        if (orderIndex === -1) return;
+        if (orderIndex < previous) findings.push({ severity: rule.severity, path: `content.tableRows[${idx}].${rule.field}`, message: `Rank ordering failed at content.tableRows[${idx}].${rule.field}: expected non-decreasing ${rule.order.join(' > ')}, actual=${rank}.` });
+        previous = orderIndex;
+      });
+    }
+    if (rule.type === 'monotonicDate') {
+      let prevTs = null;
+      (content?.timelineEvents || []).forEach((event, idx) => {
+        const ts = Date.parse(String(event?.[rule.field] || ''));
+        if (Number.isNaN(ts)) return;
+        if (prevTs != null && ts < prevTs) findings.push({ severity: rule.severity, path: `content.timelineEvents[${idx}].${rule.field}`, message: `Monotonic constraint failed at content.timelineEvents[${idx}].${rule.field}: expected >= previous date, actual=${event?.[rule.field]}.` });
+        prevTs = ts;
+      });
+    }
+    if (rule.type === 'monotonicNumeric') {
+      let prev = null;
+      stats.forEach((item, idx) => {
+        const value = toNum(item?.[rule.field]);
+        if (value == null) return;
+        const bad = prev != null && (rule.direction === 'desc' ? value > prev : value < prev);
+        if (bad) findings.push({ severity: rule.severity, path: `content.stats[${idx}].${rule.field}`, message: `Monotonic constraint failed at content.stats[${idx}].${rule.field}: expected ${rule.direction}, actual=${value}.` });
+        prev = value;
+      });
+    }
+  });
+  return findings;
+}
+
 export function validateEditorState(state, options = {}) {
   const { strictMode = false, sanitizeStrictStyle = false } = options;
   const errors = [];
@@ -41,6 +106,7 @@ export function validateEditorState(state, options = {}) {
   }
 
   const { content, uploadedImages, frameId, theme } = state;
+  const layout = FRAMES.find((frame) => frame.id === frameId)?.layout;
   let overrides = state.overrides;
   if (!isObj(content)) push(errors, CODES.CONTENT_MISSING, 'content', 'Content is required.');
   if (!isObj(overrides)) push(errors, CODES.OVERRIDES_MISSING, 'overrides', 'Overrides must be an object.');
@@ -118,7 +184,12 @@ export function validateEditorState(state, options = {}) {
     }
   }
 
-  return { valid: errors.length === 0, errors, codes: [...new Set(errors.map((e) => e.code))], sanitizedOverrides: strictMode && sanitizeStrictStyle ? overrides : undefined };
+  const constraintFindings = evaluateLayoutConstraints({ layout, content });
+  const blockingFindings = constraintFindings.filter((f) => f.severity === 'blocking');
+  const warningFindings = constraintFindings.filter((f) => f.severity !== 'blocking');
+  blockingFindings.forEach((f) => push(errors, CODES.TABLE_ROWS_INVALID, f.path, f.message));
+
+  return { valid: errors.length === 0, errors, warnings: warningFindings, codes: [...new Set(errors.map((e) => e.code))], sanitizedOverrides: strictMode && sanitizeStrictStyle ? overrides : undefined, findings: constraintFindings };
 }
 
 export { CODES as editorStateValidationCodes };

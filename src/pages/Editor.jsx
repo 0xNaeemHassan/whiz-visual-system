@@ -883,10 +883,12 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     { id: 'export', label: 'Export', hint: 'Ship final assets and metadata.', why: 'Reliable exports keep downstream workflows consistent.' },
   ];
   const runValidationCheck = useCallback(() => {
+    if (stateValidation.errors.length) return showToast(`Blocking validation findings: ${stateValidation.errors.map((e) => `${e.path} -> ${e.message}`).join(' | ')}`, 'error');
+    if ((stateValidation.warnings || []).length) return showToast(`Validation warnings: ${stateValidation.warnings.map((w) => `${w.path} -> ${w.message}`).join(' | ')}`, 'warning');
     if (editorValidation.errors.length) return showToast(`Validation errors: ${editorValidation.errors.join(' | ')}`, 'error');
     if (editorValidation.warnings.length) return showToast(`Validation warnings: ${editorValidation.warnings.join(' | ')}`, 'warning');
     showToast('Validation passed', 'info');
-  }, [editorValidation, showToast]);
+  }, [stateValidation, editorValidation, showToast]);
   const commandRegistry = useMemo(() => createEditorCommandRegistry({
     openPalette: () => { setShowCommandPalette(true); setPaletteQuery(''); },
     save: () => doSaveRef.current?.(),
