@@ -31,6 +31,6 @@ export function createSceneModel({ frameId, theme, content, overrides, aspectRat
       body: content?.body || '',
       handle: content?.handle || '',
     },
-    citations: buildCitationModel(content, citationMode),
+    citations: buildCitationModel(content, citationMode, { strictMode: Boolean(content?.strictMode) }),
   };
 }

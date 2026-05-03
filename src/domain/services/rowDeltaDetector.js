@@ -1,9 +1,9 @@
 const METRIC_CONFIG = {
-  percent: { method: 'mad', sensitivity: 3.2 },
-  currency: { method: 'iqr', sensitivity: 1.5 },
-  ratio: { method: 'zscore', sensitivity: 2.8 },
-  score: { method: 'zscore', sensitivity: 2.5 },
-  default: { method: 'mad', sensitivity: 3.5 },
+  percent: { series: { method: 'mad', sensitivity: 3.2 }, delta: { method: 'zscore', sensitivity: 2.8 } },
+  currency: { series: { method: 'iqr', sensitivity: 1.5 }, delta: { method: 'mad', sensitivity: 3.1 } },
+  ratio: { series: { method: 'zscore', sensitivity: 2.8 }, delta: { method: 'zscore', sensitivity: 2.6 } },
+  score: { series: { method: 'zscore', sensitivity: 2.5 }, delta: { method: 'mad', sensitivity: 3.0 } },
+  default: { series: { method: 'mad', sensitivity: 3.5 }, delta: { method: 'mad', sensitivity: 3.2 } },
 };
 
 const mean = (nums) => nums.reduce((s, n) => s + n, 0) / (nums.length || 1);
@@ -42,13 +42,7 @@ export const parseNumericValue = (value) => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
-export function detectRowSeriesDeltas(rows = [], options = {}) {
-  const metricType = options.metricType || inferMetricType(rows[0]?.col3);
-  const cfg = { ...METRIC_CONFIG.default, ...(METRIC_CONFIG[metricType] || {}), ...(options.config || {}) };
-  const series = rows.map((row, index) => ({ index, value: parseNumericValue(row?.col3) })).filter((d) => d.value !== null);
-  const values = series.map((d) => d.value);
-  if (values.length < 4) return { metricType, config: cfg, flags: [] };
-
+function evaluateOutlier(value, values, cfg, label = 'value') {
   const mu = mean(values);
   const sigma = std(values) || 1;
   const med = median(values);
@@ -57,24 +51,43 @@ export function detectRowSeriesDeltas(rows = [], options = {}) {
   const q3 = q(values, 0.75);
   const iqr = (q3 - q1) || 1;
 
-  const flags = series.flatMap(({ index, value }) => {
-    let score = 0;
-    let explanation = '';
-    if (cfg.method === 'zscore') {
-      score = Math.abs((value - mu) / sigma);
-      explanation = `z-score ${score.toFixed(2)} exceeds threshold ${cfg.sensitivity}.`;
-    } else if (cfg.method === 'iqr') {
-      const low = q1 - cfg.sensitivity * iqr;
-      const high = q3 + cfg.sensitivity * iqr;
-      score = value < low ? (low - value) / iqr : value > high ? (value - high) / iqr : 0;
-      explanation = `Value is outside IQR fence [${low.toFixed(2)}, ${high.toFixed(2)}].`;
-    } else {
-      score = Math.abs(0.6745 * (value - med) / mad);
-      explanation = `MAD score ${score.toFixed(2)} exceeds threshold ${cfg.sensitivity}.`;
-    }
-    if (score <= cfg.sensitivity) return [];
-    return [{ rowIndex: index, score, method: cfg.method, metricType, explanation, acknowledged: false }];
+  if (cfg.method === 'zscore') {
+    const score = Math.abs((value - mu) / sigma);
+    return { score, expectedRange: [mu - cfg.sensitivity * sigma, mu + cfg.sensitivity * sigma], observed: value, explanation: `${label} expected in [${(mu - cfg.sensitivity * sigma).toFixed(2)}, ${(mu + cfg.sensitivity * sigma).toFixed(2)}], observed ${value.toFixed(2)}.` };
+  }
+  if (cfg.method === 'iqr') {
+    const low = q1 - cfg.sensitivity * iqr;
+    const high = q3 + cfg.sensitivity * iqr;
+    const score = value < low ? (low - value) / iqr : value > high ? (value - high) / iqr : 0;
+    return { score, expectedRange: [low, high], observed: value, explanation: `${label} expected in [${low.toFixed(2)}, ${high.toFixed(2)}], observed ${value.toFixed(2)}.` };
+  }
+  const score = Math.abs(0.6745 * (value - med) / mad);
+  const scaled = (cfg.sensitivity * mad) / 0.6745;
+  return { score, expectedRange: [med - scaled, med + scaled], observed: value, explanation: `${label} expected in [${(med - scaled).toFixed(2)}, ${(med + scaled).toFixed(2)}], observed ${value.toFixed(2)}.` };
+}
+
+export function detectRowSeriesDeltas(rows = [], options = {}) {
+  const metricType = options.metricType || inferMetricType(rows[0]?.col3);
+  const metricConfig = { ...METRIC_CONFIG.default, ...(METRIC_CONFIG[metricType] || {}), ...(options.config || {}) };
+  const seriesCfg = metricConfig.series || METRIC_CONFIG.default.series;
+  const deltaCfg = metricConfig.delta || METRIC_CONFIG.default.delta;
+  const series = rows.map((row, index) => ({ index, value: parseNumericValue(row?.col3) })).filter((d) => d.value !== null);
+  const values = series.map((d) => d.value);
+  if (values.length < 4) return { metricType, config: metricConfig, flags: [] };
+
+  const seriesFlags = series.flatMap(({ index, value }) => {
+    const evaluated = evaluateOutlier(value, values, seriesCfg, 'Series value');
+    if (evaluated.score <= seriesCfg.sensitivity) return [];
+    return [{ rowIndex: index, score: evaluated.score, method: seriesCfg.method, metricType, checkType: 'series', expectedRange: evaluated.expectedRange, observed: evaluated.observed, explanation: evaluated.explanation, acknowledged: false }];
   });
 
-  return { metricType, config: cfg, flags };
+  const deltas = series.slice(1).map((point, idx) => ({ rowIndex: point.index, previousRowIndex: series[idx].index, value: point.value - series[idx].value }));
+  const deltaValues = deltas.map((d) => d.value);
+  const deltaFlags = deltaValues.length < 4 ? [] : deltas.flatMap((delta) => {
+    const evaluated = evaluateOutlier(delta.value, deltaValues, deltaCfg, 'Row delta');
+    if (evaluated.score <= deltaCfg.sensitivity) return [];
+    return [{ rowIndex: delta.rowIndex, previousRowIndex: delta.previousRowIndex, score: evaluated.score, method: deltaCfg.method, metricType, checkType: 'delta', expectedRange: evaluated.expectedRange, observed: evaluated.observed, explanation: evaluated.explanation, acknowledged: false }];
+  });
+
+  return { metricType, config: metricConfig, flags: [...seriesFlags, ...deltaFlags] };
 }

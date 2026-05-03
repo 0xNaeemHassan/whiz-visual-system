@@ -61,6 +61,43 @@ const frameRuleRegistry = new Map([
   ['default', defaultRules()],
 ]);
 
+const IMPOSSIBLE_STATE_RULES = [
+  {
+    id: 'IMP_RATE_LABEL_REQUIRES_PERCENT',
+    message: 'Rate-like labels should include percentage values.',
+    severity: 'blocking',
+    confidence: 'high',
+    domains: ['finance', 'macro', 'default'],
+    layouts: ['stat-grid', 'kpi-strip', 'default'],
+    evaluate: ({ stat, label, value }) => {
+      if ((label.includes('apy') || label.includes('rate') || label.includes('%')) && !value.includes('%')) {
+        return {
+          fieldPath: `content.stats[${stat.index}].value`,
+          remediation: 'Add a percent sign or change the label to a non-rate metric.',
+        };
+      }
+      return null;
+    },
+  },
+  {
+    id: 'IMP_SHARE_LABEL_REQUIRES_PERCENT',
+    message: 'Share/mix labels should use percentage values.',
+    severity: 'blocking',
+    confidence: 'high',
+    domains: ['finance', 'macro', 'default'],
+    layouts: ['stat-grid', 'default'],
+    evaluate: ({ stat, label, value }) => {
+      if ((label.includes('share') || label.includes('mix')) && !value.includes('%')) {
+        return {
+          fieldPath: `content.stats[${stat.index}].value`,
+          remediation: 'Use a percentage value for share/mix metrics.',
+        };
+      }
+      return null;
+    },
+  },
+];
+
 export function evaluateConstraintRegistry({ frameId, layoutId, content }) {
   const rules = frameRuleRegistry.get(String(frameId)) || frameRuleRegistry.get(layoutId) || frameRuleRegistry.get('default') || [];
   const violations = [];
@@ -77,6 +114,33 @@ export function evaluateConstraintRegistry({ frameId, layoutId, content }) {
     }
   });
   return violations;
+}
+
+function includesContext(scope = [], value = 'default') {
+  return scope.includes('default') || scope.includes(value);
+}
+
+export function evaluateImpossibleStateConstraints({ content = {}, layoutId = 'default', domain = 'default' } = {}) {
+  const stats = Array.isArray(content?.stats) ? content.stats : [];
+  const findings = [];
+  stats.forEach((stat, index) => {
+    const label = String(stat?.label || '').trim().toLowerCase();
+    const value = String(stat?.value || '').trim().toLowerCase();
+    IMPOSSIBLE_STATE_RULES.forEach((rule) => {
+      if (!includesContext(rule.layouts, layoutId) || !includesContext(rule.domains, domain)) return;
+      const result = rule.evaluate({ stat: { ...stat, index }, label, value, layoutId, domain, content });
+      if (!result) return;
+      findings.push({
+        ruleId: rule.id,
+        severity: rule.severity,
+        confidence: rule.confidence,
+        message: rule.message,
+        fieldPath: result.fieldPath || `content.stats[${index}]`,
+        remediation: result.remediation || 'Review metric label and value pairing.',
+      });
+    });
+  });
+  return findings;
 }
 
 export function getConstraintRuleIds(violations = []) {
