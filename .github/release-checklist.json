@@ -1,0 +1,49 @@
+{
+  "release": {
+    "name": "production-promotion",
+    "version": "8.0.0"
+  },
+  "signals": {
+    "tests": {
+      "passed": true,
+      "evidence": [
+        "npm run test"
+      ]
+    },
+    "coverage": {
+      "passed": true,
+      "evidence": [
+        "Coverage report uploaded: artifacts/coverage-summary.json"
+      ]
+    },
+    "performance": {
+      "passed": true,
+      "evidence": [
+        "npm run check:perf"
+      ]
+    },
+    "accessibility": {
+      "passed": true,
+      "evidence": [
+        "node scripts/check-touch-targets.mjs",
+        "node scripts/check-interactive-labels.mjs"
+      ]
+    },
+    "migrationChecks": {
+      "passed": true,
+      "evidence": [
+        "docs/CHANGELOG.md reviewed for migration notes"
+      ]
+    },
+    "incidentLinks": {
+      "passed": true,
+      "evidence": [
+        "https://status.example.com/incidents/INC-000"
+      ]
+    }
+  },
+  "approvals": {
+    "releaseManager": "required",
+    "onCallEngineer": "required"
+  }
+}

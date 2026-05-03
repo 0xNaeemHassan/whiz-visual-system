@@ -12,7 +12,8 @@
     "check:chips": "node scripts/check-semantic-chips.mjs",
     "lint:naming": "eslint src --ext .js,.jsx --rule \"naming/file-naming-convention:error\" --rule \"naming/hook-api-naming:error\" --rule \"naming/service-symbol-naming:error\" --rule \"naming/comment-prefix-convention:error\"",
     "check:touch-targets": "node scripts/check-touch-targets.mjs",
-    "check:perf": "node scripts/perf-smoke-check.mjs"
+    "check:perf": "node scripts/perf-smoke-check.mjs",
+    "check:release-signals": "node scripts/verify-release-signals.mjs"
   },
   "dependencies": {
     "html2canvas": "^1.4.1",
