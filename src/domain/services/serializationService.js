@@ -32,6 +32,7 @@ export function parseImportedState(raw) {
     ...raw,
     content: normalization.content,
     sectionLocks: raw.sectionLocks || null,
+    auditTrail: Array.isArray(raw.auditTrail) ? raw.auditTrail : [],
     telemetry: {
       ...(raw.telemetry || {}),
       taxonomyAutoCorrected: normalization.compliance.autoCorrected.length > 0,
