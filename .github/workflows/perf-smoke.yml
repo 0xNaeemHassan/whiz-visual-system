@@ -1,0 +1,59 @@
+name: Perf Smoke
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  perf-smoke:
+    name: Build Perf Smoke Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run deterministic perf smoke checks
+        run: node scripts/perf-smoke-check.mjs
+
+  budget-change-approval:
+    name: Budget Change Approval Gate
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify budget changes are explicitly approved
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const pr = context.payload.pull_request;
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner,
+              repo,
+              pull_number: pr.number,
+              per_page: 100
+            });
+
+            const changedBudget = files.some((file) => file.filename === 'config/perf-budgets.json');
+            if (!changedBudget) {
+              core.info('No perf budget change detected.');
+              return;
+            }
+
+            const hasApprovalLabel = (pr.labels || []).some((label) => label.name === 'perf-budget-approved');
+            if (!hasApprovalLabel) {
+              core.setFailed('config/perf-budgets.json changed. Add the "perf-budget-approved" label for explicit budget-change approval.');
+              return;
+            }
+
+            core.info('Perf budget change is explicitly approved via label.');
