@@ -1,19 +1,16 @@
-import { useEffect, useRef } from 'react';
+import { useRef } from 'react';
+import { useDialogFocus } from '../utils/focusTrap';
 
 export default function ConfirmDialog({ open, title, message, details = [], confirmLabel = 'Confirm', cancelLabel = 'Cancel', danger = false, allowSkip = false, skipLabel = "Don't ask again this session", skipChecked = false, onSkipChange, onConfirm, onCancel }) {
   const confirmBtnRef = useRef(null);
-  const cancelBtnRef = useRef(null);
-
-  useEffect(() => {
-    if (!open) return;
-    confirmBtnRef.current?.focus();
-  }, [open]);
+  const dialogRef = useRef(null);
+  useDialogFocus({ isOpen: open, containerRef: dialogRef, initialFocusRef: confirmBtnRef });
 
   if (!open) return null;
 
   return (
     <div className="modal-overlay open" role="presentation" onClick={(e) => e.target === e.currentTarget && onCancel?.()}>
-      <div className="modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-desc" onKeyDown={(e)=>{if(e.key==='Escape')onCancel?.();}}>
+      <div ref={dialogRef} className="modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-desc" onKeyDown={(e)=>{if(e.key==='Escape')onCancel?.();}}>
         <div className="modal-header">
           <span id="confirm-title" className="modal-title">{title}</span>
         </div>

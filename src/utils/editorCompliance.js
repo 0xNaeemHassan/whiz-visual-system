@@ -353,3 +353,19 @@ export function getBrandScore(input) {
   const score = Math.max(0, Math.round((checks.filter((c) => c.pass).length / checks.length) * 100));
   return { score, checks, issues };
 }
+
+export function validateEditorTextMinimum({ overrides = {}, content = {}, minFontSizePx = 12 } = {}) {
+  const regions = [
+    { key: 'title', value: Number(overrides?.title?.fontSize ?? 52) },
+    { key: 'deck', value: Number(overrides?.deck?.fontSize ?? 18) },
+    { key: 'body', value: Number(overrides?.body?.fontSize ?? 15) },
+  ];
+
+  const tableText = Array.isArray(content?.tableRows) && content.tableRows.length > 0 ? Number(overrides?.table?.fontSizePx ?? 12) : null;
+  if (Number.isFinite(tableText)) regions.push({ key: 'table', value: tableText });
+
+  const violations = regions.filter((entry) => Number.isFinite(entry.value) && entry.value < minFontSizePx)
+    .map((entry) => ({ region: entry.key, fontSize: entry.value, minFontSizePx }));
+
+  return { valid: violations.length === 0, minFontSizePx, violations };
+}
