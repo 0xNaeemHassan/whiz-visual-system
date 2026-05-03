@@ -1,4 +1,6 @@
-export default function TopBar({ title, page, onHamburger, showToast, activeTheme, navigateTo }) {
+import { MOTION_PREFERENCE } from '../hooks/useMotionPreference';
+
+export default function TopBar({ title, page, onHamburger, showToast, activeTheme, navigateTo, motionPreference, setMotionPreference }) {
   return (
     <div className="topbar">
       <button className="hamburger" onClick={onHamburger} aria-label="Toggle menu">
@@ -37,6 +39,14 @@ export default function TopBar({ title, page, onHamburger, showToast, activeThem
         <button className="btn btn-primary btn-sm" onClick={() => navigateTo('editor')}>
           \u2726 New Frame
         </button>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'var(--font-m)', fontSize: 10, color: 'var(--muted)' }}>
+          Motion
+          <select className="motion-select" value={motionPreference} onChange={(e) => setMotionPreference(e.target.value)}>
+            <option value={MOTION_PREFERENCE.SYSTEM}>System</option>
+            <option value={MOTION_PREFERENCE.REDUCE}>Reduce</option>
+            <option value={MOTION_PREFERENCE.FULL}>Full</option>
+          </select>
+        </label>
       </div>
     </div>
   );

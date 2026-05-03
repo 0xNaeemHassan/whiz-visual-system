@@ -20,8 +20,12 @@
   --r:           8px;
   --r-lg:        14px;
   --r-xl:        20px;
-  --t:           0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  --t-spring:    0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  --motion-fast-duration: 150ms;
+  --motion-base-duration: 220ms;
+  --motion-slow-duration: 320ms;
+  --motion-standard-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --t:           var(--motion-base-duration) var(--motion-standard-ease);
+  --t-spring:    var(--motion-slow-duration) cubic-bezier(0.34, 1.56, 0.64, 1);
   --shadow:      0 4px 24px rgba(0,0,0,0.5);
   --shadow-lg:   0 12px 48px rgba(0,0,0,0.7);
   --shadow-glow: 0 0 40px rgba(0,0,0,0.12);
@@ -2445,3 +2449,21 @@ input[type="range"]::-moz-range-thumb {
   .mobile-action-cluster{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0 12px}
   .mobile-qa-checklist label{display:flex;gap:8px;align-items:center;padding:8px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;font-size:12px}
 }
+
+
+.motion-select { width: auto; min-width: 92px; padding: 5px 24px 5px 8px; font-size: 10px; }
+
+:root[data-motion='reduce'] .wf-ticker-scroll,
+:root[data-motion='reduce'] .ticker-inner,
+:root[data-motion='reduce'] .dash-ticker-scroll { animation: none !important; transform: none !important; }
+:root[data-motion='reduce'] .sidebar,
+:root[data-motion='reduce'] .frame-card,
+:root[data-motion='reduce'] .dash-grid > .card,
+:root[data-motion='reduce'] .modal,
+:root[data-motion='reduce'] .toast { transition-duration: 0.01ms !important; animation: none !important; }
+:root[data-motion='reduce'] .ticker-bar::before,
+:root[data-motion='reduce'] .ticker-bar::after { display: none; }
+:root[data-motion='reduce'] .modal-overlay,
+:root[data-motion='reduce'] .sidebar-overlay,
+:root[data-motion='reduce'] .topbar,
+:root[data-motion='reduce'] .wf-ticker { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
