@@ -1,96 +1,93 @@
+import { FRAMES } from '../../data/frames';
+import { FRAME_GUIDANCE_BY_ID } from '../../data/frameGuidance';
 import { getLayoutDatasetShape } from '../../data/frameDatasetShapes';
 
-const KEYWORD_INTENT_WEIGHTS = {
-  comparison: ['compare', 'versus', 'vs', 'leaderboard', 'rank', 'top', 'winner', 'loser'],
-  timeline: ['timeline', 'roadmap', 'history', 'sequence', 'phases'],
-  risk: ['risk', 'hack', 'exploit', 'threat', 'failure', 'postmortem', 'security'],
-  explainer: ['how', 'why', 'mechanism', 'walkthrough', 'explain'],
-  macro: ['thesis', 'macro', 'forecast', 'prediction', 'outlook'],
-  ecosystem: ['ecosystem', 'map', 'landscape', 'stack', 'network'],
-  tracker: ['weekly', 'recap', 'snapshot', 'update', 'tracker'],
-};
+const DATASET_LAYOUT_MAP = Object.freeze({
+  table: new Set(['table', 'scorecard', 'tier-list']),
+  timeline: new Set(['timeline', 'long-bet']),
+  split: new Set(['bull-bear']),
+  grid: new Set(['grid', 'quote']),
+  stats: new Set(['stats', 'pitch-deck']),
+});
 
-function inferIntent(text = '') {
-  const lower = text.toLowerCase();
-  const matches = Object.entries(KEYWORD_INTENT_WEIGHTS)
-    .map(([intent, words]) => ({ intent, score: words.reduce((acc, w) => acc + (lower.includes(w) ? 1 : 0), 0) }))
-    .filter((entry) => entry.score > 0)
-    .sort((a, b) => b.score - a.score);
-  return matches[0]?.intent || 'general';
+const INTENT_TAG_MAP = Object.freeze({
+  compare: ['comparison', 'versus', 'ranking', 'head-to-head'],
+  explain: ['explainer', 'education', 'framework'],
+  risk: ['risk', 'postmortem', 'security'],
+  thesis: ['thesis', 'editorial', 'opinion'],
+  recap: ['weekly', 'recap', 'calendar'],
+});
+
+const URGENCY_LAYOUT_BONUS = Object.freeze({
+  high: new Set(['table', 'timeline', 'grid']),
+  medium: new Set(['bull-bear', 'stats']),
+  low: new Set(['thesis', 'cover-story', 'postmortem']),
+});
+
+const CONFIDENCE_TIER_BONUS = Object.freeze({ low: 'D', medium: 'C', high: 'G' });
+
+function normalize(value, fallback) {
+  const clean = String(value || '').trim().toLowerCase();
+  return clean || fallback;
 }
 
-function mapDataShapeToLayouts(dataShape = 'generic') {
-  const shape = String(dataShape).toLowerCase();
-  if (shape.includes('table') || shape.includes('ranking')) return ['table', 'scorecard', 'tier-list'];
-  if (shape.includes('timeline')) return ['timeline', 'long-bet'];
-  if (shape.includes('network') || shape.includes('map')) return ['network', 'constellation', 'trade-routes'];
-  if (shape.includes('split')) return ['bull-bear'];
-  if (shape.includes('grid')) return ['grid'];
-  if (shape.includes('chart') || shape.includes('curve')) return ['curve', 'matrix'];
-  return [];
-}
+export function rankFrameCandidates(input, options = {}) {
+  const topN = Number(options.topN) > 0 ? Number(options.topN) : 3;
+  const dataShape = normalize(input?.dataShape, 'generic');
+  const intent = normalize(input?.intent, 'recap');
+  const urgency = normalize(input?.urgency, 'medium');
+  const confidence = normalize(input?.confidence, 'medium');
+  const rejectFeedback = Array.isArray(options.rejectFeedback) ? options.rejectFeedback : [];
 
-function inferComplexityPenalty(frame, complexityBudget = 'medium') {
-  const effort = Number(frame.effortMinutes || 45);
-  const difficulty = frame.difficulty || (effort > 90 ? 'hard' : effort > 45 ? 'medium' : 'easy');
-  if (complexityBudget === 'low') return difficulty === 'hard' ? -0.2 : difficulty === 'medium' ? -0.08 : 0;
-  if (complexityBudget === 'high') return difficulty === 'hard' ? 0.05 : 0;
-  return difficulty === 'hard' ? -0.07 : 0;
-}
-
-function historicalSignal(frame, historicalPerformance = {}) {
-  const byFrame = historicalPerformance.byFrameId || {};
-  const direct = byFrame[String(frame.id)] || byFrame[frame.id];
-  if (typeof direct === 'number') return Math.max(-0.3, Math.min(0.3, direct));
-  return 0;
-}
-
-export function rankRecommendedFrames({ frames = [], intent, topic = '', notes = '', dataShape = 'generic', complexityBudget = 'medium', historicalPerformance = {}, topK = 5 }) {
-  const inferredIntent = intent || inferIntent(`${topic} ${notes}`);
-  const layoutHints = new Set(mapDataShapeToLayouts(dataShape));
-
-  const scored = frames.map((frame) => {
+  const scored = FRAMES.map((frame) => {
+    let score = 0;
     const reasons = [];
-    let score = 0.15;
-
-    if (frame.tags?.includes(inferredIntent) || frame.tierName?.toLowerCase().includes(inferredIntent)) {
-      score += 0.3;
-      reasons.push(`matches intent (${inferredIntent})`);
-    }
-
     const shape = getLayoutDatasetShape(frame.layout);
-    if (layoutHints.has(frame.layout) || (shape.dataset && String(dataShape).toLowerCase().includes(shape.dataset))) {
-      score += 0.25;
-      reasons.push(`fits data shape (${shape.dataset || frame.layout})`);
+
+    if (shape.dataset === dataShape || DATASET_LAYOUT_MAP[dataShape]?.has(frame.layout)) {
+      score += 4;
+      reasons.push(`Data shape fit: ${dataShape}`);
     }
 
-    const complexityAdj = inferComplexityPenalty(frame, complexityBudget);
-    score += complexityAdj;
-    if (complexityAdj < 0) reasons.push(`penalized for ${complexityBudget} complexity budget`);
+    const intentSignals = INTENT_TAG_MAP[intent] || [];
+    const matchingTags = frame.tags.filter((tag) => intentSignals.some((signal) => tag.includes(signal)));
+    if (matchingTags.length > 0) {
+      score += 3;
+      reasons.push(`Intent fit: ${intent} (${matchingTags[0]})`);
+    }
 
-    const histAdj = historicalSignal(frame, historicalPerformance);
-    score += histAdj;
-    if (histAdj !== 0) reasons.push(`historical performance adjustment (${histAdj > 0 ? '+' : ''}${histAdj.toFixed(2)})`);
+    if (URGENCY_LAYOUT_BONUS[urgency]?.has(frame.layout)) {
+      score += 2;
+      reasons.push(`Urgency fit: ${urgency}`);
+    }
 
-    if (reasons.length === 0) reasons.push('general-purpose fit');
+    if (frame.tier === CONFIDENCE_TIER_BONUS[confidence]) {
+      score += 1;
+      reasons.push(`Confidence match: ${confidence}`);
+    }
 
-    return {
-      frame,
-      confidence: Math.max(0, Math.min(0.99, score)),
-      rationale: reasons,
-    };
-  }).sort((a, b) => b.confidence - a.confidence || a.frame.id - b.frame.id);
+    const feedbackPenalty = rejectFeedback.filter((entry) => Number(entry.frameId) === frame.id).length;
+    if (feedbackPenalty > 0) {
+      score -= feedbackPenalty * 2;
+      reasons.push('De-prioritized from reject feedback');
+    }
 
-  const recommendations = scored.slice(0, topK);
-  const leader = recommendations[0];
-  const lowConfidence = !leader || leader.confidence < 0.45;
+    const guidance = FRAME_GUIDANCE_BY_ID[frame.id];
+    if (guidance?.bestUseCases?.length) {
+      reasons.push(`Use case: ${guidance.bestUseCases[0]}`);
+    }
 
-  return {
-    inferredIntent,
-    recommendations,
-    fallback: lowConfidence ? {
-      reason: 'Low confidence in top match',
-      fallbackFrameIds: frames.filter((frame) => ['table', 'grid', 'editorial'].includes(frame.layout)).slice(0, 3).map((frame) => frame.id),
-    } : null,
-  };
+    return { frame, score, reasons };
+  });
+
+  return scored
+    .sort((a, b) => b.score - a.score || a.frame.id - b.frame.id)
+    .slice(0, topN)
+    .map((entry, rank) => ({
+      rank: rank + 1,
+      frameId: entry.frame.id,
+      frameName: entry.frame.name,
+      score: entry.score,
+      reasons: entry.reasons.slice(0, 3),
+    }));
 }
