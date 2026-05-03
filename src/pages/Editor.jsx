@@ -58,6 +58,33 @@ const DEFAULT_CONTENT = {
 const DEFAULT_OVERRIDES = {frameBg:null,spineColor:null,tickerColor:null,tickerBg:null,title:{fontSize:52,fontWeight:700,color:'#F4F5F7',italic:false,lineHeight:1.05,letterSpacing:-0.02,textAlign:'left',opacity:1},deck:{fontSize:18,fontWeight:400,color:'#8B95A3',italic:true},body:{fontSize:15,fontWeight:400,color:'#8B95A3',lineHeight:1.75,textAlign:'left',opacity:1},accent:{color:null},tag:{background:null,color:null,borderColor:null},footer:{background:null},statsColor:null,bignumColor:null,avatarColor:null,ruleBg:null,handleColor:null};
 const LOCKED_NEUTRALS = ['#8b95a3', '#f4f5f7', '#d0d6de'];
 const DEFAULT_EFFECTS = { glow: true, noise: true, intenseAccent: false };
+
+const PROVENANCE_CONFIDENCE_OPTIONS = ['low', 'medium', 'high'];
+
+const createDefaultProvenance = () => ({
+  source: '',
+  date: '',
+  confidence: 'medium',
+  notes: '',
+  links: '',
+});
+
+const normalizeProvenance = (value) => {
+  const base = value && typeof value === 'object' ? value : {};
+  const confidence = String(base.confidence || 'medium').toLowerCase();
+  return {
+    source: String(base.source || '').trim(),
+    date: String(base.date || '').trim(),
+    confidence: PROVENANCE_CONFIDENCE_OPTIONS.includes(confidence) ? confidence : 'medium',
+    notes: String(base.notes || '').trim(),
+    links: String(base.links || '').trim(),
+  };
+};
+
+const isPublishReadyProvenance = (prov) => {
+  const normalized = normalizeProvenance(prov);
+  return Boolean(normalized.source && normalized.date && normalized.confidence && normalized.links);
+};
 const ELEMENTS = [{key:'frame',label:'Background',icon:'\u25A1'},{key:'spine',label:'Spine',icon:'|'},{key:'ticker',label:'Ticker',icon:'\u2014'},{key:'title',label:'Title',icon:'T'},{key:'deck',label:'Deck',icon:'D'},{key:'tag',label:'Tag',icon:'#'},{key:'body',label:'Body',icon:'B'},{key:'stats',label:'Stats',icon:'S'},{key:'bignum',label:'Big #',icon:'N'},{key:'footer',label:'Footer',icon:'F'},{key:'accent',label:'Accent',icon:'\u25CF'}];
 const WORKFLOW_PHASES=['draft','review','publish-ready'];
 function ColorRow({label,value,defaultVal,onChange}){const col=value||defaultVal;return(<div className="prop-color-row"><span className="prop-label-text">{label}</span><div className="prop-color-swatch" style={{background:col,position:'relative'}}><input type="color" value={col} onChange={e=>onChange(e.target.value)} aria-label={`${label} color`} style={{position:'absolute',inset:0,opacity:0,cursor:'pointer',width:'100%',height:'100%'}}/></div><input type="text" className="prop-hex" value={col} onChange={e=>{const v=e.target.value;if(/^#[0-9A-Fa-f]{0,6}$/.test(v)||v==='')onChange(v||null);}}/><button className="btn btn-ghost btn-sm editor-btn-reset" onClick={()=>onChange(null)} title="Reset">\u21BA</button></div>);}
@@ -485,6 +512,9 @@ Apply these auto-corrections?`);
     if(hasBlockingSpineContrastIssue){showToast('Publish blocked: rotated spine contrast is below threshold.','error');return;}
     const preflight=runNormalizationPreflight();if(!preflight)return;const { normalizedContent, taxonomyAutoCorrected }=preflight;
     const v=validateEditorState({frameId,theme,content,overrides,uploadedImages});
+    const missingStatProvenance=(content.stats||[]).some(stat=>!isPublishReadyProvenance(stat?.provenance));
+    const missingTableProvenance=(content.tableRows||[]).some(row=>!isPublishReadyProvenance(row?.provenance));
+    if(missingStatProvenance||missingTableProvenance){showToast('Export blocked: fill provenance (source, date, confidence, links) for stats/table rows.','error');return;}
     if(!v.valid){showToast(`Export blocked (${v.codes.join(', ')})`,'error');return;}
     setExporting(true);showToast('Generating WebP…');
     try{
