@@ -108,6 +108,7 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [seriesFocusFilter, setSeriesFocusFilter] = useState(null);
+  const [rankingWeights, setRankingWeights] = useLocalStorage('whiz-planner-ranking-weights', DEFAULT_RANKING_WEIGHTS);
   const [showModal, setShowModal] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [editingIssue, setEditingIssue] = useState(null);
@@ -498,8 +499,10 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
     setSeriesFocusFilter(seriesName);
   };
 
+  const rankedIssues = useMemo(() => rankPlannerIssues(issues, { weights: rankingWeights }), [issues, rankingWeights]);
+
   const filtered = useMemo(() => {
-    let f = issues;
+    let f = rankedIssues;
     if (statusFilter !== 'ALL') f = f.filter(i => i.status === statusFilter);
     if (search) { const q = search.toLowerCase(); f = f.filter(i => i.topic?.toLowerCase().includes(q) || i.issueNum?.includes(q) || i.notes?.toLowerCase().includes(q) || i.caption?.toLowerCase().includes(q) || i.sourceLinks?.toLowerCase().includes(q)); }
     if (seriesFocusFilter) f = f.filter(i => (i.series || '').trim() === seriesFocusFilter && (i.confidence || 'medium') === 'low');
@@ -712,6 +715,24 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
           <option value="ALL">All Statuses</option>
           {STATUSES.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}
         </select>
+        <div style={{ display:'flex', gap:6, alignItems:'center', fontSize:10, color:'var(--muted)' }}>
+          <span>Rank W:</span>
+          {Object.entries(normalizeWeights(rankingWeights)).map(([key, value]) => (
+            <label key={key} style={{ display:'flex', alignItems:'center', gap:4 }}>
+              <span style={{ textTransform:'capitalize' }}>{key === 'freshnessPenalty' ? 'Fresh' : key.slice(0,4)}</span>
+              <input
+                aria-label={`Ranking weight ${key}`}
+                type="number"
+                min="0"
+                step="0.05"
+                value={rankingWeights[key]}
+                onChange={e => setRankingWeights((prev) => ({ ...prev, [key]: Number(e.target.value) }))}
+                style={{ width:54, padding:'2px 4px' }}
+              />
+              <span>{value.toFixed(2)}</span>
+            </label>
+          ))}
+        </div>
         <div className="planner-views">
           <button className={`view-btn ${view==='table'?'active':''}`} onClick={() => setViewSafe('table')}>Table</button>
           <button className={`view-btn ${view==='kanban'?'active':''}`} onClick={() => setViewSafe('kanban')}>Kanban</button>
@@ -796,6 +817,7 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
                     <tr key={issue.id}>
                       <td><span style={{ fontFamily: 'var(--font-m)', color: 'var(--dim)' }}>#{issue.issueNum}</span></td>
                       <td><strong style={{ fontSize: 13 }}>{issue.topic || '—'}</strong></td>
+                      <td><div style={{ fontFamily:'var(--font-m)', fontSize:10, color:'var(--muted)', maxWidth:220 }}><div style={{ color:'var(--text)' }}>{issue.ranking.rankScore.toFixed(3)}</div><div title={issue.ranking.breakdown}>{issue.ranking.breakdown}</div></div></td>
                       <td><span style={{ fontFamily: 'var(--font-m)', fontSize: 11, color: 'var(--muted)' }}>{frame ? `${frame.id}. ${frame.name}` : issue.frameId || '—'}</span></td>
                       <td>{theme ? (<div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: theme.accent, display: 'inline-block' }} /><span style={{ fontSize: 11 }}>{theme.name}</span></div>) : <span style={{ color: 'var(--dim)' }}>—</span>}</td>
                       {/* L6: Color + icon for status, not color-only */}
