@@ -8,7 +8,7 @@ const FRAME_TYPE_REQUIREMENTS = Object.freeze({
 const safe = (v) => String(v || '').trim();
 const normalizeConfidence = (value) => ['low', 'medium', 'high'].includes(String(value || '').toLowerCase()) ? String(value).toLowerCase() : 'medium';
 
-export function generateExportSummary({ frame, content = {}, complianceIssues = [], validationWarnings = [], exportContract = null }) {
+export function generateExportSummary({ frame, content = {}, complianceIssues = [], validationWarnings = [], exportProfileDecision = null }) {
   const title = safe(content.title);
   const thesis = safe(content.thesis || content.deck || content.body).slice(0, 280);
   const keyValues = [
@@ -40,14 +40,7 @@ export function generateExportSummary({ frame, content = {}, complianceIssues = 
     dataTimestamps: Array.from(timestamps),
     confidenceSummary,
     exportedAt: new Date().toISOString(),
-    exportPresetId: exportContract?.presetId || 'standard',
-    exportParameters: exportContract ? {
-      width: Number(exportContract?.dimensions?.width || 0),
-      height: Number(exportContract?.dimensions?.height || 0),
-      quality: Number(exportContract?.quality || 0),
-      citationMode: exportContract?.citationMode || 'off',
-      effectsPolicy: exportContract?.effectsPolicy || 'balanced',
-    } : null,
+    exportProfileDecision: exportProfileDecision || content.exportProfileDecision || null,
   };
 
   return summary;
