@@ -78,3 +78,73 @@ export function runExportPreflight({ content = {}, overrides = {}, theme = {}, w
   const warnings = checks.filter((c) => c.severity === 'warning' && !c.passed);
   return { checks, passed: criticalFailures.length === 0, hasWarnings: warnings.length > 0, criticalFailures, warnings, generatedAt: new Date().toISOString() };
 }
+
+
+const TRUST_BLOCKING_SEVERITIES = new Set(['blocking']);
+
+export function runTrustPreflightOrchestrator({ content = {}, strictMode = true, exceptionReason = '' } = {}) {
+  const normalize = (value) => String(value || '').trim();
+  const stats = Array.isArray(content?.stats) ? content.stats : [];
+  const tableRows = Array.isArray(content?.tableRows) ? content.tableRows : [];
+  const issues = [];
+  const addIssue = (checkId, severity, fieldPath, message) => issues.push({ checkId, severity, fieldPath, message });
+
+  const hasCompleteProvenance = (prov = {}) => Boolean(normalize(prov.source) && normalize(prov.date) && normalize(prov.confidence) && normalize(prov.links));
+  stats.forEach((stat, idx) => { if (!hasCompleteProvenance(stat?.provenance)) addIssue('provenance-completeness', 'blocking', `content.stats[${idx}].provenance`, 'Stat provenance is incomplete.'); });
+  tableRows.forEach((row, idx) => { if (!hasCompleteProvenance(row?.provenance)) addIssue('provenance-completeness', 'blocking', `content.tableRows[${idx}].provenance`, 'Table row provenance is incomplete.'); });
+
+  const today = new Date().toISOString().slice(0, 10);
+  const isFuture = (dateValue) => /^\d{4}-\d{2}-\d{2}$/.test(dateValue) && dateValue > today;
+  [...stats.map((x, idx) => ({ date: normalize(x?.provenance?.date), fieldPath: `content.stats[${idx}].provenance.date` })), ...tableRows.map((x, idx) => ({ date: normalize(x?.provenance?.date), fieldPath: `content.tableRows[${idx}].provenance.date` }))].forEach(({ date, fieldPath }) => {
+    if (isFuture(date)) addIssue('freshness', 'warning', fieldPath, 'Provenance date is in the future.');
+  });
+
+  stats.forEach((stat, idx) => {
+    const raw = normalize(stat?.value).replace(/[$,%\s,]/g, '');
+    const n = Number(raw);
+    if (Number.isFinite(n) && Math.abs(n) > 1_000_000_000_000) addIssue('outliers', 'warning', `content.stats[${idx}].value`, 'Value looks like an outlier and may need verification.');
+  });
+
+  const units = new Set();
+  stats.forEach((stat, idx) => {
+    const value = normalize(stat?.value);
+    if (value.includes('%')) units.add('percent');
+    if (value.includes('$')) units.add('currency');
+    if (value.match(/(k|m|b|t)/i)) units.add('magnitude');
+    if (units.size > 1) addIssue('unit-compatibility', 'warning', `content.stats[${idx}].value`, 'Mixed unit families detected across stats.');
+  });
+
+  stats.forEach((stat, idx) => {
+    const label = normalize(stat?.label).toLowerCase();
+    const value = normalize(stat?.value);
+    if ((label.includes('apy') || label.includes('rate') || label.includes('%')) && !value.includes('%')) addIssue('impossible-combinations', 'blocking', `content.stats[${idx}].value`, 'Rate-like labels should include percentage values.');
+  });
+
+  const seen = new Map();
+  stats.forEach((stat, idx) => {
+    const key = `${normalize(stat?.label).toLowerCase()}::${normalize(stat?.value).toLowerCase()}`;
+    if (!key || key === '::') return;
+    if (seen.has(key)) addIssue('duplicates', 'warning', `content.stats[${idx}]`, `Duplicate stat also appears at index ${seen.get(key)}.`);
+    else seen.set(key, idx);
+  });
+
+  const blocking = issues.filter((issue) => TRUST_BLOCKING_SEVERITIES.has(issue.severity));
+  const warnings = issues.filter((issue) => issue.severity === 'warning');
+  const bypassed = !strictMode && blocking.length > 0;
+  return {
+    strictMode,
+    exceptionReason: bypassed ? normalize(exceptionReason) || 'non-strict mode override' : '',
+    checks: {
+      'provenance-completeness': issues.filter((x) => x.checkId === 'provenance-completeness'),
+      freshness: issues.filter((x) => x.checkId === 'freshness'),
+      outliers: issues.filter((x) => x.checkId === 'outliers'),
+      'unit-compatibility': issues.filter((x) => x.checkId === 'unit-compatibility'),
+      'impossible-combinations': issues.filter((x) => x.checkId === 'impossible-combinations'),
+      duplicates: issues.filter((x) => x.checkId === 'duplicates'),
+    },
+    blocking,
+    warnings,
+    canProceed: blocking.length === 0 || !strictMode,
+    generatedAt: new Date().toISOString(),
+  };
+}
