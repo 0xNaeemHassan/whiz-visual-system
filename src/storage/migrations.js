@@ -25,18 +25,25 @@ export function toEnvelope(data, version = STORAGE_SCHEMA_VERSION) {
 
 function migrateAnyToEnvelope(rawValue) {
   if (isEnvelope(rawValue)) return rawValue;
+  if (isObject(rawValue) && typeof rawValue.version === 'number' && 'data' in rawValue) {
+    return {
+      ...rawValue,
+      updatedAt: typeof rawValue.updatedAt === 'number' ? rawValue.updatedAt : Date.now(),
+    };
+  }
   return toEnvelope(rawValue, STORAGE_SCHEMA_VERSION);
 }
 
 function migrateLegacySaveRecord(save) {
   if (!isObject(save)) return save;
+  const { status: legacyStatus, ...rest } = save;
   const tags = Array.isArray(save.tags)
     ? save.tags.filter((tag) => typeof tag === 'string').map((tag) => tag.trim()).filter(Boolean)
     : [];
   const folder = typeof save.folder === 'string' ? save.folder : '';
-  const status = typeof save.status === 'string' && save.status.trim() ? save.status.trim() : undefined;
+  const status = typeof legacyStatus === 'string' && legacyStatus.trim() ? legacyStatus.trim() : undefined;
   return {
-    ...save,
+    ...rest,
     tags,
     folder,
     ...(status ? { status } : {}),

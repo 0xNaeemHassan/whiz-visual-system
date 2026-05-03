@@ -1,0 +1,51 @@
+name: Production Promotion Gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_signals_file:
+        description: "Path to release checklist JSON"
+        required: false
+        default: ".github/release-checklist.json"
+
+jobs:
+  promotion-gate:
+    name: Verify pre-release checklist before production promotion
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run test signal
+        run: npm run test
+
+      - name: Run performance signal
+        run: npm run check:perf
+
+      - name: Run accessibility signal
+        run: |
+          node scripts/check-touch-targets.mjs
+          node scripts/check-interactive-labels.mjs
+
+      - name: Verify release checklist artifact signals
+        env:
+          RELEASE_SIGNALS_FILE: ${{ github.event.inputs.release_signals_file }}
+        run: node scripts/verify-release-signals.mjs
+
+      - name: Upload release sign-off metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-signoff-${{ github.run_number }}
+          path: artifacts/release-signoff.json
+          if-no-files-found: error

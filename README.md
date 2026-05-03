@@ -20,3 +20,7 @@ For each migration note, include:
 - impact,
 - required action,
 - safe fallback (if any).
+
+## Coverage policy
+
+Coverage thresholds, CI enforcement, and exception handling are documented in `docs/coverage-policy.md`.

@@ -1,0 +1,7 @@
+{
+  "events": [
+    {"date":"2026-05-01","label":"Launch","sub":"Mainnet"},
+    {"date":"May 02, 2026","label":"Patch","sub":"Hotfix"},
+    {"date":"bad date","label":"Unknown","sub":"TBD"}
+  ]
+}
