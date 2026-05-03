@@ -110,6 +110,10 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
     confidence: CONFIDENCE.includes(issue.confidence) ? issue.confidence : 'medium',
     series: issue.series || '',
     assistantBrief: issue.assistantBrief || '',
+    recommendationIntent: issue.recommendationIntent || 'recap',
+    recommendationDataShape: issue.recommendationDataShape || 'table',
+    recommendationUrgency: issue.recommendationUrgency || 'medium',
+    recommendationFeedback: Array.isArray(issue.recommendationFeedback) ? issue.recommendationFeedback : [],
     targetMetric: issue.targetMetric || '',
     metricConfidence: issue.metricConfidence || '',
     metricSource: issue.metricSource || '',
@@ -162,6 +166,10 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
         confidence: draft.confidence || 'medium',
         series: draft.series || '',
         assistantBrief: draft.assistantBrief || '',
+        recommendationIntent: draft.recommendationIntent || 'recap',
+        recommendationDataShape: draft.recommendationDataShape || 'table',
+        recommendationUrgency: draft.recommendationUrgency || 'medium',
+        recommendationFeedback: draft.recommendationFeedback || [],
         targetMetric: draft.targetMetric || '',
         metricConfidence: draft.metricConfidence || '',
         metricSource: draft.metricSource || '',
@@ -188,7 +196,7 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
     setShowModal(true);
   };
 
-  const openEdit = (issue) => { setEditingIssue(issue.id); setForm({ confidence: 'medium', series: '', ...normalizeIssue(issue) }); setShowModal(true); };
+  const openEdit = (issue) => { setEditingIssue(issue.id); setForm({ confidence: 'medium', series: '', recommendationIntent: 'recap', recommendationDataShape: 'table', recommendationUrgency: 'medium', recommendationFeedback: [], ...normalizeIssue(issue) }); setShowModal(true); };
 
   // F5: Duplicate issue
   const duplicateIssue = (issue) => {
@@ -510,6 +518,20 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
   }, [issues]);
 
   // F10: Open in Editor with frame/theme pre-loaded
+
+  const frameSuggestions = useMemo(() => rankFrameCandidates({
+    dataShape: form.recommendationDataShape,
+    intent: form.recommendationIntent,
+    urgency: form.recommendationUrgency,
+    confidence: form.confidence,
+  }, { topN: 3, rejectFeedback: form.recommendationFeedback }), [form.recommendationDataShape, form.recommendationIntent, form.recommendationUrgency, form.confidence, form.recommendationFeedback]);
+
+  const rejectSuggestedFrame = (frameId, reason) => {
+    setForm((prev) => ({
+      ...prev,
+      recommendationFeedback: [...(prev.recommendationFeedback || []), { frameId, reason, at: Date.now() }],
+    }));
+  };
   const openInEditor = (issue) => {
     // Fix #21: pass full issue context so Editor can pre-fill content
     const frameId = issue.frameId ? Number(issue.frameId) : undefined;
