@@ -447,6 +447,11 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const [noviceStep, setNoviceStep] = useLocalStorage('whiz-ui-experience-step', 'outline');
   const [largeTextMode, setLargeTextMode] = useLocalStorage('whiz-large-text-mode', false);
   const [dyslexiaFriendlyMode, setDyslexiaFriendlyMode] = useLocalStorage('whiz-dyslexia-friendly-mode', false);
+  const resolvedFontPairing = useMemo(() => {
+    const resolution = resolveApprovedFontPairing(activeFontPairing);
+    warnFontSubstitutions(resolution.substitutions);
+    return resolution.fonts;
+  }, [activeFontPairing]);
   const[showCommandPalette,setShowCommandPalette]=useState(false);
   const[paletteQuery,setPaletteQuery]=useState('');
   const[whizEffects,setWhizEffects]=useLocalStorage('whiz-effects',DEFAULT_EFFECTS);
@@ -1271,7 +1276,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
       {/* CENTER */}
       <div className={`editor-center ${mobileTab==='preview'?'mob-active':''}`} ref={centerRef}>
         <div className="frame-scale-wrap" style={{transform:`scale(${zoom})`}}><WhizFrame trustLevel={trustLevel} frameRef={frameRef} frame={selectedFrame} theme={theme} content={content} editMode={editMode} selectedEl={selectedEl} onSelectEl={k=>{setSelectedEl(k);k&&setRightTab('design');}} styleOverrides={overrides} showGrid={showGrid} aspectRatio={aspectRatio} uploadedImages={uploadedImages} bgGradient={bgGradient} patternOverlay={patternOverlay} strictWhizMode={strictWhizMode} whizEffects={whizEffects}
-            fontPairing={activeFontPairing}/></div>
+            fontPairing={resolvedFontPairing}/></div>
         <div className="zoom-bar"><IconButton className="zoom-btn" label="Zoom out" onClick={()=>setZoom(z=>Math.max(0.1,+(z-0.05).toFixed(2)))}>−</IconButton><span className="zoom-pct">{Math.round(zoom*100)}%</span><IconButton className="zoom-btn" label="Zoom in" onClick={()=>setZoom(z=>Math.min(1,+(z+0.05).toFixed(2)))}>+</IconButton><IconButton className="zoom-btn" label="Fit frame to viewport" onClick={updateZoom} style={{fontSize:10}}>⊡</IconButton><div style={{width:1,height:16,background:'var(--border)'}}/><IconButton className={`zoom-btn ${showGrid?'active':''}`} label={showGrid ? 'Hide grid overlay' : 'Show grid overlay'} onClick={()=>setShowGrid(g=>!g)} style={{color:showGrid?'var(--theme-accent)':undefined}}>▦</IconButton><IconButton className={`zoom-btn ${editMode?'active':''}`} label={editMode ? 'Disable edit mode' : 'Enable edit mode'} onClick={()=>{setEditMode(m=>!m);editMode&&setSelectedEl(null);}} style={{color:editMode?'var(--theme-accent)':undefined}}>✎</IconButton><div style={{width:1,height:16,background:'var(--border)'}}/><IconButton className="zoom-btn" label="Undo" onClick={()=>handleUndo(mobileTab==='preview'?'mobile':'desktop')} disabled={!canUndo} style={{opacity:canUndo?1:0.3}}>↶</IconButton><IconButton className="zoom-btn" label="Redo" onClick={()=>handleRedo(mobileTab==='preview'?'mobile':'desktop')} disabled={!canRedo} style={{opacity:canRedo?1:0.3}}>↷</IconButton></div>
         <div style={{position:'absolute',top:10,left:10,fontFamily:'var(--font-m)',fontSize:9,color:'var(--dim)',background:'rgba(0,0,0,0.6)',padding:'4px 8px',borderRadius:'var(--r)',backdropFilter:'blur(4px)'}}>{String(frameId).padStart(2,'0')} — {selectedFrame.name} · {aspectRatio.w}×{aspectRatio.h}</div>
         <div style={{position:'absolute',top:34,left:10,fontFamily:'var(--font-m)',fontSize:9,color:trustTone.fg,background:trustTone.bg,padding:'4px 8px',borderRadius:'var(--r)',border:`1px solid ${trustTone.border}`,backdropFilter:'blur(4px)'}}>Trust: {trustLevel}</div>

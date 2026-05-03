@@ -9,7 +9,7 @@ import SemanticChip, { SemanticMarker, semanticLabel } from '../SemanticChip';
 import { resolveRiskAccent } from '../../domain/riskAccentPolicy';
 import { getSourceTypeBadgeMeta, normalizeProvenanceShape } from '../../utils/provenance';
 
-export function FrameShell({ frameRef, frame, theme, content, trustLevel = 'Draft', editMode, selectedEl, onSelectEl, styleOverrides, showGrid, aspectRatio, uploadedImages, bgGradient, patternOverlay, strictWhizMode = false, whizEffects = { glow: true, noise: true, intenseAccent: false } }) {
+export function FrameShell({ frameRef, frame, theme, content, trustLevel = 'Draft', editMode, selectedEl, onSelectEl, styleOverrides, showGrid, aspectRatio, uploadedImages, bgGradient, patternOverlay, strictWhizMode = false, whizEffects = { glow: true, noise: true, intenseAccent: false }, fontPairing = {} }) {
   const reduceMotion = typeof document !== 'undefined' && document.documentElement?.dataset?.motion === 'reduce';
   const ov = styleOverrides || {};
   const sel = (key, e) => { if (editMode) { e?.stopPropagation(); onSelectEl?.(selectedEl === key ? null : key); } };
@@ -20,6 +20,9 @@ export function FrameShell({ frameRef, frame, theme, content, trustLevel = 'Draf
   const glowEnabled = !reduceMotion && !strictWhizMode && whizEffects?.glow !== false;
   const intenseAccentEnabled = !strictWhizMode && whizEffects?.intenseAccent === true;
   const accentIntensity = intenseAccentEnabled ? '70' : '50';
+  const headingFont = fontPairing?.heading || "'Space Grotesk', sans-serif";
+  const bodyFont = fontPairing?.body || "'Inter', sans-serif";
+  const monoFont = fontPairing?.mono || "'JetBrains Mono', monospace";
 
   const tagStyle = {
     background: ov.tag?.background || `${accentColor}08`,
@@ -30,7 +33,7 @@ export function FrameShell({ frameRef, frame, theme, content, trustLevel = 'Draf
 
   const SectionHead = ({ children }) => (
     <div style={{
-      fontFamily: "'JetBrains Mono', monospace", fontSize: 'var(--font-min-body)', fontWeight: 600,
+      fontFamily: monoFont, fontSize: 'var(--font-min-body)', fontWeight: 600,
       letterSpacing: '0.14em', textTransform: 'uppercase', color: accentColor,
       marginBottom: '12px', marginTop: '22px', display: 'flex', alignItems: 'center', gap: '10px',
     }}>
@@ -90,7 +93,7 @@ export function FrameShell({ frameRef, frame, theme, content, trustLevel = 'Draf
         width: `${aspectRatio?.w || 1080}px`,
         height: `${aspectRatio?.h || 1350}px`,
         background: bgGradient || ov.frameBg || theme.base,
-        fontFamily: fontPairing?.body || "'Inter', sans-serif",
+        fontFamily: bodyFont,
       }}
       onClick={() => { if (editMode) onSelectEl?.(null); }}
     >
@@ -182,7 +185,7 @@ export function FrameShell({ frameRef, frame, theme, content, trustLevel = 'Draf
       <div className="wf-title-slab" style={{ flexShrink: 0 }}>
         <div className={`wf-title ${ec('title')}`}
           style={{
-            fontFamily: "'Space Grotesk', sans-serif",
+            fontFamily: headingFont,
             fontSize: `${Math.max(14, resolvedOv.title?.fontSize || baseTitleSize)}px`,
             fontWeight: resolvedOv.title?.fontWeight || 700,
             color: resolvedOv.title?.color || 'var(--text-primary)',
@@ -196,7 +199,7 @@ export function FrameShell({ frameRef, frame, theme, content, trustLevel = 'Draf
         <div style={{ height: '1px', margin: '18px 0 14px', background: `linear-gradient(90deg, ${accentColor}50, ${ov.ruleBg || '#1E2A3A'}80, transparent)` }} />
         <div className={`wf-deck ${ec('deck')}`}
           style={{
-            fontFamily: "'Inter', sans-serif",
+            fontFamily: bodyFont,
             fontSize: `${Math.max(14, resolvedOv.deck?.fontSize || 18)}px`,
             fontWeight: resolvedOv.deck?.fontWeight || 400,
             color: resolvedOv.deck?.color || 'var(--text-secondary)',
@@ -2103,7 +2106,7 @@ function BullBearLayout(props) {
       <SectionHead>CASE ANALYSIS</SectionHead>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
         <div style={{ padding: '16px', borderRadius: '8px', background: `linear-gradient(180deg, ${accentColor}06 0%, transparent 100%)`, border: `1px solid ${accentColor}20` }}>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 'var(--font-min-body)', fontWeight: 600, letterSpacing: '0.08em', marginBottom: '12px', color: accentColor, display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{ fontFamily: monoFont, fontSize: 'var(--font-min-body)', fontWeight: 600, letterSpacing: '0.08em', marginBottom: '12px', color: accentColor, display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: accentColor, boxShadow: `0 0 8px ${accentColor}80` }} />BULL CASE
           </div>
           {(content.bullPoints || []).map((p, i) => (
@@ -2114,7 +2117,7 @@ function BullBearLayout(props) {
           ))}
         </div>
         <div style={{ padding: '16px', borderRadius: '8px', background: 'linear-gradient(180deg, rgba(255,90,90,0.05) 0%, transparent 100%)', border: '1px solid rgba(255,90,90,0.18)' }}>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 'var(--font-min-body)', fontWeight: 600, letterSpacing: '0.08em', marginBottom: '12px', color: 'var(--status-danger)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{ fontFamily: monoFont, fontSize: 'var(--font-min-body)', fontWeight: 600, letterSpacing: '0.08em', marginBottom: '12px', color: 'var(--status-danger)', display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#FF5A5A', boxShadow: '0 0 8px rgba(255,90,90,0.6)' }} />BEAR CASE
           </div>
           {(content.bearPoints || []).map((p, i) => (
@@ -2127,7 +2130,7 @@ function BullBearLayout(props) {
       </div>
       {content.verdict && (
         <div style={{ marginTop: '16px', padding: '14px 18px', borderRadius: '8px', background: `${accentColor}06`, border: `1px solid ${accentColor}08` }}>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 'var(--font-min-body)', fontWeight: 600, letterSpacing: '0.12em', color: accentColor, marginBottom: '8px' }}>WHIZ VERDICT</div>
+          <div style={{ fontFamily: monoFont, fontSize: 'var(--font-min-body)', fontWeight: 600, letterSpacing: '0.12em', color: accentColor, marginBottom: '8px' }}>WHIZ VERDICT</div>
           <div style={{ fontFamily: "'Inter', sans-serif", fontSize: '14px', color: 'var(--text-status)', lineHeight: 1.6 }}>{content.verdict}</div>
         </div>
       )}

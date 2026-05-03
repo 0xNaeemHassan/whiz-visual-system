@@ -131,19 +131,19 @@ export async function renderSceneToCanvas(sceneModel, contract) {
   const citationBoundText = sceneModel.citations?.boundText || {};
 
   ctx.fillStyle = sceneModel.palette.textPrimary;
-  ctx.font = `700 ${sceneModel.typography.titleSize}px "Space Grotesk", sans-serif`;
+  ctx.font = `700 ${sceneModel.typography.titleSize}px ${headingFont}`;
   wrapText(ctx, citationBoundText.title || sceneModel.content.title, 44, 120, width - 88, sceneModel.typography.titleSize * 1.05, 3);
 
   ctx.fillStyle = sceneModel.palette.textSecondary;
-  ctx.font = `400 ${sceneModel.typography.deckSize}px Inter, sans-serif`;
+  ctx.font = `400 ${sceneModel.typography.deckSize}px ${bodyFont}`;
   wrapText(ctx, citationBoundText.deck || sceneModel.content.deck, 44, 320, width - 88, sceneModel.typography.deckSize * 1.45, 3);
 
   ctx.fillStyle = sceneModel.palette.body;
-  ctx.font = `400 ${sceneModel.typography.bodySize}px Inter, sans-serif`;
+  ctx.font = `400 ${sceneModel.typography.bodySize}px ${bodyFont}`;
   wrapText(ctx, citationBoundText.body || sceneModel.content.body, 44, 420, width - 88, sceneModel.typography.bodySize * 1.7, 10);
 
   ctx.fillStyle = sceneModel.palette.accent;
-  ctx.font = '500 12px "JetBrains Mono", monospace';
+  ctx.font = `500 12px ${monoFont}`;
   ctx.fillText(sceneModel.content.handle, 44, height - 30);
   if (!disabledLayers.has('decorative.citationStrip')) {
     paintCitationStrip(ctx, sceneModel, contract, width, height);
