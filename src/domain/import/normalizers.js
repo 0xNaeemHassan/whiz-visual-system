@@ -1,7 +1,7 @@
-import { FRAME_CONTENT_SCHEMA, EDITOR_STATE_SCHEMA } from './mappings';
-import { normalizeContentTaxonomy } from '../../utils/contentNormalization';
-import { normalizeDateInput, normalizeTimelineEvents } from '../services/dateNormalizationService';
-import { normalizeProvenanceShape } from '../../utils/provenance';
+import { FRAME_CONTENT_SCHEMA, EDITOR_STATE_SCHEMA } from './mappings.js';
+import { normalizeContentTaxonomy } from '../../utils/contentNormalization.js';
+import { normalizeDateInput, normalizeTimelineEvents } from '../services/dateNormalizationService.js';
+import { normalizeProvenanceShape } from '../../utils/provenance.js';
 
 function toString(v, fallback = '') { return v == null ? fallback : String(v); }
 function toNumber(v, fallback = 0) { const n = Number(v); return Number.isFinite(n) ? n : fallback; }
@@ -57,10 +57,42 @@ export function normalizeFrameContent(raw, defaults = {}) {
   return normalizeContentTaxonomy(merged).content;
 }
 
+export function normalizeFrameContentSafe(raw, defaults = {}) {
+  try {
+    return {
+      ok: true,
+      value: normalizeFrameContent(raw, defaults),
+      errors: [],
+    };
+  } catch {
+    return {
+      ok: false,
+      value: { ...toObject(defaults, {}) },
+      errors: [{ code: 'NORMALIZE_FRAME_CONTENT_FAILED', message: 'Failed to normalize frame content.' }],
+    };
+  }
+}
+
 export function normalizeEditorState(raw, defaults = {}) {
   const normalized = normalizeBySchema(raw, EDITOR_STATE_SCHEMA);
   if (normalized.content) {
     normalized.content = normalizeFrameContent(normalized.content, defaults.content || {});
   }
   return { ...defaults, ...normalized };
+}
+
+export function normalizeEditorStateSafe(raw, defaults = {}) {
+  try {
+    return {
+      ok: true,
+      value: normalizeEditorState(raw, defaults),
+      errors: [],
+    };
+  } catch {
+    return {
+      ok: false,
+      value: { ...toObject(defaults, {}), content: toObject(defaults?.content, {}) },
+      errors: [{ code: 'NORMALIZE_EDITOR_STATE_FAILED', message: 'Failed to normalize editor state.' }],
+    };
+  }
 }
