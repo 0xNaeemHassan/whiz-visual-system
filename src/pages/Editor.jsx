@@ -17,6 +17,7 @@ import { CONTENT_TEMPLATES } from '../data/templates';
 import { createDefaultContent, createDefaultOverrides, createDefaultEditorState } from '../domain/editorDefaults.js';
 import { nearestTypeScale, getComplianceIssues, getBrandScore, getEditorValidationReport } from '../utils/editorCompliance';
 import { normalizeContentTaxonomy } from '../utils/contentNormalization';
+import { validateEditorState } from '../utils/editorStateValidation';
 import { buildMutationDispatcher } from './EditorMutations.js';
 import { normalizeDateInput, normalizeTimelineEvents } from '../domain/services/dateNormalizationService';
 import { SemanticChip } from '../components/primitives';
@@ -63,6 +64,65 @@ function ColorRow({label,value,defaultVal,onChange}){const col=value||defaultVal
 function SliderRow({label,value,min,max,step,unit,onChange}){return(<div className="editor-panel-row"><div className="editor-panel-row-head"><span className="prop-label-text">{label}</span><span className="size-val">{value}{unit}</span></div><input type="range" min={min} max={max} step={step||1} value={value} onChange={e=>onChange(Number(e.target.value))} aria-label={label}/></div>);}
 function WeightRow({label,value,weights,onChange}){return(<div className="editor-panel-row"><div className="prop-label-text editor-panel-label">{label}</div><div className="ww-grid">{weights.map(w=>(<button key={w} className={`ww-btn ${value===w?'on':''}`} onClick={()=>onChange(w)} style={{fontWeight:w}}>{w}</button>))}</div></div>);}
 
+
+
+const parseDelimitedRows = (rawText = '') => {
+  const lines = String(rawText).split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (!lines.length) return [];
+  return lines.map((line) => {
+    const delimiter = line.includes('\t') ? '\t' : ',';
+    return line.split(delimiter).map((cell) => cell.trim());
+  });
+};
+
+const normalizeImportedTableRows = ({ rows, headerCount }) => rows.map((cells) => {
+  const row = {};
+  for (let idx = 0; idx < headerCount; idx += 1) row[`col${idx + 1}`] = String(cells[idx] || '').trim();
+  return row;
+});
+
+const buildTableImportReport = ({ rawText, headerCount, currentContent }) => {
+  const parsedRows = parseDelimitedRows(rawText);
+  const normalizedRows = normalizeImportedTableRows({ rows: parsedRows, headerCount });
+  const validRows = [];
+  const invalidRows = [];
+
+  normalizedRows.forEach((row, rowIndex) => {
+    const errors = [];
+    const cells = Object.values(row);
+    if (parsedRows[rowIndex]?.length !== headerCount) {
+      errors.push({
+        column: 'row',
+        message: `Expected ${headerCount} columns, got ${parsedRows[rowIndex]?.length || 0}.`,
+        suggestion: `Add/remove delimiters so the row has exactly ${headerCount} columns.`,
+      });
+    }
+    cells.forEach((cell, cellIndex) => {
+      if (typeof cell !== 'string') {
+        errors.push({ column: `col${cellIndex + 1}`, message: 'Cell must be text.', suggestion: 'Convert the value to plain text.' });
+      }
+      if (!cell) {
+        errors.push({ column: `col${cellIndex + 1}`, message: 'Cell is empty.', suggestion: 'Fill this value or remove the row.' });
+      }
+    });
+
+    const validation = validateEditorState({
+      content: { ...currentContent, tableRows: [row] },
+      overrides: {},
+      uploadedImages: {},
+    });
+    if (!validation.valid) {
+      validation.errors.filter((entry) => entry.path.startsWith('content.tableRows')).forEach((entry) => {
+        errors.push({ column: 'row', message: entry.message, suggestion: 'Match the table row object shape used by existing rows.' });
+      });
+    }
+
+    if (errors.length) invalidRows.push({ rowIndex, row, errors });
+    else validRows.push(row);
+  });
+
+  return { parsedRows, validRows, invalidRows };
+};
 function DesignPanel({selectedEl,setSelectedEl,overrides,setOverrides,theme,bgGradient,setBgGradient,showToast,resetOverrides,setPatternOverlay,strictMode}){
   const currentOverrides = overrides;
   const setOverrideValue = (key, value) => setOverrides((previousOverrides) => ({ ...previousOverrides, [key]: value }));
@@ -194,6 +254,28 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
 
   useEffect(()=>{try{const r=localStorage.getItem('whiz-autosave');if(r){const d=JSON.parse(r);if(d.savedAt&&Date.now()-d.savedAt<86400000){autosaveDataRef.current=d;setShowAutosavePrompt(true);}}}catch(e){}},[]);
   const restoreAutosave=()=>{const d=autosaveDataRef.current;if(d){d.frameId&&setFrameId(d.frameId);d.theme&&(setTheme(d.theme),setActiveTheme(d.theme));d.content&&resetContent(d.content);d.overrides&&setOverrides(d.overrides);d.aspectRatio&&setAspectRatio(d.aspectRatio);d.bgGradient&&updateMedia(prev=>({...prev,bgGradient:d.bgGradient}));d.patternOverlay&&updateMedia(prev=>({...prev,patternOverlay:d.patternOverlay}));showToast('Restored');}setShowAutosavePrompt(false);};
+  const runTableImportValidation = () => {
+    const headerCount = (content.tableHeaders || []).length || 5;
+    const report = buildTableImportReport({ rawText: tableImportText, headerCount, currentContent: content });
+    setTableImportReport(report);
+    showToast(`Validated ${report.parsedRows.length} rows: ${report.validRows.length} valid / ${report.invalidRows.length} invalid.`, report.invalidRows.length ? 'warning' : 'success');
+  };
+
+  const applyValidImportedRows = () => {
+    if (!tableImportReport || !tableImportReport.validRows.length) {
+      showToast('No valid rows to apply.', 'warning');
+      return;
+    }
+    updateContent('tableRows', [...(content.tableRows || []), ...tableImportReport.validRows]);
+    showToast(`Applied ${tableImportReport.validRows.length} valid rows.`, 'success');
+  };
+
+  const discardInvalidImportedRows = () => {
+    if (!tableImportReport?.invalidRows?.length) return;
+    setTableImportReport((prev) => prev ? { ...prev, invalidRows: [] } : prev);
+    showToast('Discarded invalid rows from import batch.', 'info');
+  };
+
   const selectedFrame=FRAMES.find(f=>f.id===frameId)||FRAMES[0];
   const activeFramePitfalls = useMemo(() => getFramePitfalls(frameId), [frameId]);
   const preExportChecklist = useMemo(() => ({
