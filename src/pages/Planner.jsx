@@ -5,6 +5,8 @@ import { THEMES } from '../data/themes';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { useIntl } from '../i18n/IntlProvider';
 import { normalizePlannerIssue } from '../utils/schemaContracts';
+import { computeCadencePolicy, CADENCE_SLOT_STATE } from '../domain/services/cadencePolicyEngine';
+import { DEFAULT_CADENCE_CONFIG } from '../state/editorStore';
 
 const STATUSES = ['draft', 'planned', 'wip', 'done', 'published'];
 const CONFIDENCE = ['low', 'medium', 'high'];
@@ -51,6 +53,8 @@ function useDragDrop(onDrop) {
 
 export default function Planner({ showToast, activeTheme, navigateTo, isActive }) {
   const [issues, setIssues] = useLocalStorage('whiz-issues', []);
+  const [cadenceConfig, setCadenceConfig] = useLocalStorage('whiz-cadence-config', DEFAULT_CADENCE_CONFIG);
+  const [cadenceOverrideLog, setCadenceOverrideLog] = useLocalStorage('whiz-cadence-overrides', []);
   const [view, setView] = useState('table');
   // Fix #20: reset deleteConfirmId on view change
   const setViewSafe = (v) => { setView(v); setDeleteConfirmId(null); };
@@ -115,6 +119,7 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
   const existingIssueNums = new Set(issues.map(i => String(i.issueNum || '').padStart(3, '0')));
 
   const { registerHandlers } = useUIEventContext();
+  const { t } = useIntl();
 
   // Escape handler routed via UI event context
   useEffect(() => {
@@ -415,6 +420,14 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
   }, [issues, statusFilter, search, seriesFocusFilter]);
 
   const stats = STATUSES.reduce((acc, s) => { acc[s] = issues.filter(i => i.status === s).length; return acc; }, {});
+  const cadencePolicy = useMemo(() => computeCadencePolicy({ issues, cadenceConfig, now: new Date() }), [issues, cadenceConfig]);
+  const cadenceDebt = cadencePolicy.debt;
+  const registerCadenceOverride = () => {
+    const reason = window.prompt('Override reason for cadence debt?');
+    if (!reason) return;
+    setCadenceOverrideLog((prev) => [...prev, { reason: reason.trim(), timestamp: Date.now() }]);
+    showToast('Cadence override logged', 'warning');
+  };
 
   // F10: Open in Editor with frame/theme pre-loaded
   const openInEditor = (issue) => {
@@ -443,6 +456,26 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
           <div style={{ fontFamily: 'var(--font-d)', fontSize: 24, fontWeight: 700, color: activeTheme.accent, lineHeight: 1 }}>{issues.length}</div>
           <div style={{ fontFamily: 'var(--font-m)', fontSize: 9, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>TOTAL<br/>ISSUES</div>
         </div>
+      </div>
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+          <div style={{ fontSize: 12 }}>Weekly cadence score: <strong>{cadencePolicy.score}%</strong> · Debt: <strong>{cadenceDebt}</strong></div>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <label style={{ fontSize: 11 }}>TZ <input value={cadenceConfig.timezone} onChange={(e) => setCadenceConfig((prev) => ({ ...prev, timezone: e.target.value }))} style={{ width: 110, marginLeft: 4 }} /></label>
+            <label style={{ fontSize: 11 }}>Grace h <input type="number" value={cadenceConfig.graceWindowHours} onChange={(e) => setCadenceConfig((prev) => ({ ...prev, graceWindowHours: Number(e.target.value) || 0 }))} style={{ width: 56, marginLeft: 4 }} /></label>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+          {cadencePolicy.slots.map((slot) => {
+            const meta = slot.state === CADENCE_SLOT_STATE.ON_TRACK ? ['On Track', '#3CE6A6'] : slot.state === CADENCE_SLOT_STATE.AT_RISK ? ['At Risk', '#E5B23A'] : ['Missed', '#FF5A5A'];
+            return <span key={slot.slotKey} style={{ border: `1px solid ${meta[1]}`, borderRadius: 999, padding: '2px 8px', fontSize: 10 }}>{slot.slotKey} · {meta[0]}</span>;
+          })}
+        </div>
+        {cadencePolicy.reminders.length > 0 && (
+          <div style={{ marginTop: 10, fontSize: 11, color: '#E5B23A' }}>
+            {cadencePolicy.reminders.map((reminder) => <div key={`${reminder.slotKey}-${reminder.severity}`}>[{reminder.severity.toUpperCase()}] {reminder.message}</div>)}
+          </div>
+        )}
       </div>
 
 
@@ -516,6 +549,13 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
         <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer' }}>↑ CSV<input type="file" accept=".csv" onChange={importCSV} style={{ display: 'none' }} /></label>
         <button className="btn btn-primary" onClick={() => openIssueForm()}>+ New Issue</button>
       </div>
+      {cadencePolicy.hardWarning && (
+        <div className="card" style={{ marginBottom: 16, borderColor: '#FF5A5A' }}>
+          <div style={{ fontSize: 12, color: '#FF5A5A', marginBottom: 8 }}>Hard warning: cadence debt exists. Publishing is discouraged until debt is resolved or overridden.</div>
+          <button className="btn btn-danger btn-sm" onClick={registerCadenceOverride}>Override with reason</button>
+          <div style={{ marginTop: 6, fontSize: 10, color: 'var(--muted)' }}>Overrides logged: {cadenceOverrideLog.length}</div>
+        </div>
+      )}
 
       {/* Table View */}
       {view === 'table' && (
