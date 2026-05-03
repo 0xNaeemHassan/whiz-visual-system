@@ -5,7 +5,7 @@ import { TICKER_CONTRACT, normalizeTickerSpeed } from '../../domain/tickerContra
 import { SPINE_DESIGN_TOKENS } from '../../domain/spineDesignTokens';
 import { calculateReceiptSummary } from '../../domain/services/receiptCalcService';
 import { FrameFooter } from './FrameFooter';
-import SemanticChip from '../SemanticChip';
+import SemanticChip, { SemanticMarker, semanticLabel } from '../SemanticChip';
 import { resolveRiskAccent } from '../../domain/riskAccentPolicy';
 
 export function FrameShell({ frameRef, frame, theme, content, editMode, selectedEl, onSelectEl, styleOverrides, showGrid, aspectRatio, uploadedImages, bgGradient, patternOverlay, strictWhizMode = false, whizEffects = { glow: true, noise: true, intenseAccent: false } }) {
@@ -550,10 +550,17 @@ function TierListLayout(props) {
           );
         })}
       </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8, marginBottom: 8 }}>
+        {displayTiers.map((tier) => (
+          <SemanticChip key={tier} role="tier" tone={tier} style={{ fontSize: 9, padding: '2px 7px' }}>
+            {tier} ▦ Tier {tier}
+          </SemanticChip>
+        ))}
+      </div>
       <div style={{
         fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#5A6478',
         paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.05)', marginTop: 8,
-      }}>{resolvedContent.body?.split('\n')[0] || 'Criteria: TVL × team × product × momentum'}</div>
+      }}>{resolvedContent.body?.split('\n')[0] || 'Criteria: TVL × team × product × momentum. Legend uses text + shape markers.'}</div>
     </>
   );
 }
@@ -653,11 +660,12 @@ function TrustStackLayout(props) {
                 letterSpacing: '0.12em', color: accentColor, width: 80, flexShrink: 0,
               }}>{layer.name}</div>
               <div style={{ flex: 1, fontFamily: "'Inter', sans-serif", fontSize: 11, color: '#8B95A3', lineHeight: 1.4 }}>{layer.trust}</div>
-              <div style={{
-                fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
-                color: riskAcc, background: `${riskAcc}18`,
-                padding: '3px 8px', borderRadius: 10, flexShrink: 0,
-              }}>{layer.risk || 'MED'}</div>
+              <SemanticMarker
+                role="risk"
+                tone={String(layer.risk || 'med').toLowerCase()}
+                text={semanticLabel('risk', String(layer.risk || 'med').toLowerCase())}
+                style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: riskAcc, background: `${riskAcc}18`, padding: '3px 8px', borderRadius: 10, flexShrink: 0 }}
+              />
             </div>
           );
         })}
@@ -1114,14 +1122,19 @@ function ThreatModelLayout(props) {
     { key: 'go', label: 'GOVERNANCE', color: '#E5B23A', items: rows.filter((_, i) => i % 4 === 2) },
     { key: 'op', label: 'OPERATIONAL', color: '#9DB4D0', items: rows.filter((_, i) => i % 4 === 3) },
   ];
-  const SeverityDots = ({ level }) => {
+  const severityTone = (level) => { const n = parseInt(level) || 3; return n >= 5 ? 'critical' : n >= 4 ? 'high' : n >= 3 ? 'medium' : 'low'; };
+  const SeverityBadge = ({ level }) => {
     const n = parseInt(level) || 3;
+    const tone = severityTone(level);
     return (
-      <span>
-        {Array.from({ length: 5 }, (_, i) => (
-          <span key={i} style={{ color: i < n ? '#FF5A5A' : '#2A3040', fontSize: 8 }}>●</span>
-        ))}
-      </span>
+      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        <SemanticMarker role="severity" tone={tone} text={`${semanticLabel('severity', tone)} (${n}/5)`} style={{ fontSize: 9, padding: '2px 6px' }} />
+        <span aria-hidden="true">
+          {Array.from({ length: 5 }, (_, i) => (
+            <span key={i} style={{ color: i < n ? '#FF5A5A' : '#2A3040', fontSize: 8 }}>●</span>
+          ))}
+        </span>
+      </div>
     );
   };
   return (
@@ -1136,7 +1149,7 @@ function ThreatModelLayout(props) {
             {(q.items.length > 0 ? q.items : [{ col1: 'Reentrancy', col2: 'Flash loan attack', col3: '4' }, { col1: 'Oracle manipulation', col2: 'Price feed exploit', col3: '3' }]).slice(0, 3).map((item, i) => (
               <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                 <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 11, color: '#C8D0D8', lineHeight: 1.3 }}>{item.col1}</div>
-                <SeverityDots level={item.col3 || item.col4 || '3'} />
+                <SeverityBadge level={item.col3 || item.col4 || '3'} />
               </div>
             ))}
           </div>
