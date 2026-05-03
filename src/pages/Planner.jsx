@@ -210,15 +210,20 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
       const today = new Date(); today.setHours(0,0,0,0);
       if (d < today) showToast('Publish date is in the past', 'warning');
     }
+    const normalizedTags = normalizeProtocolTags(form.tags || []);
     if (editingIssue) {
-      setIssues(prev => prev.map(i => i.id === editingIssue ? { ...i, ...form, issueNum: normalizedIssueNum } : i));
+      setIssues(prev => prev.map(i => i.id === editingIssue ? { ...i, ...form, tags: normalizedTags.tags, issueNum: normalizedIssueNum } : i));
       showToast('Issue updated');
     } else {
-      setIssues(prev => [...prev, { ...form, issueNum: normalizedIssueNum, id: `i_${Date.now()}`, createdAt: Date.now() }]);
+      setIssues(prev => [...prev, { ...form, tags: normalizedTags.tags, issueNum: normalizedIssueNum, id: `i_${Date.now()}`, createdAt: Date.now() }]);
       showToast(`Issue #${normalizedIssueNum} created`);
     }
     setShowModal(false);
   };
+  useEffect(() => {
+    const suggestions = extractProtocolTagSuggestions({ title: form.topic, body: form.notes, tableRows: [] });
+    setTagSuggestions(suggestions.slice(0, 5));
+  }, [form.topic, form.notes]);
 
   // F3: Fixed delete — no auto-reset timer, explicit cancel
   const deleteIssue = (id) => {
@@ -799,6 +804,26 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
           {/* F7: Source links with URL hints */}
           <div className="form-group"><label className="form-label">Source Links (one per line)</label><textarea value={form.sourceLinks} onChange={e => setForm(f => ({...f, sourceLinks: e.target.value}))} rows={2} placeholder="https://defillama.com/protocol/...&#10;https://dune.com/..." />{form.sourceLinks && <div style={{ marginTop: 4 }}>{form.sourceLinks.split('\n').filter(Boolean).map((link, i) => {const isUrl = /^https?:\/\//.test(link.trim()); return (<div key={i} style={{ fontSize: 10, fontFamily: 'var(--font-m)', color: isUrl ? 'var(--muted)' : '#FF5A5A', display: 'flex', alignItems: 'center', gap: 4 }}><span>{isUrl ? '✓' : '⚠'}</span><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{link.trim()}</span></div>);})}</div>}</div>
           <div className="form-group"><label className="form-label">Notes</label><textarea value={form.notes} onChange={e => setForm(f => ({...f, notes: e.target.value}))} rows={2} placeholder="Research notes, key stats, angle ideas..." /></div>
+          <div className="form-group">
+            <label className="form-label">Protocol Tags</label>
+            <input value={(form.tags || []).join(', ')} onChange={e => setForm(f => ({ ...f, tags: e.target.value.split(',').map((t) => t.trim()).filter(Boolean) }))} placeholder="DEX, STABLECOIN" />
+            {tagSuggestions.length > 0 && (
+              <div style={{ marginTop: 8, display: 'grid', gap: 6 }}>
+                {tagSuggestions.map((suggestion) => (
+                  <div key={suggestion.tag} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 8px' }}>
+                    <div style={{ display: 'grid' }}>
+                      <strong style={{ fontSize: 11 }}>{suggestion.tag}</strong>
+                      <span style={{ fontSize: 10, color: 'var(--dim)' }}>{Math.round(suggestion.confidence * 100)}% confidence{suggestion.ambiguous ? ' · ambiguous' : ''}</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button className="btn btn-ghost btn-sm" onClick={() => setTagSuggestions((prev) => prev.filter((p) => p.tag !== suggestion.tag))}>Reject</button>
+                      <button className="btn btn-secondary btn-sm" onClick={() => setForm((prev) => ({ ...prev, tags: [...new Set([...(prev.tags || []), suggestion.tag])] }))}>Accept</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           <div className="modal-footer">
             {editingIssue && <button className="btn btn-danger" onClick={() => { deleteIssue(editingIssue); setShowModal(false); }}>Delete</button>}
             {editingIssue && <button className="btn btn-secondary" onClick={() => { duplicateIssue(issues.find(i=>i.id===editingIssue)); setShowModal(false); }}>Duplicate</button>}
