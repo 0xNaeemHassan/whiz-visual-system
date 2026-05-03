@@ -101,6 +101,10 @@ const DESTRUCTIVE_ACTION_POLICY = {
   exportWarnings: { actionId: 'export-with-warnings', title: 'Export with warnings?' },
 };
 const EXPORT_GUARD_BLOCK_UNSNAPSHOTTED_EDITS = true;
+const ZOOM_DIVIDER_STYLE = { width: 1, height: 16, background: 'var(--border)' };
+const ZOOM_FIT_STYLE = { fontSize: 10 };
+const EXPORT_ACTION_BUTTON_STYLE = { fontSize: 'var(--font-min-body)' };
+const FRAME_SCALE_STYLE = (zoom) => ({ transform: `scale(${zoom})` });
 
 const createDefaultProvenance = () => normalizeProvenanceShape({ confidence: 'medium', sourceType: 'unknown' });
 
@@ -764,6 +768,11 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const hasBlockingSpineContrastIssue = useMemo(() => complianceIssues.some((issue) => issue.startsWith('Rotated-spine contrast checks:')), [complianceIssues]);
   const previewOverflow = useMemo(() => applyOverflowPolicy({ family: selectedFrame?.tier > 2 ? 'extended' : 'core', aspectRatio, content, ov: overrides, policy: content?.truncationPolicy || {} }), [selectedFrame?.tier, aspectRatio, content, overrides]);
   const overflowMeta = { actions: previewOverflow?.actions, truncation: previewOverflow?.truncation };
+  const frameMetaStyle = useMemo(() => ({ position:'absolute',top:10,left:10,fontFamily:'var(--font-m)',fontSize:9,color:'var(--dim)',background:'rgba(0,0,0,0.6)',padding:'4px 8px',borderRadius:'var(--r)',backdropFilter:'blur(4px)' }), []);
+  const trustBadgeStyle = useMemo(() => ({ position:'absolute',top:34,left:10,fontFamily:'var(--font-m)',fontSize:9,color:trustTone.fg,background:trustTone.bg,padding:'4px 8px',borderRadius:'var(--r)',border:`1px solid ${trustTone.border}`,backdropFilter:'blur(4px)' }), [trustTone.bg, trustTone.border, trustTone.fg]);
+  const exportActionsStyle = useMemo(() => ({ position:'absolute',top:12,right:12,display:'flex',gap:6,background:'var(--glass)',padding:'6px 10px',borderRadius:'var(--r)',border:'1px solid var(--glass-border)',backdropFilter:'blur(12px)' }), []);
+  const readinessStyle = useMemo(() => ({ position:'absolute',top:52,right:12,fontFamily:'var(--font-m)',fontSize:10,color:readinessSummary.ready?'#8EF0B0':'#FFB3B3',background:readinessSummary.ready?'rgba(11,36,20,.9)':'rgba(42,10,10,.9)',padding:'6px 8px',borderRadius:6,border:`1px solid ${readinessSummary.ready?'#2BAE6666':'#FF5A5A66'}`,maxWidth:320 }), [readinessSummary.ready]);
+  const editHintStyle = useMemo(() => ({ position:'absolute',bottom:52,left:'50%',transform:'translateX(-50%)',fontFamily:'var(--font-m)',fontSize:9,color:'var(--theme-accent)',background:'rgba(0,0,0,0.75)',padding:'4px 10px',borderRadius:20,whiteSpace:'nowrap' }), []);
   const fallbackTruncation = Boolean(overflowMeta?.truncation?.hasFallback);
   const truncationSuggestions = overflowMeta?.truncation?.suggestions || [];
   const editorValidation = useMemo(() => getEditorValidationReport({ overrides, content }), [overrides, content]);
