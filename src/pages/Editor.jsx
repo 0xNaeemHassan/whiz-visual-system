@@ -21,6 +21,7 @@ import { buildMutationDispatcher } from './EditorMutations.js';
 import { normalizeDateInput, normalizeTimelineEvents } from '../domain/services/dateNormalizationService';
 import { SemanticChip } from '../components/primitives';
 import { getFramePitfalls } from '../data/framePitfalls';
+import ReadinessChecklist from '../components/ReadinessChecklist';
 
 /** @typedef {import('../types/canonical').FrameContent} FrameContent */
 /** @typedef {import('../types/canonical').StyleOverrides} StyleOverrides */
@@ -356,6 +357,79 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     }
     showToast(`Template: ${t.name}`);
   };
+  const checklistGroups = useMemo(() => {
+    const stateValidation = validateEditorState({ frameId, theme, content, overrides, uploadedImages }, { strictMode: strictWhizMode });
+    const strictViolations = strictWhizMode ? stateValidation.errors.filter((error) => error.code === 'STRICT_STYLE_OVERRIDE_BLOCKED') : [];
+    return [
+      {
+        id: 'schema',
+        label: 'Schema Validation',
+        checks: [
+          {
+            id: 'state-valid',
+            label: 'Editor state contract',
+            passed: stateValidation.valid,
+            blocking: true,
+            details: stateValidation.errors[0]?.message || '',
+            action: 'content',
+            actionLabel: 'Open Content',
+          },
+        ],
+      },
+      {
+        id: 'compliance',
+        label: 'Style / Compliance',
+        checks: [
+          {
+            id: 'compliance-rules',
+            label: 'Brand and style compliance',
+            passed: complianceIssues.length === 0,
+            blocking: strictWhizMode,
+            details: complianceIssues[0] || '',
+            action: 'design',
+            actionLabel: 'Open Design',
+          },
+        ],
+      },
+      {
+        id: 'strict-mode',
+        label: 'Strict Mode Constraints',
+        checks: [
+          {
+            id: 'strict-overrides',
+            label: strictWhizMode ? 'Strict allowlist overrides' : 'Strict mode currently disabled',
+            passed: !strictWhizMode || strictViolations.length === 0,
+            blocking: strictWhizMode,
+            details: strictViolations[0]?.message || (strictWhizMode ? '' : 'Enable strict mode to enforce allowlisted style paths.'),
+            action: 'design',
+            actionLabel: strictWhizMode ? 'Fix Override' : 'Open Design',
+          },
+        ],
+      },
+    ];
+  }, [frameId, theme, content, overrides, uploadedImages, strictWhizMode, complianceIssues]);
+
+  const readinessSummary = useMemo(() => {
+    const checks = checklistGroups.flatMap((group) => group.checks);
+    const failed = checks.filter((check) => !check.passed);
+    return {
+      total: checks.length,
+      failed: failed.length,
+      blocking: failed.filter((check) => check.blocking).length,
+      ready: failed.length === 0,
+    };
+  }, [checklistGroups]);
+
+  const jumpToChecklistFix = useCallback((action) => {
+    if (action === 'design') {
+      setRightTab('design');
+      setMobileTab('edit');
+      return;
+    }
+    setRightTab('content');
+    setMobileTab('edit');
+  }, []);
+
   const filteredFrames=useMemo(()=>{if(!frameSearch)return FRAMES;const q=frameSearch.toLowerCase();return FRAMES.filter(f=>f.name.toLowerCase().includes(q)||f.tags.some(t=>t.includes(q))||f.layout.includes(q));},[frameSearch]);
   // NOTE: Scroll frame list to top when search changes
   useEffect(()=>{if(frameListRef.current)frameListRef.current.scrollTop=0;},[frameSearch,filteredFrames]);
@@ -377,7 +451,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
         <div className="zoom-bar"><button className="zoom-btn" onClick={()=>setZoom(z=>Math.max(0.1,+(z-0.05).toFixed(2)))}>−</button><span className="zoom-pct">{Math.round(zoom*100)}%</span><button className="zoom-btn" onClick={()=>setZoom(z=>Math.min(1,+(z+0.05).toFixed(2)))}>+</button><button className="zoom-btn" onClick={updateZoom} style={{fontSize:10}}>⊡</button><div style={{width:1,height:16,background:'var(--border)'}}/><button className={`zoom-btn ${showGrid?'active':''}`} onClick={()=>setShowGrid(g=>!g)} style={{color:showGrid?'var(--theme-accent)':undefined}}>▦</button><button className={`zoom-btn ${editMode?'active':''}`} onClick={()=>{setEditMode(m=>!m);editMode&&setSelectedEl(null);}} style={{color:editMode?'var(--theme-accent)':undefined}}>✎</button><div style={{width:1,height:16,background:'var(--border)'}}/><button className="zoom-btn" onClick={()=>{const did=undo();track(TELEMETRY_EVENTS.UNDO,{scope:did?'content':'overrides'});}} disabled={!canUndo} style={{opacity:canUndo?1:0.3}}>↶</button><button className="zoom-btn" onClick={()=>{const did=redo();track(TELEMETRY_EVENTS.REDO,{scope:did?'content':'overrides'});}} disabled={!canRedo} style={{opacity:canRedo?1:0.3}}>↷</button></div>
         <div style={{position:'absolute',top:10,left:10,fontFamily:'var(--font-m)',fontSize:9,color:'var(--dim)',background:'rgba(0,0,0,0.6)',padding:'4px 8px',borderRadius:'var(--r)',backdropFilter:'blur(4px)'}}>{String(frameId).padStart(2,'0')} — {selectedFrame.name} · {aspectRatio.w}×{aspectRatio.h}</div>
         <div style={{position:'absolute',top:12,right:12,display:'flex',gap:6,background:'var(--glass)',padding:'6px 10px',borderRadius:'var(--r)',border:'1px solid var(--glass-border)',backdropFilter:'blur(12px)'}}><button className="btn btn-ghost btn-sm" onClick={exportJSON} style={{fontSize:10}}>JSON</button><button className="btn btn-ghost btn-sm" onClick={exportManifest} style={{fontSize:10}}>Manifest</button><button className="btn btn-secondary btn-sm" onClick={exportHTML} style={{fontSize:10}}>HTML</button><button className="btn btn-secondary btn-sm" onClick={applyStrictPolish} style={{fontSize:10}}>Polish</button><button className="btn btn-primary btn-sm" data-format="png" onClick={exportPNG} disabled={exporting} style={{fontSize:10}}>{exporting?'⟳':'↓'} PNG</button></div>
-        {complianceIssues.length>0&&<div style={{position:'absolute',top:52,right:12,fontFamily:'var(--font-m)',fontSize:10,color:'#FFB3B3',background:'rgba(42,10,10,.9)',padding:'6px 8px',borderRadius:6,border:'1px solid #FF5A5A66',maxWidth:300}}>Compliance: {complianceIssues[0]}{complianceIssues.length>1?` +${complianceIssues.length-1} more`:''}</div>}
+        <div style={{position:'absolute',top:52,right:12,fontFamily:'var(--font-m)',fontSize:10,color:readinessSummary.ready?'#8EF0B0':'#FFB3B3',background:readinessSummary.ready?'rgba(11,36,20,.9)':'rgba(42,10,10,.9)',padding:'6px 8px',borderRadius:6,border:`1px solid ${readinessSummary.ready?'#2BAE6666':'#FF5A5A66'}`,maxWidth:320}}>Readiness: {readinessSummary.ready?'Ready to publish':`${readinessSummary.failed}/${readinessSummary.total} checks failing`} {readinessSummary.blocking>0?`· ${readinessSummary.blocking} blocking`:''}</div>
         {editMode&&<div style={{position:'absolute',bottom:52,left:'50%',transform:'translateX(-50%)',fontFamily:'var(--font-m)',fontSize:9,color:'var(--theme-accent)',background:'rgba(0,0,0,0.75)',padding:'4px 10px',borderRadius:20,whiteSpace:'nowrap'}}>{selectedEl?`Selected: ${selectedEl}`:'Click any element'}</div>}
       </div>
       {/* RIGHT */}
@@ -535,7 +609,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
           </div>
           <div className="editor-section"><div className="editor-section-title">Big Number</div><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}><div className="form-group" style={{marginBottom:0}}><label className="form-label">Label</label><input value={content.bigLabel||''} onChange={e=>updateContent('bigLabel',e.target.value)}/></div><div className="form-group" style={{marginBottom:0}}><label className="form-label">Value</label><input value={content.bigNumber||''} onChange={e=>updateContent('bigNumber',e.target.value)}/></div></div></div>
           <div className="editor-section"><div className="editor-section-title">Images</div><ImageUpload label="Logo" value={uploadedImages.logo} onChange={v=>updateMedia(p=>({...p,uploadedImages:{...p.uploadedImages,logo:v}}))} maxSize={2} showToast={showToast}/><ImageUpload label="Hero" value={uploadedImages.hero} onChange={v=>updateMedia(p=>({...p,uploadedImages:{...p.uploadedImages,hero:v}}))} maxSize={4} showToast={showToast}/><ImageUpload label="Badge" value={uploadedImages.badge} onChange={v=>updateMedia(p=>({...p,uploadedImages:{...p.uploadedImages,badge:v}}))} maxSize={1} showToast={showToast}/></div>
-          <div className="editor-section"><div className="editor-section-title">Frame Warnings</div>{activeFramePitfalls.length===0?<div style={{fontSize:11,color:'var(--dim)'}}>No known pitfalls for this frame.</div>:<div style={{display:'flex',flexDirection:'column',gap:6}}>{activeFramePitfalls.map(p=>(<div key={p.id} style={{fontSize:11,padding:'7px 8px',borderRadius:6,border:`1px solid ${p.severity==='high'?'rgba(235,87,87,0.45)':'rgba(229,178,58,0.45)'}`,background:p.severity==='high'?'rgba(235,87,87,0.08)':'rgba(229,178,58,0.1)'}}><div style={{fontFamily:'var(--font-m)',fontSize:9,letterSpacing:'0.08em',textTransform:'uppercase',marginBottom:4}}>{p.severity==='high'?'Blocking':'Non-blocking'}</div><div>{p.warning}</div><div style={{opacity:0.75,marginTop:4}}>Hint: {p.triggerHint}</div></div>))}</div>}</div><div className="editor-section"><div className="editor-section-title">Export</div><div style={{fontFamily:'var(--font-m)',fontSize:9,color:'var(--dim)',marginBottom:8,lineHeight:1.7}}>⌘S Save · ⌘Z Undo · ⌘⇧Z Redo</div><div style={{display:'flex',flexDirection:'column',gap:8}}><div style={{display:'flex',gap:6}}><button className="btn btn-primary btn-sm" style={{flex:1}} onClick={exportPNG} disabled={exporting}>{exporting?'…':`PNG`}</button><button className="btn btn-secondary btn-sm editor-action-btn" onClick={exportWebP} disabled={exporting}>WebP</button></div><div style={{display:'flex',gap:6}}><button className="btn btn-ghost btn-sm" style={{flex:1}} onClick={exportHTML}>HTML</button><button className="btn btn-ghost btn-sm" style={{flex:1}} onClick={exportJSON}>JSON</button></div><label className="import-label">↑ Import <input type="file" accept=".json" onChange={importJSON}/></label><button className="btn btn-secondary w-full" onClick={()=>setShowSaveModal(true)}>Save</button><button className="btn btn-ghost w-full" onClick={()=>{const n=`${content.title||'Frame'} (copy)`;setSaves(p=>[...p,{id:`s_${Date.now()}`,title:n,...buildSave()}]);showToast('Duplicated');}}>Duplicate</button>{saves.length>0&&<button className="btn btn-ghost w-full" onClick={()=>{setSaveSearch('');setShowLoadModal(true);}}>Load ({saves.length})</button>}</div></div>
+          <div className="editor-section"><div className="editor-section-title">Frame Warnings</div>{activeFramePitfalls.length===0?<div style={{fontSize:11,color:'var(--dim)'}}>No known pitfalls for this frame.</div>:<div style={{display:'flex',flexDirection:'column',gap:6}}>{activeFramePitfalls.map(p=>(<div key={p.id} style={{fontSize:11,padding:'7px 8px',borderRadius:6,border:`1px solid ${p.severity==='high'?'rgba(235,87,87,0.45)':'rgba(229,178,58,0.45)'}`,background:p.severity==='high'?'rgba(235,87,87,0.08)':'rgba(229,178,58,0.1)'}}><div style={{fontFamily:'var(--font-m)',fontSize:9,letterSpacing:'0.08em',textTransform:'uppercase',marginBottom:4}}>{p.severity==='high'?'Blocking':'Non-blocking'}</div><div>{p.warning}</div><div style={{opacity:0.75,marginTop:4}}>Hint: {p.triggerHint}</div></div>))}</div>}</div><ReadinessChecklist groups={checklistGroups} onJumpToFix={jumpToChecklistFix} /><div className="editor-section"><div className="editor-section-title">Export</div><div style={{fontFamily:'var(--font-m)',fontSize:9,color:'var(--dim)',marginBottom:8,lineHeight:1.7}}>⌘S Save · ⌘Z Undo · ⌘⇧Z Redo</div><div style={{display:'flex',flexDirection:'column',gap:8}}><div style={{display:'flex',gap:6}}><button className="btn btn-primary btn-sm" style={{flex:1}} onClick={exportPNG} disabled={exporting}>{exporting?'…':`PNG`}</button><button className="btn btn-secondary btn-sm editor-action-btn" onClick={exportWebP} disabled={exporting}>WebP</button></div><div style={{display:'flex',gap:6}}><button className="btn btn-ghost btn-sm" style={{flex:1}} onClick={exportHTML}>HTML</button><button className="btn btn-ghost btn-sm" style={{flex:1}} onClick={exportJSON}>JSON</button></div><label className="import-label">↑ Import <input type="file" accept=".json" onChange={importJSON}/></label><button className="btn btn-secondary w-full" onClick={()=>setShowSaveModal(true)}>Save</button><button className="btn btn-ghost w-full" onClick={()=>{const n=`${content.title||'Frame'} (copy)`;setSaves(p=>[...p,{id:`s_${Date.now()}`,title:n,...buildSave()}]);showToast('Duplicated');}}>Duplicate</button>{saves.length>0&&<button className="btn btn-ghost w-full" onClick={()=>{setSaveSearch('');setShowLoadModal(true);}}>Load ({saves.length})</button>}</div></div>
         </>)}
       </div>
       {/* MODALS */}
