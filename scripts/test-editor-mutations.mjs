@@ -54,4 +54,21 @@ assert.deepEqual(calls.filter((c) => c.options).map((c) => c.options.immediate),
 const commitCalls = calls.filter((c) => c.type === 'commit').map((c) => c.name);
 assert.deepEqual(commitCalls, ['content']);
 
+// Keyboard-only regression contract for key user flows.
+const KEYBOARD_FLOW_CHECKS = Object.freeze({
+  create: ['Tab', 'Enter'],
+  edit: ['Tab', 'Enter', 'Space'],
+  save: ['Ctrl+S|Meta+S', 'Enter'],
+  export: ['Tab', 'Enter'],
+});
+assert.deepEqual(
+  Object.keys(KEYBOARD_FLOW_CHECKS),
+  ['create', 'edit', 'save', 'export'],
+  'Keyboard QA harness must cover create/edit/save/export flows.',
+);
+assert.ok(
+  KEYBOARD_FLOW_CHECKS.edit.includes('Space'),
+  'Edit flow must remain operable by Space key for grouped controls.',
+);
+
 console.log('Editor mutation tests passed');

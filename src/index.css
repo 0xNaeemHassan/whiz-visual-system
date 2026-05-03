@@ -17,6 +17,16 @@
   --border-3:    #353F55;
   --text:        #F0F2F5;
   --text-2:      #D8DCE5;
+
+  --text-primary: #F4F6FA;
+  --text-secondary: #D3DAE6;
+  --text-muted: #A4AFBF;
+  --text-status: #B9C6D9;
+  --bg-surface: #0F1117;
+  --bg-elevated: #161922;
+  --bg-muted: #1C2030;
+  --font-min-body: 12px;
+  --font-min-panel: 14px;
   --r:           8px;
   --r-lg:        14px;
   --r-xl:        20px;
@@ -31,6 +41,10 @@
   --bottom-nav-h: 60px;
   --dim-accessible: #6B7588;
   --font-fallback: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  --focus-ring-color: #FFFFFF;
+  --focus-ring-accent: color-mix(in srgb, var(--theme-accent) 70%, white 30%);
+  --focus-ring-shadow: color-mix(in srgb, var(--theme-accent) 32%, transparent);
+  --focus-ring-offset: 3px;
 }
 
 /* ============================================================
@@ -50,7 +64,7 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { font-size: 14px; -webkit-text-size-adjust: 100%; overflow-x: clip; }
 body {
-  background: var(--bg); color: var(--text);
+  background: var(--bg); color: var(--text-primary);
   font-family: var(--font-b); line-height: 1.55; overflow-x: hidden;
   -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
 }
@@ -59,7 +73,7 @@ button { cursor: pointer; border: none; background: none; color: inherit; font-f
 input, textarea, select {
   background: var(--bg-2); border: 1px solid var(--border);
   color: var(--text); font-family: var(--font-b);
-  border-radius: var(--r); padding: 9px 13px; font-size: 13px; outline: none; width: 100%;
+  border-radius: var(--r); padding: 9px 13px; font-size: 13px; width: 100%; width: 100%;
   transition: border-color var(--t), box-shadow var(--t);
   -webkit-appearance: none; appearance: none;
 }
@@ -78,7 +92,16 @@ ul { list-style: none; }
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 3px; }
-:focus-visible { outline: 2px solid var(--theme-accent); outline-offset: 2px; }
+:where(button, [role='button'], a, input, textarea, select, summary, [tabindex]:not([tabindex='-1'])):focus-visible {
+  outline: 2px solid var(--focus-ring-accent);
+  outline-offset: var(--focus-ring-offset);
+  box-shadow: 0 0 0 4px var(--focus-ring-shadow);
+}
+
+:where(.editor-panel, .editor-section, .sidebar, .editor-action-overflow-menu, .modal, .confirm-box):focus-within {
+  box-shadow: 0 0 0 2px var(--focus-ring-color), 0 0 0 5px var(--focus-ring-shadow);
+}
+
 
 /* ============================================================ LAYOUT ============================================================ */
 #app { display: flex; min-height: 100vh; min-height: 100dvh; max-width: 100vw; overflow-x: hidden; }
@@ -2445,3 +2468,8 @@ input[type="range"]::-moz-range-thumb {
   .mobile-action-cluster{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0 12px}
   .mobile-qa-checklist label{display:flex;gap:8px;align-items:center;padding:8px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;font-size:12px}
 }
+
+
+/* Accessibility floors */
+p, li, small, label, input, textarea, select, .card-desc, .form-hint { font-size: max(var(--font-min-body), 0.857rem); }
+.sidebar, .editor-sidebar, .editor-section, .panel, .dense-sidebar { font-size: max(var(--font-min-panel), 1rem); }
