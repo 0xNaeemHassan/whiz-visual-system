@@ -25,6 +25,7 @@ import { getFramePitfalls } from '../data/framePitfalls';
 import { createEditorCommandRegistry, filterCommands, matchesShortcut } from '../domain/editorCommands';
 import { buildSaveDiff } from '../utils/saveDiff';
 import { generateExportSummary, buildSummaryText } from '../domain/export/summaryGenerator';
+import { useDialogFocus } from '../utils/focusTrap';
 
 /** @typedef {import('../types/canonical').FrameContent} FrameContent */
 /** @typedef {import('../types/canonical').StyleOverrides} StyleOverrides */
@@ -274,6 +275,8 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   useEffect(()=>{ _persistOverrides(overrides); },[overrides]);
   const[zoom,setZoom]=useState(0.35);const[saveName,setSaveName]=useState('');
   const[showSaveModal,setShowSaveModal]=useState(false);const[showLoadModal,setShowLoadModal]=useState(false);const[selectedSaveForLoad,setSelectedSaveForLoad]=useState(null);
+  const saveModalRef = useRef(null);
+  const saveNameInputRef = useRef(null);
   const [pendingLoadSave, setPendingLoadSave] = useState(null);
   const [pendingSaveDiff, setPendingSaveDiff] = useState(null);
   const[frameSearch,setFrameSearch]=useState('');const frameListRef=useRef(null);const[exporting,setExporting]=useState(false);const[preflightResult,setPreflightResult]=useState(null);const[preflightWarningAck,setPreflightWarningAck]=useState(false);const[activityLog,setActivityLog]=useState([]);
@@ -311,6 +314,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const [showTableImportModal, setShowTableImportModal] = useState(false);
   const [tableImportText, setTableImportText] = useState('');
   const [tableImportReport, setTableImportReport] = useState(null);
+  useDialogFocus({ isOpen: showSaveModal, containerRef: saveModalRef, initialFocusRef: saveNameInputRef });
   const focusableSelector = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
   const bindFocusTrap = useCallback((isOpen, selector) => {
     if (!isOpen) return () => {};
