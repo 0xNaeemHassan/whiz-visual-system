@@ -12,6 +12,8 @@ export const TELEMETRY_EVENTS = {
   VALIDATION_ERROR: 'editor.validation.error',
   DUPLICATE_AUTOPILOT_METRIC: 'editor.duplicate.autopilot.metric',
   DUPLICATE_RESOLUTION: 'editor.duplicate.resolution',
+  PLANNER_HEURISTIC_SCORED: 'planner.heuristic.scored',
+  PLANNER_HEURISTIC_FEEDBACK: 'planner.heuristic.feedback',
 };
 
 export const EVENT_PAYLOAD_SHAPES = {
@@ -69,6 +71,19 @@ export const EVENT_PAYLOAD_SHAPES = {
     fuzzyPairs: 'number',
     unresolvedHighConfidence: 'number',
     action: 'merge|keep_both?',
+  },
+  [TELEMETRY_EVENTS.PLANNER_HEURISTIC_SCORED]: {
+    issueId: 'string',
+    score: 'number',
+    scorePercent: 'number',
+    reasonCodes: 'string[]',
+    advisoryOnly: 'boolean',
+  },
+  [TELEMETRY_EVENTS.PLANNER_HEURISTIC_FEEDBACK]: {
+    issueId: 'string',
+    score: 'number',
+    outcome: 'object',
+    feedbackType: 'engagement_outcome',
   },
 };
 
