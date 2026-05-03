@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 
 export default function ConfirmDialog({ open, title, message, details = [], confirmLabel = 'Confirm', cancelLabel = 'Cancel', danger = false, allowSkip = false, skipLabel = "Don't ask again this session", skipChecked = false, onSkipChange, onConfirm, onCancel }) {
   const confirmBtnRef = useRef(null);
+  const cancelBtnRef = useRef(null);
 
   useEffect(() => {
     if (!open) return;
@@ -22,7 +23,7 @@ export default function ConfirmDialog({ open, title, message, details = [], conf
         </div>
         {allowSkip && <label style={{ display: 'flex', gap: 8, marginTop: 10, fontSize: 12 }}><input type="checkbox" checked={skipChecked} onChange={(e)=>onSkipChange?.(e.target.checked)} />{skipLabel}</label>}
         <div className="modal-footer">
-          <button className="btn btn-ghost btn-sm" onClick={onCancel}>{cancelLabel}</button>
+          <button ref={cancelBtnRef} className="btn btn-ghost btn-sm" onClick={onCancel}>{cancelLabel}</button>
           <button ref={confirmBtnRef} className={`btn ${danger ? 'btn-danger' : 'btn-primary'} btn-sm`} onClick={onConfirm}>{confirmLabel}</button>
         </div>
       </div>
