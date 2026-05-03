@@ -2,6 +2,28 @@ import type { ExportContract } from '../../types/canonical';
 import { resolveChannelProfile, type ExportChannel } from './channelProfiles.ts';
 
 export const EXPORT_CONTRACT_VERSION = '1.0.0';
+export const BACKUP_SCHEMA_VERSION = '1.0.0';
+export const BACKUP_SCHEMA_MIN_SUPPORTED = '1.0.0';
+export const BACKUP_SCHEMA_MAX_SUPPORTED = '1.1.99';
+
+export const BACKUP_FEATURE_FLAGS = Object.freeze({
+  integrityV1: true,
+  provenanceV1: true,
+  phaseChecklistV1: true,
+} as const);
+
+export const BACKUP_MIGRATION_PATHS = Object.freeze({
+  '1.0.0->1.0.0': true,
+  '1.1.0->1.0.0': true,
+} as const);
+
+export type BackupEnvelope = {
+  schemaVersion: string;
+  appVersion: string;
+  featureFlags: Record<string, boolean>;
+  payload: Record<string, unknown>;
+  integrity?: { algorithm?: string; checksum?: string; signature?: string };
+};
 
 export const EXPORT_PRESETS = Object.freeze({
   draft: { id: 'draft', label: 'Draft', quality: 0.82, dimensionScale: 0.75, citationMode: 'off', effectsPolicy: 'balanced' },
