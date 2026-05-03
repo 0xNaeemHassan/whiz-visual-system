@@ -226,15 +226,101 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
 
   const dnd = useDragDrop(handleKanbanDrop);
 
+  const csvHeaders = ['Issue #', 'Topic', 'Frame #', 'Theme', 'Status', 'Publish Date', 'Notes', 'Caption', 'Source Links', 'Priority', 'Confidence', 'Series', 'Assistant Brief', 'Target Metric', 'Metric Confidence', 'Metric Source', 'Metric Value', 'Metric Unit', 'Metric Provenance'];
+  const csvEscape = (value) => `"${String(value ?? '').replace(/"/g,'""')}"`;
+  const parseCSV = (str) => {
+    const rows = []; let cur = [], field = '', inQ = false;
+    for (let i = 0; i < str.length; i++) {
+      const ch = str[i], nx = str[i + 1];
+      if (inQ) {
+        if (ch === '"' && nx === '"') { field += '"'; i += 1; }
+        else if (ch === '"') inQ = false;
+        else field += ch;
+      } else if (ch === '"') inQ = true;
+      else if (ch === ',') { cur.push(field); field = ''; }
+      else if (ch === '\n' || (ch === '\r' && nx === '\n')) {
+        cur.push(field); field = '';
+        if (cur.some(c => c.trim())) rows.push(cur);
+        cur = []; if (ch === '\r') i += 1;
+      } else field += ch;
+    }
+    if (field || cur.length) { cur.push(field); if (cur.some(c => c.trim())) rows.push(cur); }
+    return rows;
+  };
+
+  const mapCSVColsToIssue = (cols, idx) => {
+    let metricProvenance = [];
+    const rawMetricProvenance = cols[18]?.trim();
+    if (rawMetricProvenance) {
+      try {
+        const parsed = JSON.parse(rawMetricProvenance);
+        metricProvenance = Array.isArray(parsed) ? parsed : [];
+      } catch {
+        metricProvenance = [];
+      }
+    }
+    return normalizeIssue({
+      id: `i_${Date.now()}_${idx}`,
+      issueNum: cols[0]?.trim() || '',
+      topic: cols[1]?.trim() || '',
+      frameId: cols[2]?.trim() || '',
+      themeId: cols[3]?.trim() || '',
+      status: STATUSES.includes(cols[4]?.trim()) ? cols[4].trim() : 'draft',
+      publishDate: cols[5]?.trim() || '',
+      notes: cols[6]?.trim() || '',
+      caption: cols[7]?.trim() || '',
+      sourceLinks: cols[8]?.trim() || '',
+      priority: cols[9]?.trim() || 'medium',
+      confidence: cols[10]?.trim() || 'medium',
+      series: cols[11]?.trim() || '',
+      assistantBrief: cols[12]?.trim() || '',
+      targetMetric: cols[13]?.trim() || '',
+      metricConfidence: cols[14]?.trim() || '',
+      metricSource: cols[15]?.trim() || '',
+      metricValue: cols[16]?.trim() || '',
+      metricUnit: cols[17]?.trim() || '',
+      metricProvenance,
+      createdAt: Date.now(),
+    });
+  };
+
+  const runCSVRoundtripSmokeAssertions = () => {
+    const seed = {
+      issueNum: '001', topic: 'Smoke', frameId: '1', themeId: 'a', status: 'draft', publishDate: '2026-05-03',
+      notes: 'n', caption: 'c', sourceLinks: 's', priority: 'medium', confidence: 'high', series: 'ser',
+      assistantBrief: 'brief', targetMetric: 'CTR', metricConfidence: 'high', metricSource: 'Report', metricValue: '42', metricUnit: '%',
+      metricProvenance: [{ source: 'dataset' }],
+    };
+    const csvLine = [seed.issueNum, seed.topic, seed.frameId, seed.themeId, seed.status, seed.publishDate, seed.notes, seed.caption, seed.sourceLinks, seed.priority, seed.confidence, seed.series, seed.assistantBrief, seed.targetMetric, seed.metricConfidence, seed.metricSource, seed.metricValue, seed.metricUnit, JSON.stringify(seed.metricProvenance)].map(csvEscape).join(',');
+    const parsed = parseCSV([csvHeaders.join(','), csvLine].join('\n'))[1] || [];
+    const mapped = mapCSVColsToIssue(parsed, 0);
+    console.assert(mapped.assistantBrief === seed.assistantBrief, 'CSV roundtrip assistantBrief failed');
+    console.assert(mapped.targetMetric === seed.targetMetric, 'CSV roundtrip targetMetric failed');
+    console.assert(mapped.metricConfidence === seed.metricConfidence, 'CSV roundtrip metricConfidence failed');
+    console.assert(mapped.metricSource === seed.metricSource, 'CSV roundtrip metricSource failed');
+    console.assert(mapped.metricValue === seed.metricValue, 'CSV roundtrip metricValue failed');
+    console.assert(mapped.metricUnit === seed.metricUnit, 'CSV roundtrip metricUnit failed');
+    console.assert(Array.isArray(mapped.metricProvenance) && mapped.metricProvenance.length === 1, 'CSV roundtrip metricProvenance failed');
+
+    const invalidProvenanceCols = [...parsed];
+    invalidProvenanceCols[18] = '{bad-json';
+    const invalidMapped = mapCSVColsToIssue(invalidProvenanceCols, 1);
+    console.assert(Array.isArray(invalidMapped.metricProvenance) && invalidMapped.metricProvenance.length === 0, 'CSV provenance fallback failed');
+  };
+
+  useEffect(() => {
+    runCSVRoundtripSmokeAssertions();
+  }, []);
+
   // F8: CSV export with sourceLinks
   const exportCSV = () => {
-    const headers = ['Issue #', 'Topic', 'Frame #', 'Theme', 'Status', 'Publish Date', 'Notes', 'Caption', 'Source Links', 'Priority', 'Confidence', 'Series', 'Assistant Brief', 'Target Metric', 'Metric Confidence', 'Metric Source', 'Metric Value', 'Metric Unit', 'Metric Provenance'];
+    const headers = csvHeaders;
     const rows = issues.map(i => [
       i.issueNum, i.topic, i.frameId, i.themeId, i.status, i.publishDate, i.notes, i.caption, i.sourceLinks,
       i.priority || 'medium', i.confidence || 'medium', i.series || '',
       i.assistantBrief || '', i.targetMetric || '', i.metricConfidence || '', i.metricSource || '', i.metricValue || '', i.metricUnit || '',
       JSON.stringify(Array.isArray(i.metricProvenance) ? i.metricProvenance : []),
-    ].map(v => `"${String(v ?? '').replace(/"/g,'""')}"`));
+    ].map(csvEscape));
     const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -250,67 +336,11 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
     reader.onload = (ev) => {
       try {
         const text = ev.target.result;
-        // Fix #19: proper RFC-4180 CSV parser — handles quoted multiline fields
-        const parseCSV = (str) => {
-          const rows = []; let cur = [], field = '', inQ = false;
-          for (let i = 0; i < str.length; i++) {
-            const ch = str[i], nx = str[i+1];
-            if (inQ) {
-              if (ch === '"' && nx === '"') { field += '"'; i++; }
-              else if (ch === '"') inQ = false;
-              else field += ch;
-            } else {
-              if (ch === '"') inQ = true;
-              else if (ch === ',') { cur.push(field); field = ''; }
-              else if (ch === '\n' || (ch === '\r' && nx === '\n')) {
-                cur.push(field); field = '';
-                if (cur.some(c => c.trim())) rows.push(cur);
-                cur = []; if (ch === '\r') i++;
-              } else field += ch;
-            }
-          }
-          if (field || cur.length) { cur.push(field); if (cur.some(c => c.trim())) rows.push(cur); }
-          return rows;
-        };
         const allRows = parseCSV(text);
         const hasHeader = (allRows[0]?.[0] || '').toLowerCase().includes('issue');
         const lines = hasHeader ? allRows.slice(1) : allRows;
         if (lines.length < 1) { showToast('CSV has no data rows', 'error'); return; }
-        const imported = lines.map((cols, idx) => {
-          let metricProvenance = [];
-          const rawMetricProvenance = cols[18]?.trim();
-          if (rawMetricProvenance) {
-            try {
-              const parsed = JSON.parse(rawMetricProvenance);
-              metricProvenance = Array.isArray(parsed) ? parsed : [];
-            } catch {
-              metricProvenance = [];
-            }
-          }
-          return normalizeIssue({
-            id: `i_${Date.now()}_${idx}`,
-            issueNum: cols[0]?.trim() || '',
-            topic: cols[1]?.trim() || '',
-            frameId: cols[2]?.trim() || '',
-            themeId: cols[3]?.trim() || '',
-            status: STATUSES.includes(cols[4]?.trim()) ? cols[4].trim() : 'draft',
-            publishDate: cols[5]?.trim() || '',
-            notes: cols[6]?.trim() || '',
-            caption: cols[7]?.trim() || '',
-            sourceLinks: cols[8]?.trim() || '',
-            priority: cols[9]?.trim() || 'medium',
-            confidence: cols[10]?.trim() || 'medium',
-            series: cols[11]?.trim() || '',
-            assistantBrief: cols[12]?.trim() || '',
-            targetMetric: cols[13]?.trim() || '',
-            metricConfidence: cols[14]?.trim() || '',
-            metricSource: cols[15]?.trim() || '',
-            metricValue: cols[16]?.trim() || '',
-            metricUnit: cols[17]?.trim() || '',
-            metricProvenance,
-            createdAt: Date.now(),
-          });
-        }).filter(i => i.issueNum || i.topic);
+        const imported = lines.map((cols, idx) => mapCSVColsToIssue(cols, idx)).filter(i => i.issueNum || i.topic);
         setIssues(prev => [...prev, ...imported]);
         showToast(`Imported ${imported.length} issues`);
       } catch (err) { showToast('Failed to parse CSV', 'error'); }
