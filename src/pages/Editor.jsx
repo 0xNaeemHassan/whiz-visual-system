@@ -174,7 +174,8 @@ const normalizeImportedTableRows = ({ rows, headerCount }) => rows.map((cells) =
   for (let idx = 0; idx < headerCount; idx += 1) row[`col${idx + 1}`] = String(cells[idx] || '').trim();
   return row;
 });
-const ENTITY_ALIAS_MAP = Object.freeze({ '&': 'and', '+': 'and', '@': 'at', 'co.': 'company', 'corp.': 'corporation' });
+const ENTITY_ALIAS_MAP = Object.freeze({ '&': 'and', '+': 'and', '@': 'at', 'co.': 'company', 'corp.': 'corporation', 'inc.': 'incorporated', 'ltd.': 'limited', 'intl': 'international' });
+const COLLISION_THRESHOLDS = Object.freeze({ review: 0.82, highConfidence: 0.9 });
 const normalizeEntityKey = (value = '') => {
   const lowered = String(value || '').trim().toLowerCase();
   const aliased = Object.entries(ENTITY_ALIAS_MAP).reduce((acc, [symbol, replacement]) => acc.replaceAll(symbol, ` ${replacement} `), lowered);
@@ -196,9 +197,10 @@ const detectEntityCollisions = (rows = []) => {
     if (keyed[i].normalized === keyed[j].normalized) continue;
     const distance = fuzzyDistance(keyed[i].normalized, keyed[j].normalized);
     const confidence = 1 - (distance / Math.max(keyed[i].normalized.length, keyed[j].normalized.length, 1));
-    if (confidence >= 0.82) fuzzyPairs.push({ left: keyed[i], right: keyed[j], confidence });
+    if (confidence >= COLLISION_THRESHOLDS.review) fuzzyPairs.push({ left: keyed[i], right: keyed[j], confidence });
   }
-  return { duplicateGroups, fuzzyPairs };
+  const highConfidencePairs = fuzzyPairs.filter((pair) => pair.confidence >= COLLISION_THRESHOLDS.highConfidence);
+  return { duplicateGroups, fuzzyPairs, highConfidencePairs, thresholds: COLLISION_THRESHOLDS };
 };
 
 const buildTableImportReport = ({ rawText, headerCount, currentContent }) => {
@@ -461,6 +463,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const [showTableImportModal, setShowTableImportModal] = useState(false);
   const [tableImportText, setTableImportText] = useState('');
   const [tableImportReport, setTableImportReport] = useState(null);
+  const [collisionReviewDecisions, setCollisionReviewDecisions] = useState({});
   const [rowDeltaFlags, setRowDeltaFlags] = useState([]);
   useEffect(() => {
     const scan = detectRowSeriesDeltas(content.tableRows || [], { metricType: inferMetricType(content.tableRows?.[0]?.col3) });
@@ -546,6 +549,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const restoreAutosave=()=>{const d=autosaveDataRef.current;if(d){d.frameId&&setFrameId(d.frameId);d.theme&&(setTheme(d.theme),setActiveTheme(d.theme));d.content&&resetContent(normalizeContentWithProvenance({ ...d.content, evidenceLedger: d.content?.evidenceLedger || d.evidenceLedger }));d.overrides&&setOverrides(d.overrides);d.aspectRatio&&setAspectRatio(d.aspectRatio);d.bgGradient&&updateMedia(prev=>({...prev,bgGradient:d.bgGradient}));d.patternOverlay&&updateMedia(prev=>({...prev,patternOverlay:d.patternOverlay}));showToast('Restored');}setShowAutosavePrompt(false);};
   const runTableImportValidation = () => {
     const headerCount = (content.tableHeaders || []).length || 5;
+    setCollisionReviewDecisions({});
     const baseReport = buildTableImportReport({ rawText: tableImportText, headerCount, currentContent: content });
     const allEntries = [
       ...baseReport.validRows.map((row, rowIndex) => ({ rowIndex, row, errors: [] })),
@@ -563,7 +567,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
       return { ...entry, errors };
     }).filter((entry) => entry.errors.length);
     const validRows = allEntries.filter((entry) => !invalidRows.some((invalidEntry) => invalidEntry.rowIndex === entry.rowIndex)).map((entry) => entry.row);
-    const report = { ...baseReport, validRows, invalidRows };
+    const report = { ...baseReport, validRows, invalidRows, reviewerDecisions: collisionReviewDecisions };
     const anomalyScan = detectRowSeriesDeltas(validRows, { metricType: inferMetricType(validRows[0]?.col3) });
     report.anomalyFlags = anomalyScan.flags;
     setTableImportReport(report);
@@ -574,9 +578,23 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     }
   };
 
+  const buildCollisionKey = (pair) => `${pair.left.index}:${pair.right.index}`;
+  const getUnresolvedHighConfidencePairs = (collisionReport = { highConfidencePairs: [] }) => (collisionReport.highConfidencePairs || []).filter((pair) => {
+    const decision = collisionReviewDecisions[buildCollisionKey(pair)];
+    if (!decision) return true;
+    if (!decision.rationale || !String(decision.rationale).trim()) return true;
+    return !['merge', 'keep'].includes(decision.decision);
+  });
+
   const applyValidImportedRows = () => {
     if (!tableImportReport || !tableImportReport.validRows.length) {
       showToast('No valid rows to apply.', 'warning');
+      return;
+    }
+    const collisionReport = detectEntityCollisions(tableImportReport.validRows || []);
+    const unresolvedHighConfidence = getUnresolvedHighConfidencePairs(collisionReport);
+    if (unresolvedHighConfidence.length > 0) {
+      showToast(`Apply blocked: resolve ${unresolvedHighConfidence.length} high-confidence collisions with reviewer decisions and rationale.`, 'error');
       return;
     }
     const nextRows = [...(content.tableRows || []), ...tableImportReport.validRows.map((row)=>({ ...row, provenance: createDefaultProvenance() }))];
@@ -941,7 +959,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     if(!rolePermissions.canExportAssets){showToast(roleReasons.exportAssets,'warning');return;}
     if(!frameRef.current||exporting)return;
     const exportCollisionReport=detectEntityCollisions(content.tableRows||[]);
-    const unresolvedHighConfidenceDuplicates=exportCollisionReport.fuzzyPairs.filter((pair)=>pair.confidence>=0.9).length;
+    const unresolvedHighConfidenceDuplicates=getUnresolvedHighConfidencePairs(exportCollisionReport).length;
     if(strictMode&&unresolvedHighConfidenceDuplicates>0){showToast(`Strict export blocked: resolve ${unresolvedHighConfidenceDuplicates} high-confidence duplicate entity collisions.`,'error');return;}
     if(!ensureActionAllowed('export'))return;
     const preflight=runPublishExportPreflight('WebP export',{strict:strictMode,action:'export'});if(!preflight.ok)return;
