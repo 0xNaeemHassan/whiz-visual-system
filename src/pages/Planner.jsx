@@ -3,6 +3,7 @@ import { useUIEventContext } from '../state/UIEventContext';
 import { FRAMES } from '../data/frames';
 import { THEMES } from '../data/themes';
 import { useLocalStorage } from '../hooks/useLocalStorage';
+import { useIntl } from '../i18n/IntlProvider';
 import { normalizePlannerIssue } from '../utils/schemaContracts';
 
 const STATUSES = ['draft', 'planned', 'wip', 'done', 'published'];
@@ -521,9 +522,11 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
         <div className="card" style={{ padding: 0 }}>
           <div className="data-table-wrap">
           {filtered.length === 0 ? (
-            <div className="empty-state">
+            <div className="empty-state" role="status" aria-live="polite">
               <div style={{ fontSize: 32, marginBottom: 12 }}>▦</div>
-              <div>No issues yet. Click "New Issue" to start your content plan.</div>
+              <div style={{ fontWeight: 600, marginBottom: 6 }}>{issues.length === 0 ? t('planner.empty.noDataTitle') : t('planner.empty.filteredTitle')}</div>
+              <div>{issues.length === 0 ? t('planner.empty.noDataBody') : t('planner.empty.filteredBody')}</div>
+              <div style={{ marginTop: 8, fontFamily: 'var(--font-m)', fontSize: 10, color: 'var(--dim)' }}>{issues.length === 0 ? t('planner.empty.noDataAction') : t('planner.empty.filteredAction')}</div>
             </div>
           ) : (
             <table className="data-table">
