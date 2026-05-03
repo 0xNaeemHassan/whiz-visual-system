@@ -32,11 +32,14 @@ export default function PatternSelector({ value, onChange }) {
 
   return (
     <div className="pattern-selector">
-      <div className="pattern-grid">
+      <div className="pattern-grid" role="radiogroup" aria-label="Pattern overlays">
         {PATTERNS.map(p => (
           <button key={p.id}
             className={`pattern-btn ${(currentId || 'none') === p.id ? 'active' : ''}`}
-            onClick={() => select(p)} title={p.label}>
+            onClick={() => select(p)} title={p.label}
+            role="radio"
+            aria-checked={(currentId || 'none') === p.id}
+            tabIndex={((currentId || 'none') === p.id) ? 0 : -1}>
             <div className="pattern-preview" style={{
               background: p.id === 'none' ? 'var(--bg-2)' : p.css,
               backgroundSize: SIZES[p.id] || 'auto',

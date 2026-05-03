@@ -4,6 +4,7 @@ import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
 import Toast from './components/Toast';
 import { useLocalStorage } from './hooks/useLocalStorage';
+import { MOTION_PREFERENCE, useMotionPreference } from './hooks/useMotionPreference';
 import { DEFAULT_THEME } from './data/themes';
 import { UIEventProvider, useUIEventContext } from './state/UIEventContext';
 
@@ -111,6 +112,8 @@ function AppContent() {
   const [newFrameSignal, setNewFrameSignal] = useState(0);
   // Fix #24: Library pre-filter state (passed via navigateTo)
   const [libraryPreFilter, setLibraryPreFilter] = useState(null);
+  const [motionPreference, setMotionPreference] = useLocalStorage('whiz-motion-preference', MOTION_PREFERENCE.SYSTEM);
+  const { shouldReduceMotion } = useMotionPreference(motionPreference);
 
   const showToast = useCallback((msg, type = 'success') => {
     setToast({ msg, type, id: Date.now() });
@@ -136,8 +139,8 @@ function AppContent() {
     }
     setSidebarOpen(false);
     pushRoute(p, {}, { page: p });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, []);
+    window.scrollTo({ top: 0, behavior: shouldReduceMotion ? 'auto' : 'smooth' });
+  }, [shouldReduceMotion]);
 
   // Fix #11: Expose clearEditingFrame so Editor can clear it after consuming
   const clearEditingFrame = useCallback(() => setEditingFrame(null), []);
@@ -191,6 +194,10 @@ function AppContent() {
   const pageStyle = {
     '--theme-accent': activeTheme.accent,
     '--theme-base':   activeTheme.base,
+    '--motion-base-duration': shouldReduceMotion ? '0.01ms' : '220ms',
+    '--motion-fast-duration': shouldReduceMotion ? '0.01ms' : '150ms',
+    '--motion-slow-duration': shouldReduceMotion ? '0.01ms' : '320ms',
+    '--motion-standard-ease': 'cubic-bezier(0.4, 0, 0.2, 1)',
   };
 
   const renderPage = (id, PageComponent) => (
@@ -227,6 +234,8 @@ function AppContent() {
           showToast={showToast}
           activeTheme={activeTheme}
           navigateTo={navigateTo}
+          motionPreference={motionPreference}
+          setMotionPreference={setMotionPreference}
         />
         {renderPage('dashboard', Dashboard)}
         {renderPage('library', Library)}
