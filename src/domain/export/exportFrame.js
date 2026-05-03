@@ -1,49 +1,61 @@
 import { createExportContract } from './contracts';
-import { createExportAttemptSnapshot, diffCanonicalSnapshots } from '../../utils/exportSnapshot';
+import { resolveExportProfile } from './exportProfileResolver';
 
-export async function exportFrame({
-  contractInput,
-  sceneModel,
-  sceneRenderer,
-  domFallbackRenderer,
-  preflightResult = null,
-  snapshotInput = null,
-  strictSnapshotStability = false,
-}) {
-  const contract = createExportContract(contractInput);
-  const preSnapshot = snapshotInput ? createExportAttemptSnapshot({ ...snapshotInput, contract }) : null;
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+export async function exportFrame({ contractInput, sceneModel, sceneRenderer, simplifiedSceneRenderer = null, domFallbackRenderer, preflightResult = null, profileContext = {} }) {
+  const resolvedProfile = resolveExportProfile({
+    deviceClass: profileContext.deviceClass,
+    performanceTier: profileContext.performanceTier,
+    baseDimensions: contractInput?.dimensions,
+    format: contractInput?.format,
+  });
+
+  const contract = createExportContract({
+    ...contractInput,
+    dimensions: resolvedProfile.targetDimensions,
+    quality: contractInput?.quality ?? resolvedProfile.quality,
+  });
+
   const exportMetadata = {
     preflight: preflightResult,
     citationMode: contract.citationMode || 'off',
+    layoutCost: sceneModel?.exportProfiling?.complexity || null,
+    degradations: {
+      disabledLayers: sceneModel?.exportProfiling?.disabledLayers || [],
+      reduceEffectComplexity: Boolean(sceneModel?.exportProfiling?.reduceEffectComplexity),
+      simplifyGradients: Boolean(sceneModel?.exportProfiling?.simplifyGradients),
+      maxImageDrawSize: sceneModel?.exportProfiling?.maxImageDrawSize || null,
+    },
     exportedAt: new Date().toISOString(),
+    exportProfileDecision: resolvedProfile,
   };
 
-  const finalizeDiagnostics = (attemptMetadata = {}) => {
-    const postSnapshot = snapshotInput ? createExportAttemptSnapshot({ ...snapshotInput, contract, outputMetadata: attemptMetadata }) : null;
-    const snapshotDiff = preSnapshot && postSnapshot ? diffCanonicalSnapshots(preSnapshot, postSnapshot) : null;
-    if (strictSnapshotStability && snapshotDiff && !snapshotDiff.stable) {
-      const changed = snapshotDiff.changedFields.join(', ');
-      throw new Error(`Strict export blocked: unstable snapshot delta detected (${changed}).`);
+  const attempts = Math.max(1, Number(resolvedProfile.retryPolicy?.attempts || 1));
+  const backoffMs = Math.max(0, Number(resolvedProfile.retryPolicy?.backoffMs || 0));
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const canvas = await sceneRenderer(sceneModel, { ...contract, effects: resolvedProfile.effectToggles });
+      return { canvas, contract, usedFallback: false, rendererUsed: 'primary-renderer', exportMetadata };
+    } catch (primaryError) {
+      if (simplifiedSceneRenderer) {
+        try {
+          const canvas = await simplifiedSceneRenderer(sceneModel, { ...contract, quality: Math.min(contract.quality, 0.85), effects: { shadows: false, gradients: true, textures: false } });
+          return { canvas, contract, usedFallback: true, rendererUsed: 'simplified-renderer', fallbackReason: primaryError?.message || 'primary renderer failed', exportMetadata };
+        } catch {}
+      }
+
+      if (attempt < attempts) {
+        await wait(backoffMs);
+        continue;
+      }
+
+      if (!domFallbackRenderer) throw primaryError;
+      const canvas = await domFallbackRenderer(contract, primaryError);
+      return { canvas, contract, usedFallback: true, rendererUsed: 'dom-snapshot-fallback', fallbackReason: primaryError?.message || 'scene renderer failed', exportMetadata };
     }
-    return {
-      ...exportMetadata,
-      diagnostics: {
-        snapshotDiff,
-      },
-    };
-  };
-  try {
-    const canvas = await sceneRenderer(sceneModel, contract);
-    return { canvas, contract, usedFallback: false, exportMetadata: finalizeDiagnostics({ usedFallback: false }) };
-  } catch (error) {
-    if (!domFallbackRenderer) throw error;
-    const canvas = await domFallbackRenderer(contract, error);
-    return {
-      canvas,
-      contract,
-      usedFallback: true,
-      fallbackReason: error?.message || 'scene renderer failed',
-      exportMetadata: finalizeDiagnostics({ usedFallback: true, fallbackReason: error?.message || 'scene renderer failed' }),
-    };
   }
+
+  throw new Error('Export failed without renderer result');
 }

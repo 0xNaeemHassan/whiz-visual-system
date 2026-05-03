@@ -7,7 +7,7 @@ export const TICKER_CONTRACT = {
     default: 28,
   },
   typography: {
-    fontFamily: "'JetBrains Mono', monospace",
+    fontFamily: "'JetBrains Mono', 'SFMono-Regular', 'Cascadia Mono', 'Roboto Mono', 'Consolas', 'Liberation Mono', monospace",
     fontSizePx: 9,
     fontWeight: 500,
     letterSpacingEm: 0.08,
