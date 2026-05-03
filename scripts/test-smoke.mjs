@@ -102,6 +102,13 @@ assert.equal(editedIssue.metricUnit, 'USD', 'Editing should preserve raw metricU
 assert.deepEqual(editedIssue.metricProvenance, [{ source: 'glassnode', method: 'api' }], 'Editing should preserve metricProvenance metadata');
 
 console.log('Smoke tests passed');
+
+const editorSource = readFileSync(new URL('../src/pages/Editor.jsx', import.meta.url), 'utf8');
+const cssSource = readFileSync(new URL('../src/index.css', import.meta.url), 'utf8');
+assert.ok(editorSource.includes('bindFocusTrap'), 'Editor should define focus trap behavior for modal workflows');
+assert.ok(editorSource.includes('restoreFocus'), 'Editor should restore focus after closing modal workflows');
+assert.ok(cssSource.includes('--focus-ring-color'), 'Global focus-ring tokens should exist in index.css');
+assert.ok(cssSource.includes(':focus-visible'), 'Global :focus-visible styles should be present');
 import './test-editor-mutations.mjs';
 
 const a11yFiles = [
