@@ -39,6 +39,8 @@ export function generateExportSummary({ frame, content = {}, complianceIssues = 
     trustLevel: safe(content.trustLevel) || 'Draft',
     dataTimestamps: Array.from(timestamps),
     confidenceSummary,
+    exportDiagnostics,
+    exportFallback: exportDiagnostics?.fallback || null,
     exportedAt: new Date().toISOString(),
     exportProfileDecision: exportProfileDecision || content.exportProfileDecision || null,
   };
@@ -71,6 +73,8 @@ export function buildSummaryText(summary = {}) {
     'Data Timestamps:',
     ...((summary.dataTimestamps || []).map((t) => `- ${t}`)),
     `Confidence Summary: high=${summary.confidenceSummary?.high || 0}, medium=${summary.confidenceSummary?.medium || 0}, low=${summary.confidenceSummary?.low || 0}`,
+    `Export Fallback: ${summary.exportFallback?.chosen || 'none'}`,
+    `Export Failures Logged: ${summary.exportDiagnostics?.failures?.length || 0}`,
   ];
   return lines.join('\n');
 }
