@@ -47,7 +47,7 @@ export function FrameShell({ frameRef, frame, theme, content, trustLevel = 'Draf
     if (!uploadedImages) return null;
     return ['logo', 'hero', 'badge'].map(key => {
       const img = uploadedImages[key];
-      if (!img?.dataUrl || img.visible === false) return null;
+      if ((!img?.objectUrl && !img?.dataUrl) || img.visible === false) return null;
       const defaults = key === 'logo' ? { x: 90, y: 5, w: 80 } : key === 'hero' ? { x: 50, y: 50, w: 200 } : { x: 90, y: 90, w: 48 };
       const x = img.x ?? defaults.x;
       const y = img.y ?? defaults.y;
@@ -64,7 +64,7 @@ export function FrameShell({ frameRef, frame, theme, content, trustLevel = 'Draf
           pointerEvents: editMode ? 'auto' : 'none',
           transition: 'all 0.2s ease',
         }}>
-          <img src={img.dataUrl} alt={img.name || key}
+          <img src={img.objectUrl || img.dataUrl} alt={img.name || key}
             style={{ width: '100%', height: 'auto', objectFit: img.fit || 'contain', borderRadius: key === 'hero' ? 8 : 0 }} />
         </div>
       );
@@ -155,7 +155,7 @@ export function FrameShell({ frameRef, frame, theme, content, trustLevel = 'Draf
         background: 'transparent', pointerEvents: 'none',
       }}>
         <span style={{
-          fontFamily: "'JetBrains Mono', monospace", fontSize: `${SPINE_DESIGN_TOKENS.label.fontSizePx}px`, letterSpacing: `${SPINE_DESIGN_TOKENS.label.letterSpacingEm}em`,
+          fontFamily: SPINE_DESIGN_TOKENS.label.fontFamily, fontSize: `${SPINE_DESIGN_TOKENS.label.fontSizePx}px`, letterSpacing: `${SPINE_DESIGN_TOKENS.label.letterSpacingEm}em`,
           textTransform: SPINE_DESIGN_TOKENS.label.textTransform, color: ov.spineColor || accentColor, opacity: SPINE_DESIGN_TOKENS.label.opacity,
           transform: `rotate(${SPINE_DESIGN_TOKENS.label.rotationDeg}deg)`, whiteSpace: 'nowrap', fontWeight: SPINE_DESIGN_TOKENS.label.fontWeight,
           userSelect: 'none',
