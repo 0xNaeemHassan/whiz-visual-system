@@ -544,6 +544,16 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const [tableImportReport, setTableImportReport] = useState(null);
   const [collisionReviewDecisions, setCollisionReviewDecisions] = useState({});
   const [rowDeltaFlags, setRowDeltaFlags] = useState([]);
+  const importWindowRef = useRef([]);
+  const tablePasteWindowRef = useRef([]);
+  const INPUT_GUARDRAILS = {
+    jsonImportMaxBytes: 2 * 1024 * 1024,
+    tablePasteMaxBytes: 256 * 1024,
+    tablePasteMaxRows: 200,
+    jsonImportMaxEvents: 4,
+    tablePasteMaxEvents: 6,
+    eventWindowMs: 10000,
+  };
   useEffect(() => {
     const scan = detectRowSeriesDeltas(content.tableRows || [], { metricType: inferMetricType(content.tableRows?.[0]?.col3) });
     setRowDeltaFlags((prev) => {
@@ -650,6 +660,20 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   };
   const discardAutosave = () => { localStorage.removeItem('whiz-autosave'); setShowAutosavePrompt(false); };
   const runTableImportValidation = () => {
+    if (!checkInputRateLimit(tablePasteWindowRef, INPUT_GUARDRAILS.tablePasteMaxEvents, 'table_paste')) return;
+    const payloadBytes = new Blob([tableImportText || '']).size;
+    if (payloadBytes > INPUT_GUARDRAILS.tablePasteMaxBytes) {
+      trackInputGuardrailBlocked({ inputType: 'table_paste', reason: 'payload_size', maxAllowed: INPUT_GUARDRAILS.tablePasteMaxBytes });
+      showToast(`Paste rejected: input is too large. Limit is ${Math.round(INPUT_GUARDRAILS.tablePasteMaxBytes / 1024)}KB. Split into smaller batches.`, 'error');
+      return;
+    }
+    const rowCount = (tableImportText || '').split(/\r?\n/).filter(Boolean).length;
+    if (rowCount > INPUT_GUARDRAILS.tablePasteMaxRows) {
+      const droppedCount = rowCount - INPUT_GUARDRAILS.tablePasteMaxRows;
+      trackInputGuardrailBlocked({ inputType: 'table_paste', reason: 'item_count', droppedCount, maxAllowed: INPUT_GUARDRAILS.tablePasteMaxRows });
+      showToast(`Paste rejected: ${rowCount} rows exceeds limit (${INPUT_GUARDRAILS.tablePasteMaxRows}). Remove ${droppedCount} rows and retry.`, 'error');
+      return;
+    }
     const headerCount = (content.tableHeaders || []).length || 5;
     setCollisionReviewDecisions({});
     const baseReport = buildTableImportReport({ rawText: tableImportText, headerCount, currentContent: content });
@@ -791,6 +815,20 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   }), [activeRole]);
 
   const track = useMemo(() => createTelemetry({ frameId, layout: selectedFrame?.layout }), [frameId, selectedFrame?.layout]);
+  const trackInputGuardrailBlocked = useCallback(({ inputType, reason, droppedCount = 1, maxAllowed = null }) => {
+    track(TELEMETRY_EVENTS.INPUT_GUARDRAIL_BLOCKED, { inputType, reason, droppedCount, maxAllowed });
+  }, [track]);
+  const checkInputRateLimit = useCallback((windowRef, maxEvents, inputType) => {
+    const now = Date.now();
+    windowRef.current = windowRef.current.filter((stamp) => now - stamp < INPUT_GUARDRAILS.eventWindowMs);
+    if (windowRef.current.length >= maxEvents) {
+      trackInputGuardrailBlocked({ inputType, reason: 'rate_limit', maxAllowed: maxEvents });
+      showToast(`Too many ${inputType.replace('_', ' ')} attempts. Wait ${Math.ceil(INPUT_GUARDRAILS.eventWindowMs / 1000)}s, then retry.`, 'warning');
+      return false;
+    }
+    windowRef.current.push(now);
+    return true;
+  }, [trackInputGuardrailBlocked]);
   useEffect(() => {
     const containers = [document.querySelector('.editor-left'), document.querySelector('.editor-right'), document.querySelector('.frame-wrap')].filter(Boolean);
     const observer = createLayoutShiftObserver({
@@ -1678,7 +1716,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
             {(content.timelineEvents||[]).length===0&&<div style={{fontFamily:'var(--font-m)',fontSize:10,color:'var(--dim)',padding:'8px 0'}}>No events yet — click + Event to add</div>}
           </div>
           <div className="editor-section"><div className="editor-section-title">Big Number</div><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}><div className="form-group" style={{marginBottom:0}}><label className="form-label">Label</label><input value={content.bigLabel||''} onChange={e=>updateContent('bigLabel',e.target.value)}/></div><div className="form-group" style={{marginBottom:0}}><label className="form-label">Value</label><input value={content.bigNumber||''} onChange={e=>updateContent('bigNumber',e.target.value)}/></div></div></div>
-          <div className="editor-section"><div className="editor-section-title">Images</div><ImageUpload label="Logo" value={uploadedImages.logo} onChange={v=>updateMedia(p=>({...p,uploadedImages:{...p.uploadedImages,logo:v}}))} maxSize={2} showToast={showToast}/><ImageUpload label="Hero" value={uploadedImages.hero} onChange={v=>updateMedia(p=>({...p,uploadedImages:{...p.uploadedImages,hero:v}}))} maxSize={4} showToast={showToast}/><ImageUpload label="Badge" value={uploadedImages.badge} onChange={v=>updateMedia(p=>({...p,uploadedImages:{...p.uploadedImages,badge:v}}))} maxSize={1} showToast={showToast}/></div>
+          <div className="editor-section"><div className="editor-section-title">Images</div><ImageUpload label="Logo" value={uploadedImages.logo} onChange={v=>updateMedia(p=>({...p,uploadedImages:{...p.uploadedImages,logo:v}}))} maxSize={2} showToast={showToast} onGuardrailEvent={trackInputGuardrailBlocked}/><ImageUpload label="Hero" value={uploadedImages.hero} onChange={v=>updateMedia(p=>({...p,uploadedImages:{...p.uploadedImages,hero:v}}))} maxSize={4} showToast={showToast} onGuardrailEvent={trackInputGuardrailBlocked}/><ImageUpload label="Badge" value={uploadedImages.badge} onChange={v=>updateMedia(p=>({...p,uploadedImages:{...p.uploadedImages,badge:v}}))} maxSize={1} showToast={showToast} onGuardrailEvent={trackInputGuardrailBlocked}/></div>
           <div className="editor-section">
             <div className="editor-section-title">Evidence Ledger</div>
             <div style={{fontSize:10,color:'var(--muted)',marginBottom:6}}>Track stable evidence IDs before publish, and retain correction lineage after publish.</div>
@@ -1713,7 +1751,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
       </div>
       {showCommandPalette&&<div className="modal-overlay open" onClick={e=>e.target===e.currentTarget&&setShowCommandPalette(false)}><div className="modal" style={{maxWidth:640}}><div className="modal-header"><span className="modal-title">Command Palette</span><IconButton className="modal-close" label="Close command palette" onClick={()=>setShowCommandPalette(false)}>✕</IconButton></div><input className="form-control" autoFocus placeholder="Type a command..." value={paletteQuery} onChange={e=>setPaletteQuery(e.target.value)} style={{marginBottom:12}}/>{Object.entries(filterCommands(commandRegistry.filter(c=>c.id!=='palette.open'),paletteQuery).reduce((groups,cmd)=>{(groups[cmd.category] ||= []).push(cmd);return groups;},{})).map(([group,items])=>(<div key={group} style={{marginBottom:10}}><div style={{fontSize:11,color:'var(--dim)',marginBottom:6,textTransform:'uppercase'}}>{group}</div><div style={{display:'flex',flexDirection:'column',gap:4}}>{items.map(cmd=>(<button key={cmd.id} className="btn btn-ghost" style={{justifyContent:'space-between',display:'flex',width:'100%'}} disabled={!cmd.enabled()} onClick={()=>{cmd.handler();setShowCommandPalette(false);}}><span>{cmd.label}</span><span style={{fontFamily:'var(--font-m)',fontSize:10,color:'var(--dim)'}}>{cmd.shortcut}</span></button>))}</div></div>))}</div></div>}
       {/* MODALS */}
-      {showTableImportModal&&<div className="modal-overlay open" onClick={e=>e.target===e.currentTarget&&setShowTableImportModal(false)}><div className="modal" style={{maxWidth:760}}><div className="modal-header"><span className="modal-title">Bulk Paste Table Rows</span><IconButton className="modal-close" label="Close table import" onClick={()=>setShowTableImportModal(false)}>✕</IconButton></div><div style={{fontSize:11,color:'var(--muted)',marginBottom:8}}>Data-heavy layouts should prefer batch import over freeform entry. Workflow: paste → parse → validate → guided correction → apply.</div><textarea className="form-control" rows={8} value={tableImportText} onChange={e=>setTableImportText(e.target.value)} placeholder="Paste TSV/CSV rows here..." /><div className="modal-footer" style={{justifyContent:'flex-start'}}><button className="btn btn-secondary btn-sm" onClick={runTableImportValidation}>Parse + Validate</button><button className="btn btn-ghost btn-sm" onClick={discardInvalidImportedRows}>Resolve: Discard Invalid</button><button className="btn btn-ghost btn-sm" onClick={exportInvalidImportRows}>Export Invalid Report</button><button className="btn btn-primary btn-sm" onClick={applyValidImportedRows}>Apply Valid Rows Only</button></div>{tableImportReport&&<div style={{marginTop:8,fontSize:11}}><div style={{marginBottom:8}}>Parsed: {tableImportReport.parsedRows.length} · Valid: {tableImportReport.validRows.length} · Invalid: {tableImportReport.invalidRows.length}</div>{tableImportReport.invalidRows.length>0&&<div style={{marginBottom:8,color:'var(--muted)'}}>Guided correction: use Auto-fix per error, then re-validate before applying.</div>}{tableImportReport.invalidRows.length>0&&<div style={{display:'grid',gap:6,maxHeight:220,overflowY:'auto'}}>{tableImportReport.invalidRows.map((entry)=>(
+      {showTableImportModal&&<div className="modal-overlay open" onClick={e=>e.target===e.currentTarget&&setShowTableImportModal(false)}><div className="modal" style={{maxWidth:760}}><div className="modal-header"><span className="modal-title">Bulk Paste Table Rows</span><IconButton className="modal-close" label="Close table import" onClick={()=>setShowTableImportModal(false)}>✕</IconButton></div><div style={{fontSize:11,color:'var(--muted)',marginBottom:8}}>Data-heavy layouts should prefer batch import over freeform entry. Workflow: paste → parse → validate → guided correction → apply.</div><textarea className="form-control" rows={8} value={tableImportText} onChange={e=>setTableImportText(e.target.value)} onPaste={e=>{const nextPayload=`${tableImportText}${e.clipboardData?.getData('text')||''}`;const nextBytes=new Blob([nextPayload]).size;if(nextBytes>INPUT_GUARDRAILS.tablePasteMaxBytes){e.preventDefault();trackInputGuardrailBlocked({inputType:'table_paste',reason:'payload_size',maxAllowed:INPUT_GUARDRAILS.tablePasteMaxBytes});showToast(`Paste blocked: max ${Math.round(INPUT_GUARDRAILS.tablePasteMaxBytes/1024)}KB. Paste smaller chunks.`,'warning');}}} placeholder="Paste TSV/CSV rows here..." /><div className="modal-footer" style={{justifyContent:'flex-start'}}><button className="btn btn-secondary btn-sm" onClick={runTableImportValidation}>Parse + Validate</button><button className="btn btn-ghost btn-sm" onClick={discardInvalidImportedRows}>Resolve: Discard Invalid</button><button className="btn btn-ghost btn-sm" onClick={exportInvalidImportRows}>Export Invalid Report</button><button className="btn btn-primary btn-sm" onClick={applyValidImportedRows}>Apply Valid Rows Only</button></div>{tableImportReport&&<div style={{marginTop:8,fontSize:11}}><div style={{marginBottom:8}}>Parsed: {tableImportReport.parsedRows.length} · Valid: {tableImportReport.validRows.length} · Invalid: {tableImportReport.invalidRows.length}</div>{tableImportReport.invalidRows.length>0&&<div style={{marginBottom:8,color:'var(--muted)'}}>Guided correction: use Auto-fix per error, then re-validate before applying.</div>}{tableImportReport.invalidRows.length>0&&<div style={{display:'grid',gap:6,maxHeight:220,overflowY:'auto'}}>{tableImportReport.invalidRows.map((entry)=>(
               <div key={`invalid-${entry.rowIndex}`} style={{border:'1px solid rgba(235,87,87,.35)',borderRadius:6,padding:8}}>
                 <div style={{fontWeight:600,marginBottom:4}}>Row {entry.rowIndex+1}</div>
                 {entry.errors.map((error,errorIndex)=><div key={`${error.column}-${errorIndex}`} style={{display:'grid',gridTemplateColumns:'100px 1fr auto',gap:6,alignItems:'center',marginBottom:4}}><div style={{color:'var(--theme-accent)'}}>{error.column}</div><div>{error.message}</div><button className="btn btn-ghost btn-sm" onClick={()=>setTableImportText(prev=>{const lines=prev.split(/\r?\n/);if(error.column!=='row'&&lines[entry.rowIndex]){const delimiter=lines[entry.rowIndex].includes('\t')?'\t':',';const cells=lines[entry.rowIndex].split(delimiter);const colIdx=Math.max(0,Number(error.column.replace('col',''))-1);cells[colIdx]=(cells[colIdx]||'').slice(0,TABLE_CELL_MAX_LENGTH);lines[entry.rowIndex]=cells.join(delimiter);}return lines.join('\n');})}>Auto-fix</button></div>)}
