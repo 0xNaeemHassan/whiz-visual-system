@@ -101,7 +101,7 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
     issueNum: '', topic: '', frameId: '', themeId: '', status: 'draft', priority: 'medium',
     publishDate: '', notes: '', caption: '', sourceLinks: '', confidence: 'medium', series: '',
   });
-  const normalizeIssueNum = (v) => String(v || '').replace(/\D/g, '').slice(-3).padStart(3, '0');
+  const normalizeIssueNum = (v) => normalizeIssueNumber(v);
   const normalizeIssue = (issue) => ({
     ...normalizePlannerIssue(issue),
     issueNum: normalizeIssueNum(issue.issueNum),
@@ -116,7 +116,8 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
     metricUnit: issue.metricUnit || '',
     metricProvenance: Array.isArray(issue.metricProvenance) ? issue.metricProvenance : [],
   });
-  const existingIssueNums = new Set(issues.map(i => String(i.issueNum || '').padStart(3, '0')));
+  const existingIssueNums = new Set(issues.map(i => normalizeIssueNum(i.issueNum)));
+  const issueAllocator = useMemo(() => createIssueNumberAllocator(issues), [issues]);
 
   const { registerHandlers } = useUIEventContext();
   const { t } = useIntl();
@@ -132,7 +133,7 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
     });
   }, [isActive, registerHandlers]);
 
-  const nextNum = issues.length > 0 ? Math.max(...issues.map(i => Number(i.issueNum) || 0)) + 1 : 1;
+  const nextIssueNum = issueAllocator.peekNext();
 
   useEffect(() => {
     try {
@@ -142,7 +143,7 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
       localStorage.removeItem('whiz-planner-issue-draft');
       setEditingIssue(null);
       setForm({
-        issueNum: draft.issueNum || String(nextNum).padStart(3, '0'),
+        issueNum: draft.issueNum || nextIssueNum,
         topic: draft.topic || '',
         frameId: draft.frameId || '',
         themeId: draft.themeId || '',
@@ -167,12 +168,12 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
     } catch (error) {
       localStorage.removeItem('whiz-planner-issue-draft');
     }
-  }, [nextNum, showToast]);
+  }, [nextIssueNum, showToast]);
 
 
   const openIssueForm = (presetStatus) => {
     setEditingIssue(null);
-    setForm({ issueNum: String(nextNum).padStart(3,'0'), topic: '', frameId: '', themeId: '', status: presetStatus || 'draft', publishDate: '', notes: '', caption: '', sourceLinks: '', priority: 'medium', confidence: 'medium', series: '' });
+    setForm({ issueNum: nextIssueNum, topic: '', frameId: '', themeId: '', status: presetStatus || 'draft', publishDate: '', notes: '', caption: '', sourceLinks: '', priority: 'medium', confidence: 'medium', series: '' });
     setShowModal(true);
   };
 
@@ -180,7 +181,7 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
 
   // F5: Duplicate issue
   const duplicateIssue = (issue) => {
-    const dn = String(nextNum).padStart(3,'0');
+    const dn = issueAllocator.reserveNext();
     setIssues(prev => [...prev, { ...issue, id: `i_${Date.now()}`, issueNum: dn, status: 'draft', createdAt: Date.now(), topic: `${issue.topic} (copy)` }]);
     showToast('Issue duplicated');
   };
@@ -344,7 +345,10 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
         const lines = hasHeader ? allRows.slice(1) : allRows;
         if (lines.length < 1) { showToast('CSV has no data rows', 'error'); return; }
         const imported = lines.map((cols, idx) => mapCSVColsToIssue(cols, idx)).filter(i => i.issueNum || i.topic);
-        setIssues(prev => [...prev, ...imported]);
+        setIssues(prev => {
+          const allocator = createIssueNumberAllocator(prev);
+          return [...prev, ...allocator.reconcile(imported)];
+        });
         showToast(`Imported ${imported.length} issues`);
       } catch (err) { showToast('Failed to parse CSV', 'error'); }
     };
