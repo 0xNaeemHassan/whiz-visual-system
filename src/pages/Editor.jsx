@@ -553,6 +553,13 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     () => getBrandScore({ overrides, content }),
     [overrides, content],
   );
+  const freshnessReport = useMemo(() => evaluateContentFreshness({ stats: content.stats, tableRows: content.tableRows }), [content.stats, content.tableRows]);
+  const freshnessByKey = useMemo(() => {
+    const map = {};
+    freshnessReport.stats.forEach((entry) => { map[`stat-${entry.index}`] = entry; });
+    freshnessReport.tableRows.forEach((entry) => { map[`row-${entry.index}`] = entry; });
+    return map;
+  }, [freshnessReport]);
   const jumpToField = useCallback((id) => {
     const target = document.getElementById(id);
     if (!target) return;
