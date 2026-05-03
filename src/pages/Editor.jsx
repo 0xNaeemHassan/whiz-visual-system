@@ -1,6 +1,6 @@
 import { TICKER_CONTRACT, normalizeTickerSpeed } from '../domain/tickerContract';
 import { createTemplateForLayout, checkTemplateLayoutCompatibility, getFrameTemplate } from '../data/templates.js';
-import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
 import { FRAMES } from '../data/frames.js';
 import { applyDefaultSort, applyDefaultSortWithMetadata, validateDefaultSort } from '../domain/tableSort.js';
 import { THEMES } from '../data/themes.js';
@@ -20,18 +20,21 @@ import { nearestTypeScale, getComplianceIssues, getBrandScore, getEditorValidati
 import { normalizeContentTaxonomy } from '../utils/contentNormalization';
 import { validateEditorState } from '../utils/editorStateValidation';
 import { buildMutationDispatcher } from './EditorMutations.js';
+import { createEditorSelectors, measureSelectorPhase, STATIC_MEDIA_STATE, updateSliceImmutable } from '../state/editorStore.js';
 import { normalizeDateInput, normalizeTimelineEvents } from '../domain/services/dateNormalizationService';
 import { detectRowSeriesDeltas, inferMetricType } from '../domain/services/rowDeltaDetector';
 import { SemanticChip, AccessibleIconButton, LabeledField, IconButton } from '../components/primitives';
 import { getFramePitfalls } from '../data/framePitfalls';
 import { createEditorCommandRegistry, filterCommands, matchesShortcut } from '../domain/editorCommands';
+import { optimizeCanvasForExport } from '../domain/services/imageOptimizationService';
 import { buildSaveDiff } from '../utils/saveDiff';
 import { generateExportSummary, buildSummaryText } from '../domain/export/summaryGenerator';
+import { resolveExportContractPreset } from '../domain/export/contracts';
 import { shouldBlockStrictExportForUnsnapshottedEdits } from '../domain/export/exportGuards';
 import { useDialogFocus } from '../utils/focusTrap';
 import { validateCriticalNumericFields } from '../domain/criticalFieldValidator';
 import { createDefaultEvidenceLedger, normalizeEvidenceLedger, validateEvidenceLedger } from '../domain/evidenceLedger';
-import { evaluateEditorComplexity } from '../domain/services/editorComplexityService';
+import { scoreFrameComplexity, classifyComplexity } from '../domain/services/frameComplexityService.js';
 
 /** @typedef {import('../types/canonical').FrameContent} FrameContent */
 /** @typedef {import('../types/canonical').StyleOverrides} StyleOverrides */
@@ -98,6 +101,10 @@ const DESTRUCTIVE_ACTION_POLICY = {
   exportWarnings: { actionId: 'export-with-warnings', title: 'Export with warnings?' },
 };
 const EXPORT_GUARD_BLOCK_UNSNAPSHOTTED_EDITS = true;
+const ZOOM_DIVIDER_STYLE = { width: 1, height: 16, background: 'var(--border)' };
+const ZOOM_FIT_STYLE = { fontSize: 10 };
+const EXPORT_ACTION_BUTTON_STYLE = { fontSize: 'var(--font-min-body)' };
+const FRAME_SCALE_STYLE = (zoom) => ({ transform: `scale(${zoom})` });
 
 const createDefaultProvenance = () => normalizeProvenanceShape({ confidence: 'medium', sourceType: 'unknown' });
 
@@ -412,7 +419,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const saveNameInputRef = useRef(null);
   const [pendingLoadSave, setPendingLoadSave] = useState(null);
   const [pendingSaveDiff, setPendingSaveDiff] = useState(null);
-  const[frameSearch,setFrameSearch]=useState('');const frameListRef=useRef(null);const[exporting,setExporting]=useState(false);const[preflightResult,setPreflightResult]=useState(null);const[preflightWarningAck,setPreflightWarningAck]=useState(false);const[activityLog,setActivityLog]=useState([]);const[trustPreflightModal,setTrustPreflightModal]=useState(null);
+  const[frameSearch,setFrameSearch]=useState('');const[layoutShiftSnapshot,setLayoutShiftSnapshot]=useState({ totalShift: 0, byContainer: {}, actions: {} });const[layoutShiftWarnings,setLayoutShiftWarnings]=useState([]);const layoutShiftObserverRef=useRef(null);const frameListRef=useRef(null);const[exporting,setExporting]=useState(false);const[preflightResult,setPreflightResult]=useState(null);const[preflightWarningAck,setPreflightWarningAck]=useState(false);const[activityLog,setActivityLog]=useState([]);const[trustPreflightModal,setTrustPreflightModal]=useState(null);
   const[showGrid,setShowGrid]=useState(false);const[editMode,setEditMode]=useState(false);
   const[selectedEl,setSelectedEl]=useState(null);const[rightTab,setRightTab]=useState('content');
   const [showHistoryDrawer, setShowHistoryDrawer] = useState(false);
@@ -424,12 +431,16 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const lastContentRef = useRef(content);
   const[mobileTab,setMobileTab]=useState('preview');const[aspectRatio,setAspectRatio]=useState(RATIOS[0]);
   const[showActionOverflow,setShowActionOverflow]=useState(false);
-  const [_savedMedia, persistMedia] = useLocalStorage('whiz-media',{uploadedImages:{logo:null,hero:null,badge:null},bgGradient:null,patternOverlay:null});
+  const [_savedMedia, persistMedia] = useLocalStorage('whiz-media', STATIC_MEDIA_STATE);
   const { state: mediaState, set: setMediaState, reset: resetMediaState, commit: commitMedia } = useUndoRedo(_savedMedia);
-  const uploadedImages = mediaState.uploadedImages;
-  const bgGradient = mediaState.bgGradient;
-  const patternOverlay = mediaState.patternOverlay;
+  const selectorStart = useMemo(() => performance.now(), [mediaState]);
+  const editorSelectors = useMemo(() => createEditorSelectors(), []);
+  const { uploadedImages, bgGradient, patternOverlay } = editorSelectors.selectMediaSlices(mediaState);
+  useEffect(() => {
+    measureSelectorPhase('editor.media-selector', selectorStart, { hasGradient: Boolean(bgGradient), hasPattern: Boolean(patternOverlay) });
+  }, [selectorStart, bgGradient, patternOverlay]);
   useEffect(()=>{persistMedia(mediaState);},[mediaState,persistMedia]);
+  useEffect(() => () => revokeAllManagedObjectURLs(), []);
   const setBgGradient = (value) => setMediaState(prev => ({...prev, bgGradient: value}), { immediate: true });
   const setPatternOverlay = (value) => setMediaState(prev => ({...prev, patternOverlay: value}), { immediate: true });
 
@@ -444,9 +455,15 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const [noviceStep, setNoviceStep] = useLocalStorage('whiz-ui-experience-step', 'outline');
   const [largeTextMode, setLargeTextMode] = useLocalStorage('whiz-large-text-mode', false);
   const [dyslexiaFriendlyMode, setDyslexiaFriendlyMode] = useLocalStorage('whiz-dyslexia-friendly-mode', false);
+  const resolvedFontPairing = useMemo(() => {
+    const resolution = resolveApprovedFontPairing(activeFontPairing);
+    warnFontSubstitutions(resolution.substitutions);
+    return resolution.fonts;
+  }, [activeFontPairing]);
   const[showCommandPalette,setShowCommandPalette]=useState(false);
   const[paletteQuery,setPaletteQuery]=useState('');
   const[whizEffects,setWhizEffects]=useLocalStorage('whiz-effects',DEFAULT_EFFECTS);
+  const [exportPresetId, setExportPresetId] = useLocalStorage('export-preset-id', 'standard');
   const [workflowPhase,setWorkflowPhase]=useState('draft');
   const [phaseChecklist,setPhaseChecklist]=useState({draftAt:Date.now(),reviewAt:null,publishReadyAt:null,lastTransitionAt:Date.now()});
   const [collaborationMode, setCollaborationMode] = useLocalStorage('whiz-collaboration-mode', 'collaborative');
@@ -481,10 +498,14 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const [rowDeltaFlags, setRowDeltaFlags] = useState([]);
   useEffect(() => {
     const scan = detectRowSeriesDeltas(content.tableRows || [], { metricType: inferMetricType(content.tableRows?.[0]?.col3) });
-    setRowDeltaFlags((prev) => scan.flags.map((flag) => {
-      const prior = prev.find((p) => p.rowIndex === flag.rowIndex);
-      return prior ? { ...flag, acknowledged: Boolean(prior.acknowledged) } : flag;
-    }));
+    setRowDeltaFlags((prev) => {
+      const next = scan.flags.map((flag) => {
+        const prior = prev.find((p) => p.rowIndex === flag.rowIndex);
+        return prior ? { ...flag, acknowledged: Boolean(prior.acknowledged) } : flag;
+      });
+      if (next.length === prev.length && next.every((entry, idx) => JSON.stringify(entry) === JSON.stringify(prev[idx]))) return prev;
+      return next;
+    });
   }, [content.tableRows]);
   useDialogFocus({ isOpen: showSaveModal, containerRef: saveModalRef, initialFocusRef: saveNameInputRef });
   const focusableSelector = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -638,14 +659,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
       return;
     }
     const blob = new Blob([createInvalidRowsCsv(tableImportReport.invalidRows)], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `invalid-table-rows-${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(url);
+    withManagedDownload(blob, `invalid-table-rows-${new Date().toISOString().slice(0, 10)}.csv`);
     showToast(`Exported ${tableImportReport.invalidRows.length} invalid rows report.`, 'info');
   };
 
@@ -711,6 +725,21 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
 
   const track = useMemo(() => createTelemetry({ frameId, layout: selectedFrame?.layout }), [frameId, selectedFrame?.layout]);
   useEffect(() => {
+    const containers = [document.querySelector('.editor-left'), document.querySelector('.editor-right'), document.querySelector('.frame-wrap')].filter(Boolean);
+    const observer = createLayoutShiftObserver({
+      containers,
+      report: (snapshot) => {
+        setLayoutShiftSnapshot(snapshot);
+        const diagnostics = reportLayoutShiftDiagnostics(snapshot, { tier: selectedFrame?.tier || 2 });
+        setLayoutShiftWarnings(diagnostics.warnings);
+      },
+    });
+    layoutShiftObserverRef.current = observer;
+    observer.start();
+    if (document?.fonts?.ready) document.fonts.ready.then(() => observer.markAction(observer.actionKeys.fontLoad, () => {}));
+    return () => observer.stop();
+  }, [selectedFrame?.tier]);
+  useEffect(() => {
     const layoutBase = createTemplateForLayout(selectedFrame.layout);
     const frameTemplate = getFrameTemplate(frameId, layoutBase);
     const compatibility = checkTemplateLayoutCompatibility(frameTemplate, selectedFrame.layout);
@@ -739,6 +768,11 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const hasBlockingSpineContrastIssue = useMemo(() => complianceIssues.some((issue) => issue.startsWith('Rotated-spine contrast checks:')), [complianceIssues]);
   const previewOverflow = useMemo(() => applyOverflowPolicy({ family: selectedFrame?.tier > 2 ? 'extended' : 'core', aspectRatio, content, ov: overrides, policy: content?.truncationPolicy || {} }), [selectedFrame?.tier, aspectRatio, content, overrides]);
   const overflowMeta = { actions: previewOverflow?.actions, truncation: previewOverflow?.truncation };
+  const frameMetaStyle = useMemo(() => ({ position:'absolute',top:10,left:10,fontFamily:'var(--font-m)',fontSize:9,color:'var(--dim)',background:'rgba(0,0,0,0.6)',padding:'4px 8px',borderRadius:'var(--r)',backdropFilter:'blur(4px)' }), []);
+  const trustBadgeStyle = useMemo(() => ({ position:'absolute',top:34,left:10,fontFamily:'var(--font-m)',fontSize:9,color:trustTone.fg,background:trustTone.bg,padding:'4px 8px',borderRadius:'var(--r)',border:`1px solid ${trustTone.border}`,backdropFilter:'blur(4px)' }), [trustTone.bg, trustTone.border, trustTone.fg]);
+  const exportActionsStyle = useMemo(() => ({ position:'absolute',top:12,right:12,display:'flex',gap:6,background:'var(--glass)',padding:'6px 10px',borderRadius:'var(--r)',border:'1px solid var(--glass-border)',backdropFilter:'blur(12px)' }), []);
+  const readinessStyle = useMemo(() => ({ position:'absolute',top:52,right:12,fontFamily:'var(--font-m)',fontSize:10,color:readinessSummary.ready?'#8EF0B0':'#FFB3B3',background:readinessSummary.ready?'rgba(11,36,20,.9)':'rgba(42,10,10,.9)',padding:'6px 8px',borderRadius:6,border:`1px solid ${readinessSummary.ready?'#2BAE6666':'#FF5A5A66'}`,maxWidth:320 }), [readinessSummary.ready]);
+  const editHintStyle = useMemo(() => ({ position:'absolute',bottom:52,left:'50%',transform:'translateX(-50%)',fontFamily:'var(--font-m)',fontSize:9,color:'var(--theme-accent)',background:'rgba(0,0,0,0.75)',padding:'4px 10px',borderRadius:20,whiteSpace:'nowrap' }), []);
   const fallbackTruncation = Boolean(overflowMeta?.truncation?.hasFallback);
   const truncationSuggestions = overflowMeta?.truncation?.suggestions || [];
   const editorValidation = useMemo(() => getEditorValidationReport({ overrides, content }), [overrides, content]);
@@ -955,7 +989,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const attemptPhaseTransition=(phase)=>{if(!canTransitionTo(phase)){showToast(`Cannot move to ${phase} until checklist criteria are met.`,'warning');return;}setWorkflowPhase(phase);setPhaseChecklist(prev=>({...prev,lastTransitionAt:Date.now(),reviewAt:phase==='review'||phase==='publish-ready'?(prev.reviewAt||Date.now()):prev.reviewAt,publishReadyAt:phase==='publish-ready'?(prev.publishReadyAt||Date.now()):prev.publishReadyAt}));showToast(`Workflow phase set to ${phase}`);};
 
   const downloadFile=(name,blob)=>{const u=URL.createObjectURL(blob);const a=document.createElement('a');a.href=u;a.download=name;a.click();URL.revokeObjectURL(u);};
-  const buildExportSummary=(normalizedContent)=>generateExportSummary({frame:activeFrame,content:{...content,...normalizedContent},complianceIssues,validationWarnings:editorValidation.warnings});
+  const buildExportSummary=(normalizedContent,exportProfileDecision=null)=>generateExportSummary({frame:activeFrame,content:{...content,...normalizedContent},complianceIssues,validationWarnings:editorValidation.warnings,exportProfileDecision});
   const exportSummarySidecars=(baseName,summary,imageFileName)=>{const payload={...summary,imageFileName};const immutableLedgerRef=Object.freeze({issueNum:content.issueNum,hash:`ledger:${content.issueNum}:${ledgerValidation.total}:${ledgerValidation.complete}`,savedAt:new Date().toISOString(),evidenceLedger:normalizeEvidenceLedger(content?.evidenceLedger,content?.issueNum)});downloadFile(`${baseName}.summary.json`,new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));downloadFile(`${baseName}.summary.txt`,new Blob([buildSummaryText(payload)],{type:'text/plain'}));downloadFile(`${baseName}.manifest.signoff.json`,new Blob([JSON.stringify({reviewState,signoffRecord,immutableLedgerRef,savedAt:new Date().toISOString()},null,2)],{type:'application/json'}));};
 
   const ensureActionAllowed=(action)=>{if(action==='publish'&&workflowPhase!=='publish-ready'){showToast('Publish actions require publish-ready phase.','error');return false;}if(action==='publish'){const requiresApproval=collaborationMode==='collaborative'||requireSignoffInSolo;if(requiresApproval&&reviewState!=='approved'){showToast('Publish blocked: approval sign-off is required first.','error');return false;}}if(action==='export'&&workflowPhase==='draft'){showToast('Export actions require review or publish-ready phase.','error');return false;}if(shouldBlockStrictExportForUnsnapshottedEdits({strictMode,isSnapshotLockCurrent,guardEnabled:EXPORT_GUARD_BLOCK_UNSNAPSHOTTED_EDITS,action})){showToast('Strict export/publish blocked: create or refresh a dataset snapshot first.','error');return false;}if(!stateValidation.valid){showToast(`Blocked by validation: ${stateValidation.codes.join(', ')}`,'error');return false;}if(action==='publish'&&complianceIssues.length){showToast(`Blocked by compliance: ${complianceIssues[0]}`,'error');return false;}if(action==='publish'&&strictMode&&unacknowledgedOutlierFlags.length){showToast(`Strict publish blocked: acknowledge ${unacknowledgedOutlierFlags.length} outlier flag(s) first.`,'error');return false;}return true;};
@@ -966,11 +1000,11 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
 
   const validateExportTypography=()=>{const textValidation=validateEditorTextMinimum({overrides,content,minFontSizePx:12});if(!textValidation.valid){const msg=textValidation.violations.map(v=>`${v.region} ${v.fontSize}px`).join(', ');showToast(`Export blocked: minimum text size is 12px (${msg}).`,'error');return false;}return true;};
   const validateCriticalExportFields=(format)=>{const parseLinks=(raw='')=>String(raw||'').split(/[\n,]/).map(link=>link.trim()).filter(Boolean);const hasCompliantLinks=(raw='')=>{const links=parseLinks(raw);return links.length>0&&links.every((link)=>{try{const u=new URL(link);return u.protocol==='http:'||u.protocol==='https:';}catch{return false;}});};const registry=[...(content.stats||[]).filter(stat=>String(stat?.value||'').trim()).map((stat,index)=>({id:`stats:${index}`,category:'stats',label:stat?.label||`Stat ${index+1}`,provenance:stat?.provenance})),...(content.tableRows||[]).flatMap((row,rowIndex)=>['col2','col3','col4','col5'].filter((field)=>String(row?.[field]||'').trim()).map((field)=>({id:`tableRows:${rowIndex}:${field}`,category:'keyTableField',label:`Row ${rowIndex+1} ${field.toUpperCase()}`,provenance:row?.provenance}))),...((String(content.bigNumber||'').trim())?[{id:'bigNumber',category:'bigNumber',label:content.bigLabel||'Big Number',provenance:content.bigNumberProvenance}]:[]),...(content.timelineEvents||[]).filter((event)=>String(event?.label||event?.date||event?.sub||'').trim()).map((event,index)=>({id:`timeline:${index}`,category:'timelineClaim',label:event?.label||event?.date||`Timeline ${index+1}`,provenance:event?.provenance}))];const registryIssues=registry.filter((claim)=>!hasCompliantLinks(claim?.provenance?.links)).map((claim)=>({claimId:claim.id,category:claim.category,label:claim.label,reason:String(claim?.provenance?.links||'').trim()?'NON_COMPLIANT_LINKS':'MISSING_LINKS'}));const criticalNumeric=validateCriticalNumericFields({layout:activeFrame?.layout,content});const criticalNumericIssues=criticalNumeric.valid?[]:criticalNumeric.issues.map((issue)=>({claimId:issue.path,category:'criticalNumeric',label:issue.path,reason:'MISSING_PROVENANCE'}));const issues=[...criticalNumericIssues,...registryIssues];if(!issues.length)return{valid:true};const payload={valid:false,code:'CRITICAL_CLAIMS_PROVENANCE_BLOCKED',format,message:`Export/publish blocked for ${format}: ${issues.length} critical claims missing compliant provenance links.`,issues};track(TELEMETRY_EVENTS.EXPORT_BLOCKED_PROVENANCE,{format,issueCount:issues.length,issuePaths:issues.map(i=>i.claimId),issueCategories:issues.map(i=>i.category),code:payload.code});showToast(payload.message,'error');console.warn('export/publish blocked',payload);return payload;};
-  const exportJSON=()=>{if(!validateExportTypography())return;if(!validateCriticalExportFields('json').valid)return;if(!ensureActionAllowed('export'))return;const normalized=runNormalizationPreflight();if(!normalized)return;const d=JSON.stringify({...buildSave(),content:{...content,...normalized}},null,2);const b=new Blob([d],{type:'application/json'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=`${normalized.slug||'whiz_export'}.json`;a.click();URL.revokeObjectURL(u);showToast('JSON exported');};
-  const exportManifest=()=>{if(!validateExportTypography())return;if(!validateCriticalExportFields('manifest').valid)return;if(!ensureActionAllowed('publish'))return;if(hasBlockingSpineContrastIssue){showToast('Publish blocked: rotated spine contrast is below threshold.','error');return;}if(editorValidation.errors.length){showToast(`Export blocked: ${editorValidation.errors.join(' | ')}`,'error');return;}if(editorValidation.warnings.length&&!window.confirm(`Editor validation warnings:\n- ${editorValidation.warnings.join('\n- ')}\n\nExport anyway?`))return;const normalized=runNormalizationPreflight();if(!normalized)return;const payload={issueNum:content.issueNum,topic:normalized.topicTag,slug:normalized.slug,title:content.title,date:content.date,frameId,themeId:theme.id,strictMode,brandScore,complianceIssues,preflightResult,activityLog,sources:(content.sourceLinks||'').split(',').map(s=>s.trim()).filter(Boolean),targetMetric:content.targetMetric||'',metricConfidence:content.metricConfidence||'',metricProvenance:Array.isArray(content.metricProvenance)?content.metricProvenance:(content.metricProvenance?[content.metricProvenance]:[]),rowProvenance:{stats:normalizeStatsWithProvenance(content.stats).map((s,idx)=>({index:idx,label:s.label,provenance:s.provenance})),tableRows:normalizeTableRowsWithProvenance(content.tableRows).map((row,idx)=>({index:idx,cells:Object.fromEntries(Object.entries(row).filter(([k])=>k!=='provenance')),provenance:row.provenance}))},exportedAt:new Date().toISOString()};const d=JSON.stringify(payload,null,2);const b=new Blob([d],{type:'application/json'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=`whiz_issue${content.issueNum||'000'}_manifest.json`;a.click();URL.revokeObjectURL(u);showToast('Manifest exported');};
+  const exportJSON=()=>{if(!validateExportTypography())return;if(!validateCriticalExportFields('json').valid)return;if(!ensureActionAllowed('export'))return;const normalized=runNormalizationPreflight();if(!normalized)return;const d=JSON.stringify({...buildSave(),content:{...content,...normalized}},null,2);const b=new Blob([d],{type:'application/json'});withManagedDownload(b,`${normalized.slug||'whiz_export'}.json`);showToast('JSON exported');};
+  const exportManifest=()=>{if(!validateExportTypography())return;if(!validateCriticalExportFields('manifest').valid)return;if(!ensureActionAllowed('publish'))return;if(hasBlockingSpineContrastIssue){showToast('Publish blocked: rotated spine contrast is below threshold.','error');return;}if(editorValidation.errors.length){showToast(`Export blocked: ${editorValidation.errors.join(' | ')}`,'error');return;}if(editorValidation.warnings.length&&!window.confirm(`Editor validation warnings:\n- ${editorValidation.warnings.join('\n- ')}\n\nExport anyway?`))return;const normalized=runNormalizationPreflight();if(!normalized)return;const payload={issueNum:content.issueNum,topic:normalized.topicTag,slug:normalized.slug,title:content.title,date:content.date,frameId,themeId:theme.id,strictMode,brandScore,complianceIssues,preflightResult,activityLog,sources:(content.sourceLinks||'').split(',').map(s=>s.trim()).filter(Boolean),targetMetric:content.targetMetric||'',metricConfidence:content.metricConfidence||'',metricProvenance:Array.isArray(content.metricProvenance)?content.metricProvenance:(content.metricProvenance?[content.metricProvenance]:[]),rowProvenance:{stats:normalizeStatsWithProvenance(content.stats).map((s,idx)=>({index:idx,label:s.label,provenance:s.provenance})),tableRows:normalizeTableRowsWithProvenance(content.tableRows).map((row,idx)=>({index:idx,cells:Object.fromEntries(Object.entries(row).filter(([k])=>k!=='provenance')),provenance:row.provenance}))},exportedAt:new Date().toISOString()};const d=JSON.stringify(payload,null,2);const b=new Blob([d],{type:'application/json'});withManagedDownload(b,`whiz_issue${content.issueNum||'000'}_manifest.json`);showToast('Manifest exported');};
   const importJSON=e=>{const f=e.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=ev=>{try{const d=parseImportedState(JSON.parse(ev.target.result));d.frameId&&setFrameId(d.frameId);d.theme&&(setTheme(d.theme),setActiveTheme(d.theme));d.content&&resetContent(normalizeContentWithProvenance(d.content));d.overrides&&setOverrides(d.overrides);d.aspectRatio&&setAspectRatio(d.aspectRatio);d.bgGradient&&setBgGradient(d.bgGradient);d.patternOverlay&&setPatternOverlay(d.patternOverlay);setWorkflowPhase(WORKFLOW_PHASES.includes(d.workflowPhase)?d.workflowPhase:'draft');setPhaseChecklist(d.phaseChecklist||{draftAt:d.savedAt||Date.now(),reviewAt:null,publishReadyAt:null,lastTransitionAt:d.savedAt||Date.now()});showToast('Imported');}catch(err){showToast('Invalid JSON','error');}};r.readAsText(f);e.target.value='';};
   const exportHTML=()=>{if(!validateExportTypography())return;if(!validateCriticalExportFields('html').valid)return;if(!ensureActionAllowed('export'))return;const el=frameRef.current;if(!el)return;const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&family=Inter:wght@300..700&family=JetBrains+Mono:wght@400..700&display=swap" rel="stylesheet"><style>*{margin:0;padding:0;box-sizing:border-box}body{background:#0F1318;display:flex;justify-content:center;align-items:center;min-height:100vh}.whiz-frame{position:relative;overflow:hidden;flex-shrink:0}.wf-spine{position:absolute;left:0;top:0;bottom:0;width:3px;z-index:5}.wf-corner{position:absolute;width:16px;height:16px;z-index:6;opacity:.5}.wf-corner.tl{top:12px;left:12px;border-top:1.5px solid currentColor;border-left:1.5px solid currentColor}.wf-corner.tr{top:12px;right:12px;border-top:1.5px solid currentColor;border-right:1.5px solid currentColor}.wf-corner.bl{bottom:12px;left:12px;border-bottom:1.5px solid currentColor;border-left:1.5px solid currentColor}.wf-corner.br{bottom:12px;right:12px;border-bottom:1.5px solid currentColor;border-right:1.5px solid currentColor}.wf-content{position:relative;z-index:4;padding:40px 36px 32px 44px;display:flex;flex-direction:column;height:100%;box-sizing:border-box}.wf-title{font-family:'Space Grotesk',sans-serif;font-weight:700;letter-spacing:-.02em;line-height:1.05}.wf-deck{font-family:'Inter',sans-serif;line-height:1.6}.wf-body{font-family:'Inter',sans-serif;line-height:1.75}.wf-stat{display:flex;flex-direction:column;gap:4;padding:12px 14px;border-radius:6px}.wf-stat-val{font-family:'Space Grotesk',sans-serif;font-weight:700;line-height:1}.wf-stat-label{font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.1em}.wf-ticker{overflow:hidden;white-space:nowrap;height:${TICKER_CONTRACT.heightPx}px;display:flex;align-items:center;width:100%;position:relative;z-index:4}.wf-ticker-scroll{display:inline-block;animation:whiz-ticker-scroll ${TICKER_CONTRACT.speed.default}s linear infinite;font-family:${TICKER_CONTRACT.typography.fontFamily};font-size:${TICKER_CONTRACT.typography.fontSizePx}px;letter-spacing:${TICKER_CONTRACT.typography.letterSpacingEm}em;font-weight:${TICKER_CONTRACT.typography.fontWeight};text-transform:${TICKER_CONTRACT.typography.textTransform};padding-left:${TICKER_CONTRACT.padding.textInlineStartPct}%}.wf-section-head{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.15em;text-transform:uppercase;display:flex;align-items:center;gap:8px;margin-bottom:12px}.wf-section-head::before{content:'';width:12px;height:1.5px;background:currentColor;opacity:.5}.wf-handle{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.08em}.wf-table{width:100%;border-collapse:collapse}.wf-table th{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;text-align:left;padding:7px 10px;border-bottom:1px solid rgba(255,255,255,.06)}.wf-table td{font-family:'Inter',sans-serif;font-size:12px;padding:7px 10px;border-bottom:1px solid rgba(255,255,255,.04)}@keyframes whiz-ticker-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}</style></head><body>${el.outerHTML}</body></html>`;const b=new Blob([html],{type:'text/html'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=`whiz_export.html`;a.click();URL.revokeObjectURL(u);showToast('HTML exported');};
-  const exportPNG=async()=>{if(!validateExportTypography())return;if(!validateCriticalExportFields('png').valid)return;if(!frameRef.current||exporting)return;if(!ensureActionAllowed('publish'))return;if(hasBlockingSpineContrastIssue){showToast('Publish blocked: rotated spine contrast is below threshold.','error');return;}const normalized=runNormalizationPreflight();if(!normalized)return;if(editorValidation.errors.length){showToast(`Export blocked: ${editorValidation.errors.join(' | ')}`,'error');return;}if(strictMode&&complianceIssues.length){showToast(`Strict mode blocked export (${complianceIssues.length} issues)`,'error');return;}if(!strictMode&&complianceIssues.length&&!window.confirm(`Whiz compliance warnings:\\n- ${complianceIssues.join('\\n- ')}\\n\\nExport anyway?`))return;if(editorValidation.warnings.length&&!window.confirm(`Editor validation warnings:\\n- ${editorValidation.warnings.join('\\n- ')}\\n\\nExport anyway?`))return;setExporting(true);showToast('Generating PNG...','info');try{const sceneModel=createSceneModel({frameId,theme,content:{...content,...normalized},overrides,aspectRatio,bgGradient});const{canvas,usedFallback}=await exportFrame({contractInput:{format:'png',dimensions:{width:aspectRatio.w,height:aspectRatio.h},quality:1,background:overrides.frameBg||theme.base,version:'1.0.0'},sceneModel,sceneRenderer:renderSceneToCanvas,domFallbackRenderer:(contract)=>renderDomSnapshotToCanvas(frameRef.current,{width:contract.dimensions.width,height:contract.dimensions.height,backgroundColor:contract.background})});try{canvas.toBlob(bl=>{bl&&navigator.clipboard?.write&&navigator.clipboard.write([new ClipboardItem({'image/png':bl})]).catch(()=>{});});}catch(e){}const baseName=normalized.slug||'whiz_export';const imageFileName=`${baseName}.png`;const u=canvas.toDataURL('image/png');const a=document.createElement('a');a.href=u;a.download=imageFileName;a.click();const summary=buildExportSummary(normalized);exportSummarySidecars(baseName,summary,imageFileName);showToast(`PNG exported + summary sidecars${usedFallback?' (DOM fallback)':''}`);}catch(e){console.error(e);showToast(`Export failed: ${e.message||'unknown error'}`,'error');}setExporting(false);}
+  const exportPNG=async()=>{if(!validateExportTypography())return;if(!validateCriticalExportFields('png').valid)return;if(!frameRef.current||exporting)return;if(!ensureActionAllowed('publish'))return;if(hasBlockingSpineContrastIssue){showToast('Publish blocked: rotated spine contrast is below threshold.','error');return;}const normalized=runNormalizationPreflight();if(!normalized)return;if(editorValidation.errors.length){showToast(`Export blocked: ${editorValidation.errors.join(' | ')}`,'error');return;}if(strictMode&&complianceIssues.length){showToast(`Strict mode blocked export (${complianceIssues.length} issues)`,'error');return;}if(!strictMode&&complianceIssues.length&&!window.confirm(`Whiz compliance warnings:\\n- ${complianceIssues.join('\\n- ')}\\n\\nExport anyway?`))return;if(editorValidation.warnings.length&&!window.confirm(`Editor validation warnings:\\n- ${editorValidation.warnings.join('\\n- ')}\\n\\nExport anyway?`))return;setExporting(true);showToast('Generating PNG...','info');try{const sceneModel=createSceneModel({frameId,theme,content:{...content,...normalized},overrides,aspectRatio,bgGradient});const{canvas,usedFallback,exportMetadata}=await exportFrame({contractInput:{format:'png',dimensions:{width:aspectRatio.w,height:aspectRatio.h},quality:1,background:overrides.frameBg||theme.base,version:'1.0.0'},sceneModel,sceneRenderer:renderSceneToCanvas,simplifiedSceneRenderer:renderSceneToCanvas,domFallbackRenderer:(contract)=>renderDomSnapshotToCanvas(frameRef.current,{width:contract.dimensions.width,height:contract.dimensions.height,backgroundColor:contract.background}),profileContext:{deviceClass:window.innerWidth<=900?'mobile':'desktop',performanceTier:window.devicePixelRatio>1.5?'high':'medium'}});try{canvas.toBlob(bl=>{bl&&navigator.clipboard?.write&&navigator.clipboard.write([new ClipboardItem({'image/png':bl})]).catch(()=>{});});}catch(e){}const baseName=normalized.slug||'whiz_export';const imageFileName=`${baseName}.png`;const u=canvas.toDataURL('image/png');const a=document.createElement('a');a.href=u;a.download=imageFileName;a.click();const summary=buildExportSummary(normalized,exportMetadata?.exportProfileDecision);exportSummarySidecars(baseName,summary,imageFileName);showToast(`PNG exported + summary sidecars${usedFallback?' (DOM fallback)':''}`);}catch(e){console.error(e);showToast(`Export failed: ${e.message||'unknown error'}`,'error');}setExporting(false);}
   const exportWebP=async()=>{if(!validateExportTypography())return;
     if(!validateCriticalExportFields('webp').valid)return;
     if(!rolePermissions.canExportAssets){showToast(roleReasons.exportAssets,'warning');return;}
@@ -985,15 +1019,16 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     const normalizationPreflight=runNormalizationPreflight();if(!normalizationPreflight)return;const { normalizedContent, taxonomyAutoCorrected }=normalizationPreflight;
     const v=validateEditorState({frameId,theme,content,overrides,uploadedImages});
     if(!v.valid){showToast(`Export blocked (${v.codes.join(', ')})`,'error');return;}
+    await waitForCriticalFonts({ profile:'export' });
     setExporting(true);showToast('Generating WebP…');
     try{setDatasetSnapshotRecord({snapshotId:currentDatasetSnapshot.snapshotId,hash:currentDatasetSnapshot.hash,schemaVersion:currentDatasetSnapshot.schemaVersion,savedAt:Date.now()});
       const sceneModel=createSceneModel({frameId,theme,content:{...content,...normalizedContent},overrides,aspectRatio,bgGradient});
-      const {canvas:cv,usedFallback}=await exportFrame({contractInput:{format:'webp',dimensions:{width:aspectRatio.w,height:aspectRatio.h},quality:0.92,background:overrides.frameBg||theme.base,citationMode:content.exportCitationMode||content.citationMode||'off',version:'1.0.0'},sceneModel,sceneRenderer:renderSceneToCanvas,domFallbackRenderer:(contract)=>renderDomSnapshotToCanvas(frameRef.current,{width:contract.dimensions.width,height:contract.dimensions.height,backgroundColor:contract.background})});
+      const {canvas:cv,usedFallback,exportMetadata}=await exportFrame({contractInput:{format:'webp',dimensions:{width:aspectRatio.w,height:aspectRatio.h},quality:0.92,background:overrides.frameBg||theme.base,citationMode:content.exportCitationMode||content.citationMode||'off',version:'1.0.0'},sceneModel,sceneRenderer:renderSceneToCanvas,simplifiedSceneRenderer:renderSceneToCanvas,domFallbackRenderer:(contract)=>renderDomSnapshotToCanvas(frameRef.current,{width:contract.dimensions.width,height:contract.dimensions.height,backgroundColor:contract.background}),profileContext:{deviceClass:window.innerWidth<=900?'mobile':'desktop',performanceTier:window.devicePixelRatio>1.5?'high':'medium'}});
       await new Promise((res,rej)=>cv.toBlob(b=>{
         if(!b){rej(new Error('WebP blob empty'));return;}
         const u=URL.createObjectURL(b);const a=document.createElement('a');
         const baseName=normalizedContent.slug||'whiz_export';const imageFileName=`${baseName}.webp`;a.href=u;a.download=imageFileName;a.click();URL.revokeObjectURL(u);
-        const summary=buildExportSummary(normalizedContent);exportSummarySidecars(baseName,summary,imageFileName);
+        const summary=buildExportSummary(normalizedContent,exportMetadata?.exportProfileDecision);exportSummarySidecars(baseName,summary,imageFileName);
         track(TELEMETRY_EVENTS.EXPORT_SUCCESS,{format:'webp',strictMode,taxonomyAutoCorrected});showToast(`WebP exported + summary sidecars${usedFallback?' (DOM fallback)':''}`);res();
       },'image/webp',0.92));
     }catch(e){track(TELEMETRY_EVENTS.EXPORT_FAILURE,{format:'webp',reason:e.message||'error',strictMode});showToast(`WebP failed: ${e.message||'error'}`,'error');}
@@ -1031,7 +1066,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     setWhizEffects(prev => ({ ...prev, [effectKey]: nextValue }));
   };
   useEffect(()=>{if(!isActive)return;const t=setTimeout(()=>{try{localStorage.setItem('whiz-autosave',JSON.stringify({frameId,theme,content,overrides,aspectRatio,bgGradient,patternOverlay,savedAt:Date.now()}));}catch(e){}},3000);return()=>clearTimeout(t);},[isActive,content,overrides,frameId,theme,aspectRatio,bgGradient,patternOverlay]);
-  const applyTheme=t=>{setTheme(t);setActiveTheme(t);};
+  const applyTheme=t=>layoutShiftObserverRef.current?.markAction('themeSwitch',()=>{setTheme(t);setActiveTheme(t);});
   const applyTemplate=t=>{
     const layoutBase = createTemplateForLayout(selectedFrame.layout);
     const merged = { ...layoutBase, ...t.content };
@@ -1046,6 +1081,8 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const checklistGroups = useMemo(() => {
     const stateValidation = validateEditorState({ frameId, theme, content, overrides, uploadedImages }, { strictMode: strictWhizMode });
     const strictViolations = strictWhizMode ? stateValidation.errors.filter((error) => error.code === 'STRICT_STYLE_OVERRIDE_BLOCKED') : [];
+    const frameComplexity = scoreFrameComplexity({ content, overrides, uploadedImages, whizEffects, frameLayout: selectedFrame?.layout || frameId });
+    const frameComplexityClass = classifyComplexity(frameComplexity.score);
     return [
       {
         id: 'schema',
@@ -1078,6 +1115,21 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
         ],
       },
       {
+        id: 'complexity',
+        label: 'Frame Complexity',
+        checks: [
+          {
+            id: 'frame-complexity-budget',
+            label: `Complexity (${frameComplexityClass})`,
+            passed: frameComplexityClass !== 'critical',
+            blocking: strictWhizMode,
+            details: `score=${frameComplexity.score.toFixed(3)} · ${JSON.stringify(frameComplexity.breakdown)}`,
+            action: 'design',
+            actionLabel: 'Simplify Design',
+          },
+        ],
+      },
+      {
         id: 'strict-mode',
         label: 'Strict Mode Constraints',
         checks: [
@@ -1093,7 +1145,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
         ],
       },
     ];
-  }, [frameId, theme, content, overrides, uploadedImages, strictWhizMode, complianceIssues]);
+  }, [frameId, theme, content, overrides, uploadedImages, whizEffects, selectedFrame?.layout, strictWhizMode, complianceIssues]);
 
   const readinessSummary = useMemo(() => {
     const checks = checklistGroups.flatMap((group) => group.checks);
@@ -1215,11 +1267,15 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
         <strong>{validationIssueCount===0?'Ready to ship':'Validation needed'}</strong>
         <span>{primaryValidationIssue ? primaryValidationIssue : 'No blocking issues detected.'}</span>
       </div>
+      <div className="mobile-validation-chip" style={{marginTop:6}}>
+        <strong>Layout Shift · {layoutShiftSnapshot.totalShift.toFixed(4)}</strong>
+        <span>{layoutShiftWarnings[0] || 'Within CLS budget for current tier.'}</span>
+      </div>
       {!isExpertMode && <div className="editor-section" style={{marginBottom:8}}><div className="editor-section-title">Guided Sequence</div><div style={{fontSize:10,color:'var(--muted)',marginBottom:8}}>Follow these steps in order. Advanced controls stay collapsed until you reach their phase.</div><div style={{display:'grid',gridTemplateColumns:'repeat(5,minmax(0,1fr))',gap:6}}>{noviceSteps.map((step,idx)=><button key={step.id} className={`btn btn-ghost btn-sm ${noviceStep===step.id?'active':''}`} onClick={()=>setNoviceStep(step.id)} title={step.why} style={{display:'flex',flexDirection:'column',alignItems:'flex-start',gap:2,padding:'6px 8px'}}><span style={{fontFamily:'var(--font-m)',fontSize:9,color:'var(--dim)'}}>{idx+1}</span><span>{step.label}</span></button>)}</div><div style={{fontSize:10,color:'var(--dim)',marginTop:6}}>{noviceSteps.find((step)=>step.id===noviceStep)?.hint}</div></div>}
       {/* LEFT */}
       <div className={`editor-left ${mobileTab==='frame'?'mob-active':''}`}>
         <div className="editor-panel-header"><span>Frame &amp; Theme</span><span style={{color:'var(--theme-accent)',fontWeight:700}}>#{String(frameId).padStart(2,'0')}</span></div>
-        <div className="editor-section"><div className="editor-section-title">Template</div><input className="frame-search-mini" placeholder="Search frames..." onChange={e=>setFrameSearch(e.target.value)} value={frameSearch}/><div style={{display:'flex',flexDirection:'column',gap:4,maxHeight:260,overflowY:'auto'}}>{filteredFrames.map(f=>(<div key={f.id} onClick={()=>setFrameId(f.id)} style={{padding:'7px 10px',borderRadius:'var(--r)',cursor:'pointer',background:frameId===f.id?`color-mix(in srgb,${theme.accent} 12%,transparent)`:'transparent',border:`1px solid ${frameId===f.id?theme.accent:'transparent'}`,transition:'all 0.15s'}}><div style={{display:'flex',alignItems:'center',gap:6}}><span style={{fontFamily:'var(--font-m)',fontSize:9,color:'var(--dim)',width:22}}>{String(f.id).padStart(2,'0')}</span><SemanticChip kind="category" value={`tier-${f.tier}`} style={{fontSize:8,padding:'1px 5px'}}>T{f.tier}</SemanticChip><span style={{fontSize:12,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{f.name}</span><SemanticChip kind="category" value={f.layout} style={{fontSize:8,padding:'1px 5px'}}>{f.layout}</SemanticChip></div></div>))}</div></div>
+        <div className="editor-section"><div className="editor-section-title">Template</div><input className="frame-search-mini" placeholder="Search frames..." onChange={e=>setFrameSearch(e.target.value)} value={frameSearch}/><div style={{display:'flex',flexDirection:'column',gap:4,maxHeight:260,overflowY:'auto'}}>{filteredFrames.map(f=>(<div key={f.id} onClick={()=>layoutShiftObserverRef.current?.markAction('layoutSwitch',()=>setFrameId(f.id))} style={{padding:'7px 10px',borderRadius:'var(--r)',cursor:'pointer',background:frameId===f.id?`color-mix(in srgb,${theme.accent} 12%,transparent)`:'transparent',border:`1px solid ${frameId===f.id?theme.accent:'transparent'}`,transition:'all 0.15s'}}><div style={{display:'flex',alignItems:'center',gap:6}}><span style={{fontFamily:'var(--font-m)',fontSize:9,color:'var(--dim)',width:22}}>{String(f.id).padStart(2,'0')}</span><SemanticChip kind="category" value={`tier-${f.tier}`} style={{fontSize:8,padding:'1px 5px'}}>T{f.tier}</SemanticChip><span style={{fontSize:12,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{f.name}</span><SemanticChip kind="category" value={f.layout} style={{fontSize:8,padding:'1px 5px'}}>{f.layout}</SemanticChip></div></div>))}</div></div>
         <div className="editor-section"><div className="editor-section-title">Color Theme</div><div className="theme-grid">{THEMES.map(t=>(<div key={t.id} className={`theme-btn ${theme.id===t.id?'active':''}`} style={{borderColor:theme.id===t.id?t.accent:'var(--border)'}} onClick={()=>applyTheme(t)}><span className="theme-dot" style={{background:t.accent}}/><span className="theme-name" style={{color:theme.id===t.id?t.accent:'var(--muted)'}}>{t.name}</span></div>))}</div></div>
         <div className="editor-section accessibility-settings">
           <div className="editor-section-title">Accessibility</div>
@@ -1238,7 +1294,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
       {/* CENTER */}
       <div className={`editor-center ${mobileTab==='preview'?'mob-active':''}`} ref={centerRef}>
         <div className="frame-scale-wrap" style={{transform:`scale(${zoom})`}}><WhizFrame trustLevel={trustLevel} frameRef={frameRef} frame={selectedFrame} theme={theme} content={content} editMode={editMode} selectedEl={selectedEl} onSelectEl={k=>{setSelectedEl(k);k&&setRightTab('design');}} styleOverrides={overrides} showGrid={showGrid} aspectRatio={aspectRatio} uploadedImages={uploadedImages} bgGradient={bgGradient} patternOverlay={patternOverlay} strictWhizMode={strictWhizMode} whizEffects={whizEffects}
-            fontPairing={activeFontPairing}/></div>
+            fontPairing={resolvedFontPairing}/></div>
         <div className="zoom-bar"><IconButton className="zoom-btn" label="Zoom out" onClick={()=>setZoom(z=>Math.max(0.1,+(z-0.05).toFixed(2)))}>−</IconButton><span className="zoom-pct">{Math.round(zoom*100)}%</span><IconButton className="zoom-btn" label="Zoom in" onClick={()=>setZoom(z=>Math.min(1,+(z+0.05).toFixed(2)))}>+</IconButton><IconButton className="zoom-btn" label="Fit frame to viewport" onClick={updateZoom} style={{fontSize:10}}>⊡</IconButton><div style={{width:1,height:16,background:'var(--border)'}}/><IconButton className={`zoom-btn ${showGrid?'active':''}`} label={showGrid ? 'Hide grid overlay' : 'Show grid overlay'} onClick={()=>setShowGrid(g=>!g)} style={{color:showGrid?'var(--theme-accent)':undefined}}>▦</IconButton><IconButton className={`zoom-btn ${editMode?'active':''}`} label={editMode ? 'Disable edit mode' : 'Enable edit mode'} onClick={()=>{setEditMode(m=>!m);editMode&&setSelectedEl(null);}} style={{color:editMode?'var(--theme-accent)':undefined}}>✎</IconButton><div style={{width:1,height:16,background:'var(--border)'}}/><IconButton className="zoom-btn" label="Undo" onClick={()=>handleUndo(mobileTab==='preview'?'mobile':'desktop')} disabled={!canUndo} style={{opacity:canUndo?1:0.3}}>↶</IconButton><IconButton className="zoom-btn" label="Redo" onClick={()=>handleRedo(mobileTab==='preview'?'mobile':'desktop')} disabled={!canRedo} style={{opacity:canRedo?1:0.3}}>↷</IconButton></div>
         <div style={{position:'absolute',top:10,left:10,fontFamily:'var(--font-m)',fontSize:9,color:'var(--dim)',background:'rgba(0,0,0,0.6)',padding:'4px 8px',borderRadius:'var(--r)',backdropFilter:'blur(4px)'}}>{String(frameId).padStart(2,'0')} — {selectedFrame.name} · {aspectRatio.w}×{aspectRatio.h}</div>
         <div style={{position:'absolute',top:34,left:10,fontFamily:'var(--font-m)',fontSize:9,color:trustTone.fg,background:trustTone.bg,padding:'4px 8px',borderRadius:'var(--r)',border:`1px solid ${trustTone.border}`,backdropFilter:'blur(4px)'}}>Trust: {trustLevel}</div>
@@ -1504,17 +1560,19 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
           <div className="editor-section" style={{opacity:isSectionLocked('timeline')?0.55:1}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}><div className="editor-section-title" style={{marginBottom:0}}>Timeline Events</div><button className="btn btn-ghost btn-sm" onClick={()=>toggleSectionLock('timeline')}>{isSectionLocked('timeline')?'🔒 Locked':'🔓 Unlock'}</button>
               <button className="btn btn-secondary btn-sm" style={{fontSize:9,padding:'2px 8px'}} disabled={isSectionLocked('timeline')} onClick={()=>updateContent('timelineEvents',[...(content.timelineEvents||[]),{date:'',label:'',sub:'',provenance:createDefaultProvenance()}])}>+ Event</button>
             </div>
-            {(content.timelineEvents||[]).map((ev,i)=>(<div key={i}>
-              <div style={{display:'grid',gridTemplateColumns:'80px 1fr 1fr auto auto auto',gap:4,marginBottom:4,alignItems:'center'}}>
-                <input disabled={isSectionLocked('timeline')} value={ev.date||''} placeholder="Date" style={{fontSize:10,padding:'4px 6px'}} onChange={e=>{const raw=e.target.value;const normalized=normalizeDateInput(raw);const a=[...(content.timelineEvents||[])];a[i]={...a[i],date:normalized.valid?normalized.displayDate:raw};updateContent('timelineEvents',a);if(raw&&!normalized.valid){showToast(`Invalid timeline date. ${normalized.suggestions.join(' ')}`,'warning');}}}/>
-                <input disabled={isSectionLocked('timeline')} value={ev.label||''} placeholder="Event" style={{fontSize:10,padding:'4px 6px'}} onChange={e=>{const a=[...(content.timelineEvents||[])];a[i]={...a[i],label:e.target.value};updateContent('timelineEvents',a);}}/>
-                <input disabled={isSectionLocked('timeline')} value={ev.sub||''} placeholder="Note" style={{fontSize:10,padding:'4px 6px'}} onChange={e=>{const a=[...(content.timelineEvents||[])];a[i]={...a[i],sub:e.target.value};updateContent('timelineEvents',a);}}/>
-                <SemanticChip tone={isPublishReadyProvenance(ev?.provenance)?'positive':'warning'}>{isPublishReadyProvenance(ev?.provenance)?'Complete':'Missing'}</SemanticChip>
-                <SemanticChip tone={getConfidenceMeta(ev?.provenance).tone}>{getConfidenceMeta(ev?.provenance).icon} {getConfidenceMeta(ev?.provenance).label}</SemanticChip>
-                <button className="btn btn-danger btn-sm" style={{padding:'0 6px',height:28}} disabled={isSectionLocked('timeline')} onClick={()=>updateContent('timelineEvents',(content.timelineEvents||[]).filter((_,r)=>r!==i))}>✕</button>
+            {(content.timelineEvents||[]).map((ev,i)=>(
+              <div key={i}>
+                <div style={{display:'grid',gridTemplateColumns:'80px 1fr 1fr auto auto auto',gap:4,marginBottom:4,alignItems:'center'}}>
+                  <input disabled={isSectionLocked('timeline')} value={ev.date||''} placeholder="Date" style={{fontSize:10,padding:'4px 6px'}} onChange={e=>{const raw=e.target.value;const normalized=normalizeDateInput(raw);const a=[...(content.timelineEvents||[])];a[i]={...a[i],date:normalized.valid?normalized.displayDate:raw};updateContent('timelineEvents',a);if(raw&&!normalized.valid){showToast(`Invalid timeline date. ${normalized.suggestions.join(' ')}`,'warning');}}}/>
+                  <input disabled={isSectionLocked('timeline')} value={ev.label||''} placeholder="Event" style={{fontSize:10,padding:'4px 6px'}} onChange={e=>{const a=[...(content.timelineEvents||[])];a[i]={...a[i],label:e.target.value};updateContent('timelineEvents',a);}}/>
+                  <input disabled={isSectionLocked('timeline')} value={ev.sub||''} placeholder="Note" style={{fontSize:10,padding:'4px 6px'}} onChange={e=>{const a=[...(content.timelineEvents||[])];a[i]={...a[i],sub:e.target.value};updateContent('timelineEvents',a);}}/>
+                  <SemanticChip tone={isPublishReadyProvenance(ev?.provenance)?'positive':'warning'}>{isPublishReadyProvenance(ev?.provenance)?'Complete':'Missing'}</SemanticChip>
+                  <SemanticChip tone={getConfidenceMeta(ev?.provenance).tone}>{getConfidenceMeta(ev?.provenance).icon} {getConfidenceMeta(ev?.provenance).label}</SemanticChip>
+                  <button className="btn btn-danger btn-sm" style={{padding:'0 6px',height:28}} disabled={isSectionLocked('timeline')} onClick={()=>updateContent('timelineEvents',(content.timelineEvents||[]).filter((_,r)=>r!==i))}>✕</button>
+                </div>
+                <ProvenanceEditor disabled={isSectionLocked('timeline')} value={ev?.provenance} collapsed={false} onToggle={()=>{}} onChange={(provenance)=>{const a=[...(content.timelineEvents||[])];a[i]={...a[i],provenance:normalizeProvenance(provenance)};updateContent('timelineEvents',a);}}/>
               </div>
-              <ProvenanceEditor disabled={isSectionLocked('timeline')} value={ev?.provenance} collapsed={false} onToggle={()=>{}} onChange={(provenance)=>{const a=[...(content.timelineEvents||[])];a[i]={...a[i],provenance:normalizeProvenance(provenance)};updateContent('timelineEvents',a);}}/>
-            </div>))}
+            ))}
             {(content.timelineEvents||[]).length===0&&<div style={{fontFamily:'var(--font-m)',fontSize:10,color:'var(--dim)',padding:'8px 0'}}>No events yet — click + Event to add</div>}
           </div>
           <div className="editor-section"><div className="editor-section-title">Big Number</div><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}><div className="form-group" style={{marginBottom:0}}><label className="form-label">Label</label><input value={content.bigLabel||''} onChange={e=>updateContent('bigLabel',e.target.value)}/></div><div className="form-group" style={{marginBottom:0}}><label className="form-label">Value</label><input value={content.bigNumber||''} onChange={e=>updateContent('bigNumber',e.target.value)}/></div></div></div>
@@ -1548,7 +1606,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
             <div className="editor-section-title">Frame Warnings</div>
             {activeFramePitfalls.length===0?<div style={{fontSize:11,color:'var(--dim)'}}>No known pitfalls for this frame.</div>:<div style={{display:'flex',flexDirection:'column',gap:6}}>{activeFramePitfalls.map(p=>(<div key={p.id} style={{fontSize:11,padding:'7px 8px',borderRadius:6,border:`1px solid ${p.severity==='high'?'rgba(235,87,87,0.45)':'rgba(229,178,58,0.45)'}`,background:p.severity==='high'?'rgba(235,87,87,0.08)':'rgba(229,178,58,0.1)'}}><div style={{fontFamily:'var(--font-m)',fontSize:9,letterSpacing:'0.08em',textTransform:'uppercase',marginBottom:4}}>{p.severity==='high'?'Blocking':'Non-blocking'}</div><div>{p.warning}</div><div style={{opacity:0.75,marginTop:4}}>Hint: {p.triggerHint}</div></div>))}</div>}
           </div>
-          <div className="editor-section"><div className="editor-section-title" style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>Export<button className="btn btn-ghost btn-sm" onClick={()=>setShowShortcutHelp(true)} aria-label="Open keyboard shortcuts help">⌨ Shortcuts</button></div><div style={{fontFamily:'var(--font-m)',fontSize:9,color:'var(--dim)',marginBottom:8,lineHeight:1.7}}>⌘S Save · ⌘Z Undo · ⌘⇧Z Redo</div><div style={{display:'flex',flexDirection:'column',gap:8}}><div style={{display:'flex',gap:6}}><button className="btn btn-primary btn-sm" style={{flex:1}} onClick={exportPNG} disabled={exporting}>{exporting?'…':`PNG`}</button>{isExpertMode && <button className="btn btn-secondary btn-sm editor-action-btn" onClick={exportWebP} disabled={exporting}>WebP</button>} </div><div style={{display:'flex',gap:6}}>{isExpertMode && <button className="btn btn-ghost btn-sm" style={{flex:1}} onClick={exportHTML}>HTML</button>}<button className="btn btn-ghost btn-sm" style={{flex:1}} onClick={exportJSON}>JSON</button></div><label className="import-label">↑ Import <input type="file" accept=".json" onChange={importJSON}/></label><div style={{fontSize:10,color:isSnapshotLockCurrent?'#8EF0B0':'#FFB3B3',border:'1px solid var(--border)',borderRadius:8,padding:'8px 10px',background:'rgba(15,19,24,0.55)'}}><div style={{fontWeight:600,marginBottom:4}}>Snapshot lock: {isSnapshotLockCurrent?'Current':'Outdated'}</div><div style={{fontFamily:'var(--font-m)',fontSize:9,wordBreak:'break-all'}}>Hash {currentDatasetSnapshot.hash} · Schema {currentDatasetSnapshot.schemaVersion}</div><button className="btn btn-ghost btn-sm" style={{marginTop:6}} onClick={refreshSnapshotLock}>Refresh lock</button></div><button className="btn btn-secondary w-full" onClick={()=>setShowSaveModal(true)}>Save</button><button className="btn btn-ghost w-full" onClick={()=>commandRegistry.find(c=>c.id==='duplicate')?.handler()}>Duplicate</button>{saves.length>0&&<button className="btn btn-ghost w-full" onClick={()=>commandRegistry.find(c=>c.id==='load')?.handler()}>Load ({saves.length})</button>}</div></div>
+          <div className="editor-section"><div className="editor-section-title" style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>Export<button className="btn btn-ghost btn-sm" onClick={()=>setShowShortcutHelp(true)} aria-label="Open keyboard shortcuts help">⌨ Shortcuts</button></div><div style={{fontFamily:'var(--font-m)',fontSize:9,color:'var(--dim)',marginBottom:8,lineHeight:1.7}}>⌘S Save · ⌘Z Undo · ⌘⇧Z Redo</div><div style={{display:'flex',flexDirection:'column',gap:8}}><div className="form-group" style={{marginBottom:0}}><label className="form-label">Export preset</label><select value={exportPresetId} onChange={e=>setExportPresetId(e.target.value)}><option value="draft">Draft</option><option value="standard">Standard</option><option value="high">High</option><option value="archive">Archive</option></select></div><div style={{display:'flex',gap:6}}><button className="btn btn-primary btn-sm" style={{flex:1}} onClick={exportPNG} disabled={exporting}>{exporting?'…':`PNG`}</button>{isExpertMode && <button className="btn btn-secondary btn-sm editor-action-btn" onClick={exportWebP} disabled={exporting}>WebP</button>} </div><div style={{display:'flex',gap:6}}>{isExpertMode && <button className="btn btn-ghost btn-sm" style={{flex:1}} onClick={exportHTML}>HTML</button>}<button className="btn btn-ghost btn-sm" style={{flex:1}} onClick={exportJSON}>JSON</button></div><label className="import-label">↑ Import <input type="file" accept=".json" onChange={importJSON}/></label><div style={{fontSize:10,color:isSnapshotLockCurrent?'#8EF0B0':'#FFB3B3',border:'1px solid var(--border)',borderRadius:8,padding:'8px 10px',background:'rgba(15,19,24,0.55)'}}><div style={{fontWeight:600,marginBottom:4}}>Snapshot lock: {isSnapshotLockCurrent?'Current':'Outdated'}</div><div style={{fontFamily:'var(--font-m)',fontSize:9,wordBreak:'break-all'}}>Hash {currentDatasetSnapshot.hash} · Schema {currentDatasetSnapshot.schemaVersion}</div><button className="btn btn-ghost btn-sm" style={{marginTop:6}} onClick={refreshSnapshotLock}>Refresh lock</button></div><button className="btn btn-secondary w-full" onClick={()=>setShowSaveModal(true)}>Save</button><button className="btn btn-ghost w-full" onClick={()=>commandRegistry.find(c=>c.id==='duplicate')?.handler()}>Duplicate</button>{saves.length>0&&<button className="btn btn-ghost w-full" onClick={()=>commandRegistry.find(c=>c.id==='load')?.handler()}>Load ({saves.length})</button>}</div></div>
         </>)}
       </div>
       {showCommandPalette&&<div className="modal-overlay open" onClick={e=>e.target===e.currentTarget&&setShowCommandPalette(false)}><div className="modal" style={{maxWidth:640}}><div className="modal-header"><span className="modal-title">Command Palette</span><IconButton className="modal-close" label="Close command palette" onClick={()=>setShowCommandPalette(false)}>✕</IconButton></div><input className="form-control" autoFocus placeholder="Type a command..." value={paletteQuery} onChange={e=>setPaletteQuery(e.target.value)} style={{marginBottom:12}}/>{Object.entries(filterCommands(commandRegistry.filter(c=>c.id!=='palette.open'),paletteQuery).reduce((groups,cmd)=>{(groups[cmd.category] ||= []).push(cmd);return groups;},{})).map(([group,items])=>(<div key={group} style={{marginBottom:10}}><div style={{fontSize:11,color:'var(--dim)',marginBottom:6,textTransform:'uppercase'}}>{group}</div><div style={{display:'flex',flexDirection:'column',gap:4}}>{items.map(cmd=>(<button key={cmd.id} className="btn btn-ghost" style={{justifyContent:'space-between',display:'flex',width:'100%'}} disabled={!cmd.enabled()} onClick={()=>{cmd.handler();setShowCommandPalette(false);}}><span>{cmd.label}</span><span style={{fontFamily:'var(--font-m)',fontSize:10,color:'var(--dim)'}}>{cmd.shortcut}</span></button>))}</div></div>))}</div></div>}
