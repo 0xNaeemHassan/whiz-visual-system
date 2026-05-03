@@ -29,7 +29,12 @@ const clampLines = (text = '', maxLines = 3, charsPerLine = 28) => text.slice(0,
 
 const ellipsis = (text = '', maxChars = 120) => (text.length <= maxChars ? text : `${text.slice(0, maxChars - 1).trimEnd()}…`);
 
-const compressText = ({ text = '', budget, style = {}, baseSize }) => {
+const getPolicyForField = (policy = {}, fieldKey = '') => {
+  const defaults = { strategy: 'ellipsis', maxLines: null, priority: 2 };
+  return { ...defaults, ...(policy?.global || {}), ...(policy?.fields?.[fieldKey] || {}) };
+};
+
+const compressText = ({ text = '', budget, style = {}, baseSize, policy = {}, fieldKey = '' }) => {
   const actions = [];
   let nextText = text;
   const nextStyle = { ...style };
@@ -44,17 +49,28 @@ const compressText = ({ text = '', budget, style = {}, baseSize }) => {
     actions.push('reduce-font');
   }
 
-  if (nextText.length > budget.maxChars * 1.2) {
-    nextText = clampLines(nextText, budget.maxLines, Math.round(budget.maxChars / budget.maxLines));
+  const fieldPolicy = getPolicyForField(policy, fieldKey);
+  const overBudget = nextText.length > budget.maxChars;
+
+  if (fieldPolicy.strategy === 'wrap') {
+    nextStyle.whiteSpace = 'normal';
+    nextStyle.overflowWrap = 'anywhere';
+    actions.push('wrap');
+  }
+
+  if (fieldPolicy.strategy === 'clamp' || (nextText.length > budget.maxChars * 1.2 && fieldPolicy.strategy !== 'wrap')) {
+    const lineBudget = fieldPolicy.maxLines || budget.maxLines;
+    nextText = clampLines(nextText, lineBudget, Math.round(budget.maxChars / lineBudget));
     actions.push('clamp-lines');
   }
 
-  if (nextText.length > budget.maxChars) {
+  if ((fieldPolicy.strategy === 'ellipsis' || overBudget) && fieldPolicy.strategy !== 'wrap' && nextText.length > budget.maxChars) {
     nextText = ellipsis(nextText, budget.maxChars);
     actions.push('ellipsis');
   }
 
-  return { text: nextText, style: nextStyle, actions };
+  const fallbackTriggered = overBudget && ['ellipsis', 'clamp-lines'].some((a) => actions.includes(a));
+  return { text: nextText, style: nextStyle, actions, fallbackTriggered, suggestion: fallbackTriggered ? `Consider raising ${fieldKey} priority or shortening source copy.` : null };
 };
 
 const normalizeStat = (stat = {}, ov = {}) => ({
@@ -74,14 +90,14 @@ const normalizeChips = (topicTag = '', chips = [], ov = {}) => {
   return seed.map((chip) => compressText({ text: chip, budget: PRIMITIVE_BUDGETS.chipTag, style: ov.tag, baseSize: ov.tag?.fontSize || 10 }));
 };
 
-export function applyOverflowPolicy({ family = 'core', aspectRatio, content = {}, ov = {}, baseTitleSize = 36 }) {
+export function applyOverflowPolicy({ family = 'core', aspectRatio, content = {}, ov = {}, baseTitleSize = 36, policy = {} }) {
   const ratioKey = (aspectRatio?.w || 1080) > (aspectRatio?.h || 1350) ? 'landscape' : 'portrait';
   const familyBudget = BUDGETS[family] || BUDGETS.core;
   const budget = familyBudget[ratioKey];
 
-  const title = compressText({ text: content.title, budget: budget.title, style: ov.title, baseSize: ov.title?.fontSize || baseTitleSize });
-  const deck = compressText({ text: content.deck, budget: budget.deck, style: ov.deck, baseSize: ov.deck?.fontSize || 18 });
-  const body = compressText({ text: content.body, budget: budget.body, style: ov.body, baseSize: ov.body?.fontSize || 16 });
+  const title = compressText({ text: content.title, budget: budget.title, style: ov.title, baseSize: ov.title?.fontSize || baseTitleSize, policy, fieldKey: 'title' });
+  const deck = compressText({ text: content.deck, budget: budget.deck, style: ov.deck, baseSize: ov.deck?.fontSize || 18, policy, fieldKey: 'deck' });
+  const body = compressText({ text: content.body, budget: budget.body, style: ov.body, baseSize: ov.body?.fontSize || 16, policy, fieldKey: 'body' });
   const normalizedStats = (content.stats || []).map((stat) => normalizeStat(stat, ov));
   const normalizedHeaders = normalizeRow(content.tableHeaders || [], ov);
   const normalizedRows = (content.tableRows || []).map((row) => normalizeRow(row, ov));
@@ -105,6 +121,10 @@ export function applyOverflowPolicy({ family = 'core', aspectRatio, content = {}
       tags: normalizedChips.map((chip) => chip.text),
     },
     ov: { ...ov, title: title.style, deck: deck.style, body: body.style, footerStream: footerStream.style },
+    truncation: {
+      hasFallback: [title, deck, body].some((entry) => entry.fallbackTriggered),
+      suggestions: [title, deck, body].filter((entry) => entry.suggestion).map((entry) => entry.suggestion),
+    },
     actions: {
       title: title.actions, deck: deck.actions, body: body.actions,
       stats: normalizedStats.map((s) => ({ label: s.label.actions, value: s.value.actions })),
