@@ -1,3 +1,4 @@
+import { secureStorage } from './secureStorage.js';
 import { buildRenderCacheSignature } from '../state/cacheKey';
 
 function safeJsonParse(value) {
@@ -27,7 +28,7 @@ export function invalidateRenderCachesIfNeeded({
   fontConfig,
   exportProfile,
 }) {
-  const targetStorage = storage || window.localStorage;
+  const targetStorage = storage || secureStorage.raw;
   const nextSignature = buildRenderCacheSignature({ theme, fontConfig, exportProfile });
   const currentSignature = safeJsonParse(targetStorage.getItem(signatureKey));
 
