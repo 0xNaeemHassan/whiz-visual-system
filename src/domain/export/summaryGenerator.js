@@ -6,6 +6,7 @@ const FRAME_TYPE_REQUIREMENTS = Object.freeze({
 });
 
 const safe = (v) => String(v || '').trim();
+const normalizeConfidence = (value) => ['low', 'medium', 'high'].includes(String(value || '').toLowerCase()) ? String(value).toLowerCase() : 'medium';
 
 export function generateExportSummary({ frame, content = {}, complianceIssues = [], validationWarnings = [] }) {
   const title = safe(content.title);
@@ -21,6 +22,12 @@ export function generateExportSummary({ frame, content = {}, complianceIssues = 
     ...((Array.isArray(content.stats) ? content.stats : []).map((s) => safe(s?.provenance?.date))),
     ...((Array.isArray(content.tableRows) ? content.tableRows : []).map((r) => safe(r?.provenance?.date))),
   ].filter(Boolean));
+  const confidenceEntries = [
+    ...(Array.isArray(content.stats) ? content.stats : []).map((s) => normalizeConfidence(s?.provenance?.confidence)),
+    ...(Array.isArray(content.tableRows) ? content.tableRows : []).map((r) => normalizeConfidence(r?.provenance?.confidence)),
+    ...(Array.isArray(content.timelineEvents) ? content.timelineEvents : []).map((e) => normalizeConfidence(e?.provenance?.confidence)),
+  ];
+  const confidenceSummary = confidenceEntries.reduce((acc, level) => ({ ...acc, [level]: (acc[level] || 0) + 1, total: (acc.total || 0) + 1 }), { low: 0, medium: 0, high: 0, total: 0 });
 
   const summary = {
     frameId: frame?.id || null,
@@ -31,6 +38,7 @@ export function generateExportSummary({ frame, content = {}, complianceIssues = 
     riskFlags: [...complianceIssues, ...validationWarnings].filter(Boolean),
     trustLevel: safe(content.trustLevel) || 'Draft',
     dataTimestamps: Array.from(timestamps),
+    confidenceSummary,
     exportedAt: new Date().toISOString(),
   };
 
@@ -59,6 +67,7 @@ export function buildSummaryText(summary = {}) {
     ...((summary.riskFlags || []).map((r) => `- ${r}`)),
     'Data Timestamps:',
     ...((summary.dataTimestamps || []).map((t) => `- ${t}`)),
+    `Confidence Summary: high=${summary.confidenceSummary?.high || 0}, medium=${summary.confidenceSummary?.medium || 0}, low=${summary.confidenceSummary?.low || 0}`,
   ];
   return lines.join('\n');
 }
