@@ -143,8 +143,13 @@ export function useUndoRedo(initialState, maxHistory = 50) {
     setCursor(0);
   }, []);
 
+
+  const applyBulk = useCallback((valueOrFn, reason = 'Bulk replacement') => {
+    set(valueOrFn, { immediate: true, reason });
+  }, [set]);
+
   const canUndo = cursor > 0;
   const canRedo = cursor < historyRef.current.length - 1;
 
-  return { state, set, undo, redo, canUndo, canRedo, reset, commit, history, cursor, jumpTo };
+  return { state, set, applyBulk, undo, redo, canUndo, canRedo, reset, commit, history, cursor, jumpTo };
 }
