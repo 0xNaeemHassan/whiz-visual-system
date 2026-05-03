@@ -17,7 +17,7 @@ import { CONTENT_TEMPLATES } from '../data/templates';
 import { createDefaultContent, createDefaultOverrides, createDefaultEditorState } from '../domain/editorDefaults.js';
 import { nearestTypeScale, getComplianceIssues, getBrandScore, getEditorValidationReport } from '../utils/editorCompliance';
 import { normalizeContentTaxonomy } from '../utils/contentNormalization';
-import { buildMutationDispatcher } from './EditorMutations';
+import { buildMutationDispatcher } from './EditorMutations.js';
 import { normalizeDateInput, normalizeTimelineEvents } from '../domain/services/dateNormalizationService';
 import { SemanticChip } from '../components/primitives';
 import { getFramePitfalls } from '../data/framePitfalls';
@@ -116,9 +116,9 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const[saves,setSaves]=useLocalStorage('whiz-saves',[]);
   const[frameId,setFrameId]=useState(editingFrame||4);
   const[theme,setTheme]=useState(activeTheme);
-  const{state:content,set:setContent,undo,redo,canUndo,canRedo,reset:resetContent}=useUndoRedo(DEFAULT_CONTENT);
+  const{state:content,set:setContent,undo,redo,canUndo,canRedo,reset:resetContent,commit:commitContent}=useUndoRedo(DEFAULT_CONTENT);
   const[_savedOverrides,_persistOverrides]=useLocalStorage('whiz-overrides',DEFAULT_OVERRIDES);
-  const{state:overrides,set:setOverrides,undo:undoOverride,redo:redoOverride,reset:resetOverrides}=useUndoRedo(_savedOverrides);
+  const{state:overrides,set:setOverrides,undo:undoOverride,redo:redoOverride,reset:resetOverrides,commit:commitOverrides}=useUndoRedo(_savedOverrides);
   // Persist overrides to localStorage whenever they change
   useEffect(()=>{ _persistOverrides(overrides); },[overrides]);
   const[zoom,setZoom]=useState(0.35);const[saveName,setSaveName]=useState('');
@@ -128,7 +128,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const[selectedEl,setSelectedEl]=useState(null);const[rightTab,setRightTab]=useState('content');
   const[mobileTab,setMobileTab]=useState('preview');const[aspectRatio,setAspectRatio]=useState(RATIOS[0]);
   const [_savedMedia, persistMedia] = useLocalStorage('whiz-media',{uploadedImages:{logo:null,hero:null,badge:null},bgGradient:null,patternOverlay:null});
-  const { state: mediaState, set: setMediaState, reset: resetMediaState } = useUndoRedo(_savedMedia);
+  const { state: mediaState, set: setMediaState, reset: resetMediaState, commit: commitMedia } = useUndoRedo(_savedMedia);
   const uploadedImages = mediaState.uploadedImages;
   const bgGradient = mediaState.bgGradient;
   const patternOverlay = mediaState.patternOverlay;
@@ -326,7 +326,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     }catch(e){track(TELEMETRY_EVENTS.EXPORT_FAILURE,{format:'webp',reason:e.message||'error',strictMode});showToast(`WebP failed: ${e.message||'error'}`,'error');}
     setExporting(false);
   };
-  const mutations = useMemo(() => buildMutationDispatcher({ setContent, setOverrides, setMedia: setMediaState }), [setContent, setOverrides, setMediaState]);
+  const mutations = useMemo(() => buildMutationDispatcher({ setContent, setOverrides, setMedia: setMediaState, commitContent, commitOverrides, commitMedia }), [setContent, setOverrides, setMediaState, commitContent, commitOverrides, commitMedia]);
   const updateContent=(k,v,forceImmediate=false)=>mutations.content(k,c=>{const next={...c,[k]:v};if(k==='date'){const normalized=normalizeDateInput(v);if(normalized.valid)return{...next,date:normalized.displayDate};}if(k==='timelineEvents'){return{...next,timelineEvents:normalizeTimelineEvents(v)};}if(k==='topicTag'||k==='slug'){return normalizeContentTaxonomy(next).content;}return next;},forceImmediate);
   const updateStyle=(updater)=>mutations.style(updater);
   const updateMedia=(updater)=>mutations.image(updater);
