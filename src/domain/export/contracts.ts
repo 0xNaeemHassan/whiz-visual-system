@@ -8,6 +8,7 @@ export function createExportContract({
   quality = 0.92,
   background = null,
   version = EXPORT_CONTRACT_VERSION,
+  locale = 'en-US',
 }: Omit<ExportContract, 'version'> & { version?: string }): ExportContract {
-  return { format, dimensions, quality, background, version };
+  return { format, dimensions, quality, background, version, locale };
 }

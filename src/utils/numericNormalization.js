@@ -1,6 +1,7 @@
+import { formatLocaleNumber } from '../i18n/formatters.js';
 const ABBREV_MULTIPLIERS = Object.freeze({ K: 1_000, M: 1_000_000, B: 1_000_000_000 });
 
-function normalizeNumericString(value = '') {
+function normalizeNumericString(value = '', locale = 'en-US') {
   const raw = String(value ?? '');
   const trimmed = raw.trim();
   if (!trimmed) return { value: raw, normalized: raw, changed: false, reason: null };
@@ -31,7 +32,7 @@ function normalizeNumericString(value = '') {
 
   const scaled = abbr ? numericValue * ABBREV_MULTIPLIERS[abbr] : numericValue;
   const precision = percent ? 2 : (Number.isInteger(scaled) ? 0 : 2);
-  const formatted = scaled.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: precision });
+  const formatted = formatLocaleNumber(scaled, { locale, minimumFractionDigits: 0, maximumFractionDigits: precision });
   const normalized = `${unitPrefix}${formatted}${percent ? '%' : ''}`;
 
   return {
@@ -42,7 +43,7 @@ function normalizeNumericString(value = '') {
   };
 }
 
-function normalizeTableRows(rows = []) {
+function normalizeTableRows(rows = [], locale = 'en-US') {
   if (!Array.isArray(rows)) return { value: rows, normalized: rows, corrections: [] };
   const corrections = [];
   const normalized = rows.map((row, rowIndex) => {
@@ -50,7 +51,7 @@ function normalizeTableRows(rows = []) {
     const next = { ...row };
     Object.entries(row).forEach(([key, val]) => {
       if (typeof val !== 'string') return;
-      const result = normalizeNumericString(val);
+      const result = normalizeNumericString(val, locale);
       if (result.changed) {
         next[key] = result.normalized;
         corrections.push({ path: `tableRows[${rowIndex}].${key}`, before: val, after: result.normalized, reason: result.reason });
@@ -61,14 +62,14 @@ function normalizeTableRows(rows = []) {
   return { value: rows, normalized, corrections };
 }
 
-export function normalizeNumericFields(content = {}) {
+export function normalizeNumericFields(content = {}, { locale = 'en-US' } = {}) {
   const fields = ['bigNumber', 'bigValue', 'targetMetric'];
   const normalizedContent = { ...content };
   const corrections = [];
 
   fields.forEach((field) => {
     if (typeof content[field] !== 'string') return;
-    const result = normalizeNumericString(content[field]);
+    const result = normalizeNumericString(content[field], locale);
     if (result.changed) {
       normalizedContent[field] = result.normalized;
       corrections.push({ path: field, before: content[field], after: result.normalized, reason: result.reason });
@@ -78,14 +79,14 @@ export function normalizeNumericFields(content = {}) {
   if (Array.isArray(content.stats)) {
     normalizedContent.stats = content.stats.map((stat = {}, index) => {
       if (typeof stat?.value !== 'string') return stat;
-      const result = normalizeNumericString(stat.value);
+      const result = normalizeNumericString(stat.value, locale);
       if (!result.changed) return stat;
       corrections.push({ path: `stats[${index}].value`, before: stat.value, after: result.normalized, reason: result.reason });
       return { ...stat, value: result.normalized };
     });
   }
 
-  const tableResult = normalizeTableRows(content.tableRows || []);
+  const tableResult = normalizeTableRows(content.tableRows || [], locale);
   normalizedContent.tableRows = tableResult.normalized;
   corrections.push(...tableResult.corrections);
 
