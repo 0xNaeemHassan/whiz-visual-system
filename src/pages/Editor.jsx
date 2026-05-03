@@ -13,6 +13,7 @@ import GradientEditor from '../components/GradientEditor';
 import ImageUpload from '../components/ImageUpload';
 import AspectRatioSelector, { RATIOS } from '../components/AspectRatioSelector';
 import PatternSelector from '../components/PatternSelector';
+import ConfirmDialog from '../components/ConfirmDialog';
 import { CONTENT_TEMPLATES } from '../data/templates';
 import { createDefaultContent, createDefaultOverrides, createDefaultEditorState } from '../domain/editorDefaults.js';
 import { nearestTypeScale, getComplianceIssues, getBrandScore, getEditorValidationReport, validateEditorTextMinimum } from '../utils/editorCompliance';
@@ -77,6 +78,12 @@ const DEFAULT_TRUNCATION_POLICY = {
     footerStream: true,
   },
   strictModeSafe: false,
+};
+const DESTRUCTIVE_ACTION_POLICY = {
+  deleteSave: { actionId: 'delete-save', title: 'Delete save?', message: 'This cannot be undone.', danger: true, confirmLabel: 'Delete' },
+  overwriteLoad: { actionId: 'overwrite-load', title: 'Confirm destructive overwrite/load', message: 'Destructive changes were detected.', danger: true, confirmLabel: 'Overwrite / Load' },
+  resetDesign: { actionId: 'reset-design-overrides', title: 'Reset design overrides?', message: 'This clears all design overrides for the current frame.', danger: true, confirmLabel: 'Reset overrides' },
+  exportWarnings: { actionId: 'export-with-warnings', title: 'Export with warnings?' },
 };
 
 const createDefaultProvenance = () => ({
@@ -246,7 +253,7 @@ function DesignPanel({selectedEl,setSelectedEl,overrides,setOverrides,theme,bgGr
       <button className="btn btn-secondary btn-sm" style={{flex:1}} onClick={()=>{try{const s=localStorage.getItem('whiz-copied-style');if(s){const parsed=JSON.parse(s);const next=strictMode?sanitizeStrictStyleOverrides(parsed):parsed;setOverrides(next);if(strictMode&&JSON.stringify(next)!==JSON.stringify(parsed)){showToast('Strict mode removed blocked style overrides.','warning');}else{showToast('Style pasted');}}else showToast('Nothing copied yet','info');}catch(e){showToast('Paste failed','error');}}}>Paste</button>
     </div>
     <button className="btn btn-danger w-full btn-sm" onClick={async()=>{
-      if(await requestConfirmation({ title:'Reset design overrides?', message:'This clears all design overrides for the current frame.', danger:true, confirmLabel:'Reset overrides' })){
+      if(await requestConfirmation({ ...DESTRUCTIVE_ACTION_POLICY.resetDesign })){
         resetDesignState({
           resetOverrides,
           defaultOverrides: DEFAULT_OVERRIDES,
@@ -295,7 +302,9 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const setBgGradient = (value) => setMediaState(prev => ({...prev, bgGradient: value}), { immediate: true });
   const setPatternOverlay = (value) => setMediaState(prev => ({...prev, patternOverlay: value}), { immediate: true });
 
-  const[showDeleteConfirm,setShowDeleteConfirm]=useState(null);const[saveSearch,setSaveSearch]=useState('');
+  const[saveSearch,setSaveSearch]=useState('');
+  const [confirmState, setConfirmState] = useState(null);
+  const [sessionConfirmSkips, setSessionConfirmSkips] = useState({});
   const[saveTagsInput,setSaveTagsInput]=useState('');const[saveFolder,setSaveFolder]=useState('');const[saveStatus,setSaveStatus]=useState('');
   const[loadTagFilter,setLoadTagFilter]=useState('');const[loadFolderFilter,setLoadFolderFilter]=useState('');const[loadFrameFilter,setLoadFrameFilter]=useState('');
   const[loadDateFrom,setLoadDateFrom]=useState('');const[loadDateTo,setLoadDateTo]=useState('');
@@ -643,12 +652,12 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const confirmLoadAfterDiff = async () => {
     if (!pendingLoadSave) return;
     if (pendingSaveDiff?.destructiveFlags?.length) {
-      const ok = await requestConfirmation({ title:'Confirm destructive overwrite/load', message:'Destructive changes were detected.', details: pendingSaveDiff.destructiveFlags, danger:true, confirmLabel:'Overwrite / Load' });
+      const ok = await requestConfirmation({ ...DESTRUCTIVE_ACTION_POLICY.overwriteLoad, details: pendingSaveDiff.destructiveFlags });
       if (!ok) return;
     }
     loadSave(pendingLoadSave);
   };
-  const confirmDel=()=>{if(showDeleteConfirm){setSaves(p=>p.filter(s=>s.id!==showDeleteConfirm));showToast('Deleted','info');setShowDeleteConfirm(null);}};
+  const confirmDel=async(id)=>{const ok=await requestConfirmation({ ...DESTRUCTIVE_ACTION_POLICY.deleteSave, actionId:`${DESTRUCTIVE_ACTION_POLICY.deleteSave.actionId}:${id}` });if(!ok)return;setSaves(p=>p.filter(s=>s.id!==id));showToast('Deleted','info');};
   const runNormalizationPreflight=async()=>{
     const result=normalizeContentTaxonomy(content);
     const numeric=normalizeNumericFields(result.content);
@@ -871,14 +880,14 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   useEffect(() => bindFocusTrap(showTableImportModal, '.modal-overlay.open .modal'), [showTableImportModal, bindFocusTrap]);
   useEffect(() => bindFocusTrap(showCommandPalette, '.modal-overlay.open .modal'), [showCommandPalette, bindFocusTrap]);
   useEffect(() => bindFocusTrap(Boolean(pendingLoadSave && pendingSaveDiff), '.modal-overlay.open .modal'), [pendingLoadSave, pendingSaveDiff, bindFocusTrap]);
-  useEffect(() => bindFocusTrap(Boolean(showDeleteConfirm), '.confirm-overlay .confirm-box'), [showDeleteConfirm, bindFocusTrap]);
+  useEffect(() => bindFocusTrap(Boolean(confirmState), '.modal-overlay.open .modal'), [confirmState, bindFocusTrap]);
   useEffect(() => bindFocusTrap(showAutosavePrompt, '.confirm-overlay .confirm-box'), [showAutosavePrompt, bindFocusTrap]);
   useEffect(() => restoreFocus(showSaveModal), [showSaveModal, restoreFocus]);
   useEffect(() => restoreFocus(showLoadModal), [showLoadModal, restoreFocus]);
   useEffect(() => restoreFocus(showTableImportModal), [showTableImportModal, restoreFocus]);
   useEffect(() => restoreFocus(showCommandPalette), [showCommandPalette, restoreFocus]);
   useEffect(() => restoreFocus(Boolean(pendingLoadSave && pendingSaveDiff)), [pendingLoadSave, pendingSaveDiff, restoreFocus]);
-  useEffect(() => restoreFocus(Boolean(showDeleteConfirm)), [showDeleteConfirm, restoreFocus]);
+  useEffect(() => restoreFocus(Boolean(confirmState)), [confirmState, restoreFocus]);
   // NOTE: Scroll frame list to top when search changes
   useEffect(()=>{if(frameListRef.current)frameListRef.current.scrollTop=0;},[frameSearch,filteredFrames]);
 
@@ -1203,8 +1212,8 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
             {showDeleteConfirm&&<div className="confirm-overlay" onClick={()=>setShowDeleteConfirm(null)}><div className="confirm-box" onClick={e=>e.stopPropagation()}><div className="confirm-title">Delete?</div><div className="confirm-actions"><button className="btn btn-secondary btn-sm" onClick={()=>setShowDeleteConfirm(null)}>Cancel</button><button className="btn btn-danger btn-sm" onClick={confirmDel}>Delete</button></div></div></div>}
       {showShortcutHelp&&<div className="modal-overlay open" onClick={()=>setShowShortcutHelp(false)}><div className="modal" onClick={e=>e.stopPropagation()}><div className="modal-header"><span className="modal-title">Keyboard + Shortcuts</span><IconButton className="modal-close" label="Close keyboard shortcuts help" onClick={()=>setShowShortcutHelp(false)}>✕</IconButton></div><div style={{fontSize:12,lineHeight:1.7}}><div><strong>Top bar:</strong> Save, load, undo/redo, export/import buttons are tab-focusable and support Enter/Space.</div><div><strong>Left nav:</strong> main route buttons are keyboard reachable in DOM order.</div><div><strong>Editor canvas:</strong> editable frame regions are selectable in Edit mode and escape clears selection.</div><div><strong>Right panel:</strong> sections, tabs, grouped selectors use roving tabindex patterns.</div><div><strong>Dialogs:</strong> close, confirm, and primary actions are keyboard-activatable.</div><div><strong>Toasts:</strong> dismiss button is focusable and operable from keyboard.</div><hr style={{margin:'10px 0',borderColor:'var(--border)'}}/><div><strong>Key map:</strong> ⌘/Ctrl+S save, ⌘/Ctrl+Z undo, ⌘/Ctrl+Shift+Z redo, ⌘/Ctrl+K command palette, Esc close overlays.</div></div></div></div>}
       {showAutosavePrompt&&<div className="confirm-overlay" onClick={()=>setShowAutosavePrompt(false)}><div className="confirm-box" onClick={e=>e.stopPropagation()}><div className="confirm-title">Restore Session?</div><div className="confirm-msg">Found autosave from last session.</div><div className="confirm-actions"><button className="btn btn-secondary btn-sm" onClick={()=>setShowAutosavePrompt(false)}>Discard</button><button className="btn btn-primary btn-sm" onClick={restoreAutosave}>Restore</button></div></div></div>}
-      <ConfirmDialog open={Boolean(confirmState)} title={confirmState?.title} message={confirmState?.message} details={confirmState?.details||[]} confirmLabel={confirmState?.confirmLabel} cancelLabel={confirmState?.cancelLabel} danger={Boolean(confirmState?.danger)} allowSkip={Boolean(confirmState?.skipKey)} skipChecked={Boolean(confirmState?.skipChecked)} onSkipChange={(checked)=>setConfirmState(prev=>prev?{...prev,skipChecked:checked}:prev)} onCancel={()=>{ if(!confirmState) return; logConfirmationEvent(confirmState.title,'cancelled'); confirmState.resolve(false); setConfirmState(null); }} onConfirm={()=>{ if(!confirmState) return; if(confirmState.skipKey && confirmState.skipChecked){setSessionConfirmSkips(prev=>({...prev,[confirmState.skipKey]:true}));} logConfirmationEvent(confirmState.title,'confirmed'); confirmState.resolve(true); setConfirmState(null); }} />
-      <div className="editor-section"><div className="editor-section-title">Confirmation Activity</div><div style={{display:'grid',gap:4,maxHeight:120,overflowY:'auto',fontSize:10}}>{activityLog.length===0?<div style={{color:'var(--dim)'}}>No confirmation events yet.</div>:activityLog.map((entry)=><div key={entry.id}><strong>{entry.outcome}</strong> · {entry.label} · {new Date(entry.ts).toLocaleTimeString()}</div>)}</div></div>
+      <ConfirmDialog open={Boolean(confirmState)} title={confirmState?.title} message={confirmState?.message} details={confirmState?.details||[]} confirmLabel={confirmState?.confirmLabel} cancelLabel={confirmState?.cancelLabel} danger={Boolean(confirmState?.danger)} allowSkip={Boolean(confirmState?.skipKey)} skipChecked={Boolean(confirmState?.skipChecked)} onSkipChange={(checked)=>setConfirmState(prev=>prev?{...prev,skipChecked:checked}:prev)} onCancel={()=>{ if(!confirmState) return; logConfirmationEvent(confirmState.actionId, confirmState.title, 'cancelled'); confirmState.resolve(false); setConfirmState(null); }} onConfirm={()=>{ if(!confirmState) return; if(confirmState.skipKey && confirmState.skipChecked){setSessionConfirmSkips(prev=>({...prev,[confirmState.skipKey]:true}));} logConfirmationEvent(confirmState.actionId, confirmState.title, 'confirmed'); confirmState.resolve(true); setConfirmState(null); }} />
+      <div className="editor-section"><div className="editor-section-title">Confirmation Activity</div><div style={{display:'grid',gap:4,maxHeight:120,overflowY:'auto',fontSize:10}}>{activityLog.length===0?<div style={{color:'var(--dim)'}}>No confirmation events yet.</div>:activityLog.map((entry)=><div key={entry.id}><strong>{entry.outcome}</strong> · {entry.actionId} · {entry.label} · {new Date(entry.ts).toLocaleTimeString()}</div>)}</div></div>
       {showMobileCommandSheet && <div className="mobile-command-sheet-overlay" onClick={()=>setShowMobileCommandSheet(false)}><div className="mobile-command-sheet" onClick={e=>e.stopPropagation()}><div className="mobile-command-sheet-handle"/><div className="editor-section-title">Command Sheet</div><div className="mobile-action-cluster"><button className="btn btn-secondary btn-sm" onClick={()=>{setRightTab('content');setMobileTab('content');setShowMobileCommandSheet(false);}}>Quick Edit</button><button className="btn btn-secondary btn-sm" onClick={exportJSON}>Export JSON</button><button className="btn btn-secondary btn-sm" onClick={exportHTML}>Export HTML</button><button className="btn btn-primary btn-sm" onClick={exportPNG}>Publish PNG</button></div><div className="mobile-qa-checklist"><div className="editor-section-title">Mobile QA (Pro workflows)</div>{Object.entries({quickEdit:'Quick edits save correctly',validate:'Validation summary visible',publish:'One-tap publish works',proRows:'Row drag/menu targets are touchable'}).map(([key,label])=><label key={key}><input type="checkbox" checked={mobileQaChecks[key]} onChange={()=>setMobileQaChecks(prev=>({...prev,[key]:!prev[key]}))}/><span>{label}</span></label>)}</div></div></div>}
     </div>
   );
