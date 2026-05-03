@@ -401,6 +401,83 @@ Top 10 priorities:
 
 ---
 
+## O. Incident Postmortem Policy (Mandatory)
+
+### 1) Postmortem Template (required sections)
+Use this template for every qualifying incident. Do not mark complete until every section is filled.
+
+```markdown
+# Incident Postmortem
+
+## Incident metadata
+- Incident ID:
+- Date/time opened (UTC):
+- Date/time resolved (UTC):
+- Severity (SEV-1/SEV-2/SEV-3):
+- Customer impact summary:
+- Detection source (monitoring, user report, QA, etc.):
+
+## Timeline (required)
+- YYYY-MM-DD HH:MM UTC — Event
+- YYYY-MM-DD HH:MM UTC — Event
+
+## Root cause (required)
+- Primary root cause:
+- Evidence supporting root cause:
+
+## Contributing factors (required)
+- Factor 1:
+- Factor 2:
+
+## Detection gaps (required)
+- What should have detected this earlier:
+- Why detection failed or lagged:
+
+## Action items (required)
+| ID | Action | Type (Prevent/Detect/Mitigate) | Priority | Owner | Due date (YYYY-MM-DD) | Tracking link | Status |
+|----|--------|---------------------------------|----------|-------|------------------------|---------------|--------|
+| A1 |        |                                 |          |       |                        |               | Open   |
+
+## Owners (required)
+- Incident commander:
+- Postmortem author:
+- Engineering owner:
+- Product owner:
+
+## Due dates (required)
+- Postmortem publication due date:
+- Action review checkpoint dates:
+- Final closure target date:
+```
+
+### 2) When postmortems are mandatory
+Postmortems are required for any of the following:
+- Any SEV-1 or SEV-2 production incident.
+- Any bug that causes incorrect financial/risk numbers, broken exports, or data loss.
+- Any release rollback/hotfix within 48 hours of deployment.
+- Repeated defect pattern: same taxonomy category appears 2+ times in 30 days.
+- Any incident that breaches release quality gates (see Section N metrics).
+
+### 3) Action tracking to closure
+- Every action item must have a single owner and a due date before postmortem approval.
+- Action items are tracked in the release board with status: Open → In Progress → Blocked/Done.
+- Weekly triage reviews all Open/Blocked actions; overdue items require escalation to eng lead.
+- Incident is only closed when all Prevent/Detect actions are Done or formally risk-accepted.
+- Time-to-closure and overdue-action rate are reported in release quality review.
+
+### 4) Integration with bug taxonomy
+- Root cause and each contributing factor must map to one bug taxonomy label.
+- Taxonomy labels should align with editor risk domains (schema, render, export, data trust, performance, UX, accessibility, release process).
+- Recurrent taxonomy clusters feed sprint planning and the “First 25 tickets” backlog prioritization.
+- Taxonomy recurrence (count by label, 30-day trend) is included in incident dashboarding.
+
+### 5) Integration with release quality metrics
+- Each incident must state which Section N metric(s) regressed (export failure rate, compliance rate, latency, source attribution, regression pass rate).
+- Every release includes: incident count by severity, MTTD, MTTR, action closure SLA, and repeat-incident rate by taxonomy.
+- Release cannot pass quality gate when critical incident actions are overdue or repeat-incident rate is rising release-over-release without mitigation plan.
+
+---
+
 ## N. Success Metrics (what “fixed” looks like)
 - 95%+ compliance with Whiz visual rules across published frames.
 - <1% export failure rate.
