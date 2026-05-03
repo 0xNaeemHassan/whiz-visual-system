@@ -74,6 +74,7 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
   const [favorites, setFavorites] = useLocalStorage('whiz-favorites', []); // E7
   const [showFavOnly, setShowFavOnly] = useLocalStorage('whiz-lib-favonly', false); // Fix #59
   const [recentlyUsed, setRecentlyUsed] = useLocalStorage('whiz-recent-frames', []); // E7 — Fixed
+  const [cadencePackId, setCadencePackId] = useLocalStorage('whiz-cadence-pack', 'mwf');
 
   const tiers = ['ALL', ...Object.keys(TIER_NAMES)];
   const layouts = useMemo(() => [...new Set(FRAMES.map(f => f.layout))].sort(), []);
