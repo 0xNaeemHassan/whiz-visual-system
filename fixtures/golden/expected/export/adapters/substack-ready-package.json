@@ -1,0 +1,41 @@
+{
+  "adapterId": "substack-ready-package",
+  "status": "offline-fallback",
+  "reason": "Adapter token is not configured. Returning offline package.",
+  "context": {
+    "issueNumber": 42,
+    "tags": [
+      "macro",
+      "altcoins"
+    ],
+    "sources": [
+      {
+        "label": "FOMC Minutes",
+        "url": "https://example.com/fomc"
+      },
+      {
+        "label": "https://example.com/dune",
+        "url": null
+      }
+    ],
+    "coverAsset": {
+      "url": "https://cdn.example.com/cover.png",
+      "alt": "BTC heatmap",
+      "credit": "Whiz Studio"
+    },
+    "canonicalSlug": "issue-42-liquidity-shift"
+  },
+  "payload": {
+    "format": "substack-markdown-bundle",
+    "files": [
+      {
+        "path": "issue-42-liquidity-shift.md",
+        "content": "---\ntitle: \"Liquidity Shift\"\nslug: \"issue-42-liquidity-shift\"\nissue_number: 42\ntags: [\"macro\", \"altcoins\"]\ncover_asset: \"https://cdn.example.com/cover.png\"\n---\n\nRisk remains bid while treasury duration reprices.\n\n## Sources\n- [FOMC Minutes](https://example.com/fomc)\n- [https://example.com/dune](#)"
+      },
+      {
+        "path": "metadata.json",
+        "content": "{\n  \"issueNumber\": 42,\n  \"tags\": [\n    \"macro\",\n    \"altcoins\"\n  ],\n  \"sources\": [\n    {\n      \"label\": \"FOMC Minutes\",\n      \"url\": \"https://example.com/fomc\"\n    },\n    {\n      \"label\": \"https://example.com/dune\",\n      \"url\": null\n    }\n  ],\n  \"coverAsset\": {\n    \"url\": \"https://cdn.example.com/cover.png\",\n    \"alt\": \"BTC heatmap\",\n    \"credit\": \"Whiz Studio\"\n  },\n  \"canonicalSlug\": \"issue-42-liquidity-shift\",\n  \"title\": \"Liquidity Shift\"\n}"
+      }
+    ]
+  }
+}

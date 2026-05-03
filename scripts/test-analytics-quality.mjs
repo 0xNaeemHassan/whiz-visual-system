@@ -6,6 +6,8 @@ import {
   normalizeIssue,
   validateEditorImport,
   normalizeEditorImport,
+  aggregateOutcomeWindows,
+  computeRecommendationDeltas,
 } from '../src/utils/analyticsQuality.js';
 
 assert.deepEqual(getCadenceAlerts([{ date: '2026-01-01', value: 1 }]), [], 'single datapoint should have no alerts');
@@ -38,3 +40,19 @@ for (const badPayload of [null, undefined, 5, 'x', true, []]) {
 }
 
 console.log('Analytics quality tests passed');
+
+
+const outcomeIssues = [
+  { topic: 'A', frameId: '1', series: 'Alpha', publishDate: '2026-04-30', outcomes: { engagementRate: 4.2, conversionProxy: 1.5, recordedAt: '2026-04-30' } },
+  { topic: 'A', frameId: '1', series: 'Alpha', publishDate: '2026-04-24', outcomes: { engagementRate: 3.8, conversionProxy: 1.2, recordedAt: '2026-04-24' } },
+  { topic: 'B', frameId: '2', series: 'Beta', publishDate: '2026-03-15', outcomes: { engagementRate: 2.1, conversionProxy: 0.8, recordedAt: '2026-03-15' } },
+];
+const windows = aggregateOutcomeWindows(outcomeIssues, new Date('2026-05-03T00:00:00Z'));
+assert.equal(windows.d7.length, 1, '7d window should include newest outcome only');
+assert.equal(windows.d30.length, 2, '30d window should include two outcomes');
+assert.equal(windows.d90.length, 3, '90d window should include all outcomes');
+
+const deltas = computeRecommendationDeltas(outcomeIssues);
+assert.equal(deltas.heuristicPriors.topic.key, 'A', 'topic priors should favor stronger outcomes');
+assert.equal(deltas.heuristicPriors.frame.key, '1', 'frame priors should favor stronger outcomes');
+assert.ok(deltas.cadenceSuggestion.some((x) => x.series === 'Alpha' && x.cadenceDays === 6), 'cadence suggestion should derive series gap');
