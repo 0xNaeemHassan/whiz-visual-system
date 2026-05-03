@@ -9,7 +9,7 @@ import SemanticChip, { SemanticMarker, semanticLabel } from '../SemanticChip';
 import { resolveRiskAccent } from '../../domain/riskAccentPolicy';
 import { getSourceTypeBadgeMeta, normalizeProvenanceShape } from '../../utils/provenance';
 
-export function FrameShell({ frameRef, frame, theme, content, editMode, selectedEl, onSelectEl, styleOverrides, showGrid, aspectRatio, uploadedImages, bgGradient, patternOverlay, strictWhizMode = false, whizEffects = { glow: true, noise: true, intenseAccent: false } }) {
+export function FrameShell({ frameRef, frame, theme, content, trustLevel = 'Draft', editMode, selectedEl, onSelectEl, styleOverrides, showGrid, aspectRatio, uploadedImages, bgGradient, patternOverlay, strictWhizMode = false, whizEffects = { glow: true, noise: true, intenseAccent: false } }) {
   const reduceMotion = typeof document !== 'undefined' && document.documentElement?.dataset?.motion === 'reduce';
   const ov = styleOverrides || {};
   const sel = (key, e) => { if (editMode) { e?.stopPropagation(); onSelectEl?.(selectedEl === key ? null : key); } };
@@ -173,6 +173,9 @@ export function FrameShell({ frameRef, frame, theme, content, editMode, selected
         <div className={`wf-topic-tag ${ec('tag')}`} style={tagStyle} onClick={e => sel('tag', e)}>
           <span style={{ fontSize: 'var(--font-min-body)', marginRight: '4px' }}>&#9654;</span> {resolvedTagText}
         </div>
+        <div style={{ marginLeft: 'auto', fontFamily: "'JetBrains Mono', monospace", fontSize: 10, padding: '4px 8px', borderRadius: 999, border: `1px solid ${accentColor}66`, color: accentColor, background: `${accentColor}14` }}>
+          TRUST · {trustLevel}
+        </div>
       </div>
 
       {/* Title Slab */}
@@ -209,6 +212,9 @@ export function FrameShell({ frameRef, frame, theme, content, editMode, selected
       </div>
 
       {renderUploadedImages()}
+      <div style={{ position: 'absolute', right: 16, bottom: 44, zIndex: 8, pointerEvents: 'none', fontFamily: "'JetBrains Mono', monospace", fontSize: 9, letterSpacing: '0.08em', opacity: trustLevel === 'Verified' ? 0.6 : 0.35, color: trustLevel === 'Verified' ? accentColor : 'var(--text-muted)' }}>
+        {trustLevel === 'Verified' ? '✓ VERIFIED' : trustLevel === 'Review Needed' ? '△ REVIEW NEEDED' : '• DRAFT'}
+      </div>
 
       <FrameFooter
         content={resolvedContent}

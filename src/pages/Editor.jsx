@@ -143,6 +143,22 @@ const parseDelimitedRows = (rawText = '') => {
   });
 };
 
+
+const TRUST_LEVELS = Object.freeze({ DRAFT: 'Draft', REVIEW_NEEDED: 'Review Needed', VERIFIED: 'Verified' });
+const TRUST_LEVEL_TONE = Object.freeze({
+  [TRUST_LEVELS.DRAFT]: { fg: '#DADADA', bg: 'rgba(148,163,184,0.16)', border: 'rgba(148,163,184,0.35)' },
+  [TRUST_LEVELS.REVIEW_NEEDED]: { fg: '#FFE3AA', bg: 'rgba(229,178,58,0.18)', border: 'rgba(229,178,58,0.45)' },
+  [TRUST_LEVELS.VERIFIED]: { fg: '#B7FFD2', bg: 'rgba(43,174,102,0.2)', border: 'rgba(43,174,102,0.5)' },
+});
+const hasBlockingValidationIssues = (stateValidation, editorValidation, complianceIssues = []) => (
+  !stateValidation?.valid || (editorValidation?.errors?.length || 0) > 0 || (complianceIssues?.length || 0) > 0
+);
+const computeTrustLevel = ({ workflowPhase, stateValidation, editorValidation, complianceIssues, missingProvenance }) => {
+  if (workflowPhase === 'publish-ready' && !hasBlockingValidationIssues(stateValidation, editorValidation, complianceIssues) && !missingProvenance) return TRUST_LEVELS.VERIFIED;
+  if (workflowPhase === 'review' || hasBlockingValidationIssues(stateValidation, editorValidation, complianceIssues) || missingProvenance) return TRUST_LEVELS.REVIEW_NEEDED;
+  return TRUST_LEVELS.DRAFT;
+};
+
 const normalizeImportedTableRows = ({ rows, headerCount }) => rows.map((cells) => {
   const row = {};
   for (let idx = 0; idx < headerCount; idx += 1) row[`col${idx + 1}`] = String(cells[idx] || '').trim();
@@ -749,6 +765,16 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     review:[{label:'Basic state is valid',done:stateValidation.valid},{label:'No blocking editor errors',done:editorValidation.errors.length===0}],
     'publish-ready':[{label:'Basic state is valid',done:stateValidation.valid},{label:'No blocking editor errors',done:editorValidation.errors.length===0},{label:'No compliance issues',done:complianceIssues.length===0},{label:'Has source links',done:Boolean((content.sourceLinks||'').trim())}],
   }), [stateValidation.valid, editorValidation.errors.length, complianceIssues.length, content.sourceLinks]);
+  const missingStatProvenance = (content.stats || []).some((stat) => !isPublishReadyProvenance(stat?.provenance));
+  const missingTableProvenance = (content.tableRows || []).some((row) => !isPublishReadyProvenance(row?.provenance));
+  const trustLevel = useMemo(() => computeTrustLevel({
+    workflowPhase,
+    stateValidation,
+    editorValidation,
+    complianceIssues,
+    missingProvenance: missingStatProvenance || missingTableProvenance,
+  }), [workflowPhase, stateValidation, editorValidation, complianceIssues, missingStatProvenance, missingTableProvenance]);
+  const trustTone = TRUST_LEVEL_TONE[trustLevel] || TRUST_LEVEL_TONE[TRUST_LEVELS.DRAFT];
   const canTransitionTo=(phase)=> (phaseCriteria[phase]||[]).every((c)=>c.done);
   const attemptPhaseTransition=(phase)=>{if(!canTransitionTo(phase)){showToast(`Cannot move to ${phase} until checklist criteria are met.`,'warning');return;}setWorkflowPhase(phase);setPhaseChecklist(prev=>({...prev,lastTransitionAt:Date.now(),reviewAt:phase==='review'||phase==='publish-ready'?(prev.reviewAt||Date.now()):prev.reviewAt,publishReadyAt:phase==='publish-ready'?(prev.publishReadyAt||Date.now()):prev.publishReadyAt}));showToast(`Workflow phase set to ${phase}`);};
 
@@ -1028,7 +1054,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
       </div>
       {/* CENTER */}
       <div className={`editor-center ${mobileTab==='preview'?'mob-active':''}`} ref={centerRef}>
-        <div className="frame-scale-wrap" style={{transform:`scale(${zoom})`}}><WhizFrame frameRef={frameRef} frame={selectedFrame} theme={theme} content={content} editMode={editMode} selectedEl={selectedEl} onSelectEl={k=>{setSelectedEl(k);k&&setRightTab('design');}} styleOverrides={overrides} showGrid={showGrid} aspectRatio={aspectRatio} uploadedImages={uploadedImages} bgGradient={bgGradient} patternOverlay={patternOverlay} strictWhizMode={strictWhizMode} whizEffects={whizEffects}
+        <div className="frame-scale-wrap" style={{transform:`scale(${zoom})`}}><WhizFrame trustLevel={trustLevel} frameRef={frameRef} frame={selectedFrame} theme={theme} content={content} editMode={editMode} selectedEl={selectedEl} onSelectEl={k=>{setSelectedEl(k);k&&setRightTab('design');}} styleOverrides={overrides} showGrid={showGrid} aspectRatio={aspectRatio} uploadedImages={uploadedImages} bgGradient={bgGradient} patternOverlay={patternOverlay} strictWhizMode={strictWhizMode} whizEffects={whizEffects}
             fontPairing={activeFontPairing}/></div>
         <div className="zoom-bar"><IconButton className="zoom-btn" label="Zoom out" onClick={()=>setZoom(z=>Math.max(0.1,+(z-0.05).toFixed(2)))}>−</IconButton><span className="zoom-pct">{Math.round(zoom*100)}%</span><IconButton className="zoom-btn" label="Zoom in" onClick={()=>setZoom(z=>Math.min(1,+(z+0.05).toFixed(2)))}>+</IconButton><IconButton className="zoom-btn" label="Fit frame to viewport" onClick={updateZoom} style={{fontSize:10}}>⊡</IconButton><div style={{width:1,height:16,background:'var(--border)'}}/><IconButton className={`zoom-btn ${showGrid?'active':''}`} label={showGrid ? 'Hide grid overlay' : 'Show grid overlay'} onClick={()=>setShowGrid(g=>!g)} style={{color:showGrid?'var(--theme-accent)':undefined}}>▦</IconButton><IconButton className={`zoom-btn ${editMode?'active':''}`} label={editMode ? 'Disable edit mode' : 'Enable edit mode'} onClick={()=>{setEditMode(m=>!m);editMode&&setSelectedEl(null);}} style={{color:editMode?'var(--theme-accent)':undefined}}>✎</IconButton><div style={{width:1,height:16,background:'var(--border)'}}/><IconButton className="zoom-btn" label="Undo" onClick={()=>handleUndo(mobileTab==='preview'?'mobile':'desktop')} disabled={!canUndo} style={{opacity:canUndo?1:0.3}}>↶</IconButton><IconButton className="zoom-btn" label="Redo" onClick={()=>handleRedo(mobileTab==='preview'?'mobile':'desktop')} disabled={!canRedo} style={{opacity:canRedo?1:0.3}}>↷</IconButton></div>
         <div style={{position:'absolute',top:10,left:10,fontFamily:'var(--font-m)',fontSize:9,color:'var(--dim)',background:'rgba(0,0,0,0.6)',padding:'4px 8px',borderRadius:'var(--r)',backdropFilter:'blur(4px)'}}>{String(frameId).padStart(2,'0')} — {selectedFrame.name} · {aspectRatio.w}×{aspectRatio.h}</div>

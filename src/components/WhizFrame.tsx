@@ -16,6 +16,7 @@ type WhizFrameProps = {
   bgGradient?: string | null;
   patternOverlay?: { id?: string } | null;
   strictWhizMode?: boolean;
+  trustLevel?: string;
 } & Record<string, unknown>;
 
 function WhizFrame(props: WhizFrameProps) {
@@ -34,6 +35,7 @@ export default memo(WhizFrame, (prev, next) => (
   prev.bgGradient === next.bgGradient &&
   prev.patternOverlay?.id === next.patternOverlay?.id &&
   prev.strictWhizMode === next.strictWhizMode &&
+  prev.trustLevel === next.trustLevel &&
   JSON.stringify(prev.whizEffects) === JSON.stringify(next.whizEffects) &&
   JSON.stringify(prev.content) === JSON.stringify(next.content) &&
   JSON.stringify(prev.styleOverrides) === JSON.stringify(next.styleOverrides) &&
