@@ -1,2 +1,8 @@
 export { parseImportPayload } from './parser';
-export { normalizeEditorState, normalizeFrameContent } from './normalizers';
+export { parseImportPayloadSafe } from './parser';
+export {
+  normalizeEditorState,
+  normalizeFrameContent,
+  normalizeEditorStateSafe,
+  normalizeFrameContentSafe,
+} from './normalizers';
