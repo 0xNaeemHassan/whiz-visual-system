@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { runExportPreflight } from '../src/domain/services/complianceService.js';
+import { shouldBlockStrictExportForUnsnapshottedEdits } from '../src/domain/export/exportGuards.js';
 
 const pass = runExportPreflight({
   content: { topicTag: 'DEFI', tickerSpeed: 24, stats: [{ label: 'TVL', value: '$1B' }] },
@@ -18,5 +19,14 @@ const fail = runExportPreflight({
 assert.equal(fail.passed, false);
 assert.ok(fail.criticalFailures.length >= 1);
 assert.ok(fail.hasWarnings, true);
+
+assert.equal(
+  shouldBlockStrictExportForUnsnapshottedEdits({ strictMode: true, isSnapshotLockCurrent: false, action: 'export' }),
+  true,
+);
+assert.equal(
+  shouldBlockStrictExportForUnsnapshottedEdits({ strictMode: true, isSnapshotLockCurrent: true, action: 'publish' }),
+  false,
+);
 
 console.log('Export preflight tests passed');
