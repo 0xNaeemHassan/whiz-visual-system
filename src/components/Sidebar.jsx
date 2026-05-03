@@ -22,7 +22,7 @@ export default function Sidebar({ page, onNav, open, theme }) {
         {NAV_ITEMS.map(item => (
           <button
             key={item.id}
-            className={`sidebar-item ${page === item.id ? 'active' : ''}`}
+            className={`sidebar-item touch-target ${page === item.id ? 'active' : ''}`}
             onClick={() => onNav(item.id)}
             aria-label={`Go to ${item.label}`}
             aria-current={page === item.id ? 'page' : undefined}
