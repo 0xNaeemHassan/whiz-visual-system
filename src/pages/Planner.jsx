@@ -91,6 +91,20 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
     };
   });
   const maxMonthly = Math.max(1, ...monthlyActivity.map(m => m.count));
+  const historicalFramePerformance = useMemo(() => {
+    const byFrameId = {};
+    issues.forEach((issue) => {
+      if (!issue.frameId) return;
+      const key = String(issue.frameId);
+      const statusBonus = issue.status === 'published' ? 0.12 : issue.status === 'done' ? 0.06 : issue.status === 'wip' ? 0.02 : -0.01;
+      const confidenceBonus = issue.confidence === 'high' ? 0.06 : issue.confidence === 'low' ? -0.04 : 0;
+      byFrameId[key] = (byFrameId[key] || 0) + statusBonus + confidenceBonus;
+    });
+    Object.keys(byFrameId).forEach((id) => {
+      byFrameId[id] = Math.max(-0.3, Math.min(0.3, byFrameId[id]));
+    });
+    return { byFrameId };
+  }, [issues]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [seriesFocusFilter, setSeriesFocusFilter] = useState(null);
@@ -927,8 +941,24 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
             return <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8 }}><strong style={{ color: 'var(--text)' }}>Banger Potential: {heuristic.scorePercent}%</strong> · advisory only · {heuristic.reasonCodes.join(', ')}</div>;
           })()}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="form-group"><label className="form-label">Intent</label><input value={form.intent || ''} onChange={e => setForm(f => ({...f, intent: e.target.value}))} placeholder="comparison, risk, timeline..." /></div>
+            <div className="form-group"><label className="form-label">Data Shape</label><select value={form.dataShape || 'generic'} onChange={e => setForm(f => ({...f, dataShape: e.target.value}))}><option value="generic">Generic</option><option value="table">Table</option><option value="timeline">Timeline</option><option value="network">Network/Map</option><option value="split">Bull/Bear Split</option><option value="grid">Grid</option><option value="chart">Chart</option></select></div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="form-group"><label className="form-label">Complexity Budget</label><select value={form.complexityBudget || 'medium'} onChange={e => setForm(f => ({...f, complexityBudget: e.target.value}))}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></div>
             <div className="form-group"><label className="form-label">Frame Template</label><select value={form.frameId} onChange={e => setForm(f => ({...f, frameId: e.target.value}))}><option value="">— Select —</option>{FRAMES.map(fr => <option key={fr.id} value={fr.id}>{fr.id}. {fr.name}</option>)}</select></div>
             <div className="form-group"><label className="form-label">Color Theme</label><select value={form.themeId} onChange={e => setForm(f => ({...f, themeId: e.target.value}))}><option value="">— Select —</option>{THEMES.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></div>
+          </div>
+          <div className="form-group" style={{ border: '1px solid var(--border)', borderRadius: 'var(--r)', padding: 10 }}>
+            <div className="form-label" style={{ marginBottom: 6 }}>Recommended Frames</div>
+            {frameRecommendations.recommendations.map((item) => (
+              <button key={item.frame.id} className="btn btn-ghost btn-sm" style={{ marginRight: 6, marginBottom: 6 }} onClick={() => setForm(f => ({ ...f, frameId: String(item.frame.id) }))}>
+                {item.frame.id}. {item.frame.name} ({Math.round(item.confidence * 100)}%)
+              </button>
+            ))}
+            <div style={{ fontSize: 10, color: 'var(--dim)' }}>
+              Intent: {frameRecommendations.inferredIntent}. {frameRecommendations.fallback ? `${frameRecommendations.fallback.reason}; fallback frames: ${frameRecommendations.fallback.fallbackFrameIds.join(', ')}.` : 'Top result confidence is acceptable.'}
+            </div>
           </div>
           <div className="form-group">
             <label className="form-label">
