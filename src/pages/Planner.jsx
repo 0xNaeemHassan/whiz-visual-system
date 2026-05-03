@@ -5,6 +5,7 @@ import { THEMES } from '../data/themes';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { useIntl } from '../i18n/IntlProvider';
 import { normalizePlannerIssue } from '../utils/schemaContracts';
+import { computeIssueDrift, computeWeeklyDriftSummary } from '../domain/services/driftTrackingService';
 
 const STATUSES = ['draft', 'planned', 'wip', 'done', 'published'];
 const CONFIDENCE = ['low', 'medium', 'high'];
@@ -406,6 +407,17 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
     setSeriesFocusFilter(seriesName);
   };
 
+
+  const driftSummary = useMemo(() => computeWeeklyDriftSummary(issues, new Date()), [issues]);
+  const driftByIssueId = useMemo(() => Object.fromEntries(driftSummary.scored.map((row) => [String(row.issue.id), row])), [driftSummary]);
+
+  useEffect(() => {
+    driftSummary.breaches.forEach((breach) => {
+      const label = breach.issueNum ? `#${breach.issueNum}` : breach.topic || breach.id;
+      showToast(`Drift threshold breach (${breach.type}) on ${label}: score ${breach.score}`, 'warning');
+    });
+  }, [driftSummary.breaches, showToast]);
+
   const filtered = useMemo(() => {
     let f = issues;
     if (statusFilter !== 'ALL') f = f.filter(i => i.status === statusFilter);
@@ -495,6 +507,22 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
         )}
       </div>
 
+
+      <div className="card" style={{ marginBottom: 16 }} aria-label="Weekly drift summary panel">
+        <div style={{ fontFamily: 'var(--font-m)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 8 }}>Weekly drift summary</div>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 10, fontSize: 12 }}>
+          <span>Timing: <strong>{driftSummary.byType.timing}</strong></span>
+          <span>Topic: <strong>{driftSummary.byType.topic}</strong></span>
+          <span>Frame: <strong>{driftSummary.byType.frame}</strong></span>
+          <span>Verification: <strong>{driftSummary.byType.verification}</strong></span>
+        </div>
+        <div style={{ display: 'grid', gap: 6 }}>
+          {driftSummary.remediationActions.map((action) => (
+            <div key={action} style={{ fontSize: 11, color: 'var(--muted)' }}>• {action}</div>
+          ))}
+        </div>
+      </div>
+
       {/* Toolbar */}
       <div className="planner-toolbar">
         <div className="search-wrap" style={{ flex: 1, minWidth: 200 }}>
@@ -530,12 +558,13 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
             </div>
           ) : (
             <table className="data-table">
-              <thead><tr><th>#</th><th>Topic</th><th>Frame</th><th>Theme</th><th>Status</th><th>Date</th><th>Notes</th><th></th></tr></thead>
+              <thead><tr><th>#</th><th>Topic</th><th>Frame</th><th>Theme</th><th>Status</th><th>Date</th><th>Drift</th><th>Notes</th><th></th></tr></thead>
               <tbody>
                 {filtered.map(issue => {
                   const frame = FRAMES.find(f => String(f.id) === String(issue.frameId));
                   const theme = THEMES.find(t => t.id === issue.themeId);
                   const statusCol = KANBAN_COLS.find(c => c.id === issue.status);
+                  const driftData = driftByIssueId[String(issue.id)] || { drift: computeIssueDrift(issue).drift };
                   return (
                     <tr key={issue.id}>
                       <td><span style={{ fontFamily: 'var(--font-m)', color: 'var(--dim)' }}>#{issue.issueNum}</span></td>
@@ -552,6 +581,7 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
                         </div>
                       </td>
                       <td><span style={{ fontFamily: 'var(--font-m)', fontSize: 11, color: 'var(--muted)' }}>{issue.publishDate || '—'}</span></td>
+                      <td><div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>{Object.entries(driftData.drift).map(([type, value]) => (<span key={type} title={`${type} drift ${value.score}`} style={{ fontSize:9, padding:'2px 5px', borderRadius:999, border:'1px solid var(--border)', color:value.severity==='critical'?'#FF5A5A':value.severity==='warn'?'#E5B23A':'#6FA8FF' }}>{type[0].toUpperCase()}:{value.score}</span>))}</div></td>
                       <td><span style={{ fontSize: 11, color: 'var(--muted)', maxWidth: 160, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{issue.notes || '—'}</span></td>
                       <td>
                         <div style={{ display: 'flex', gap: 4 }}>
