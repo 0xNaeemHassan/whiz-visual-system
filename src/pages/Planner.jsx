@@ -126,20 +126,6 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
     });
   }, [isActive, registerHandlers]);
 
-  const openNewIssue = (presetStatus) => {
-    const nextN = issues.length > 0 ? Math.max(...issues.map(i => Number(i.issueNum) || 0)) + 1 : 1;
-    setEditingIssue(null);
-    setForm({
-      issueNum: String(nextN).padStart(3,'0'),
-      topic: '', frameId: '', themeId: '',
-      status: presetStatus || 'draft',
-      publishDate: '', notes: '', caption: '', sourceLinks: '',
-      priority: 'medium', confidence: 'medium', series: '',
-    });
-    setShowModal(true);
-  };
-
-
   const nextNum = issues.length > 0 ? Math.max(...issues.map(i => Number(i.issueNum) || 0)) + 1 : 1;
 
   useEffect(() => {
@@ -178,9 +164,9 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
   }, [nextNum, showToast]);
 
 
-  const openAdd = (presetStatus) => {
+  const openIssueForm = (presetStatus) => {
     setEditingIssue(null);
-    setForm({ issueNum: String(nextNum).padStart(3,'0'), topic: '', frameId: '', themeId: '', status: presetStatus || 'draft', publishDate: '', notes: '', caption: '', sourceLinks: '', confidence: 'medium', series: '' });
+    setForm({ issueNum: String(nextNum).padStart(3,'0'), topic: '', frameId: '', themeId: '', status: presetStatus || 'draft', publishDate: '', notes: '', caption: '', sourceLinks: '', priority: 'medium', confidence: 'medium', series: '' });
     setShowModal(true);
   };
 
@@ -409,7 +395,7 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
   }, [issues]);
 
   const openNewIssueForSeries = (seriesName) => {
-    openAdd('planned');
+    openIssueForm('planned');
     setForm((prev) => ({ ...prev, series: seriesName, status: 'planned' }));
   };
 
@@ -527,7 +513,7 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
         </div>
         <button className="btn btn-secondary btn-sm" onClick={exportCSV}>↓ CSV</button>
         <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer' }}>↑ CSV<input type="file" accept=".csv" onChange={importCSV} style={{ display: 'none' }} /></label>
-        <button className="btn btn-primary" onClick={() => openAdd()}>+ New Issue</button>
+        <button className="btn btn-primary" onClick={() => openIssueForm()}>+ New Issue</button>
       </div>
 
       {/* Table View */}
@@ -619,7 +605,7 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
                     );
                   })}
                   <button className="btn btn-ghost btn-sm w-full" style={{ marginTop: 4, borderStyle: 'dashed', borderColor: 'var(--border-2)' }}
-                    onClick={() => openAdd(col.id)}>+ Add</button>
+                    onClick={() => openIssueForm(col.id)}>+ Add</button>
                 </div>
               </div>
             );
