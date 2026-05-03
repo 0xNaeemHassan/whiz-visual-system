@@ -2,6 +2,7 @@ import { TICKER_CONTRACT, normalizeTickerSpeed } from '../domain/tickerContract'
 import { createTemplateForLayout, checkTemplateLayoutCompatibility, getFrameTemplate } from '../data/templates.js';
 import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
 import { FRAMES } from '../data/frames.js';
+import { applyDefaultSort, validateDefaultSort } from '../domain/tableSort.js';
 import { THEMES } from '../data/themes.js';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { useUIEventContext } from '../state/UIEventContext';
@@ -203,6 +204,11 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
       ...content,
       ...frameTemplate,
     };
+
+    if (selectedFrame?.defaultSort && Array.isArray(nextContent.tableHeaders) && Array.isArray(nextContent.tableRows)) {
+      validateDefaultSort({ defaultSort: selectedFrame.defaultSort, tableHeaders: nextContent.tableHeaders, tableRows: nextContent.tableRows });
+      nextContent.tableRows = applyDefaultSort(nextContent.tableRows, nextContent.tableHeaders, selectedFrame.defaultSort);
+    }
 
     resetContent(nextContent);
 

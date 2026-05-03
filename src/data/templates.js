@@ -202,6 +202,15 @@ export function getFrameTemplate(frameId) {
 
   const merged = { ...defaultContent, ...resolveTemplate(frameId) };
 
+  if (frame?.defaultSort && Array.isArray(merged.tableHeaders) && Array.isArray(merged.tableRows)) {
+    validateDefaultSort({
+      defaultSort: frame.defaultSort,
+      tableHeaders: merged.tableHeaders,
+      tableRows: merged.tableRows,
+    });
+    merged.tableRows = applyDefaultSort(merged.tableRows, merged.tableHeaders, frame.defaultSort);
+  }
+
   if (!hasRequiredContentShape(merged)) {
     throw new Error(`Template merge removed required content keys for frame ${frameId}`);
   }

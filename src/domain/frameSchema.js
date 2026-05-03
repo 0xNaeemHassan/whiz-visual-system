@@ -275,6 +275,22 @@ export function validateFrameData({ frames, templates, guidanceById }) {
     validateTemplateInheritance(templates, errors);
   }
 
+  const baseContent = createDefaultContent();
+  frames.forEach((frame, index) => {
+    if (!frame?.defaultSort) return;
+    const template = templates?.[frame.id] || {};
+    const tableHeaders = template.tableHeaders || baseContent.tableHeaders || [];
+    const tableRows = template.tableRows || baseContent.tableRows || [];
+    const columnIndex = tableHeaders.findIndex((header) => header === frame.defaultSort.column);
+    const prefix = `FRAMES[${index}]`;
+    assert(columnIndex >= 0, `${prefix}: defaultSort column ${frame.defaultSort.column} not found in tableHeaders`, errors);
+    if (columnIndex >= 0 && Array.isArray(tableRows) && tableRows.length > 0) {
+      const rowKey = `col${columnIndex + 1}`;
+      const hasSchema = tableRows.every((row) => row && typeof row === 'object' && rowKey in row);
+      assert(hasSchema, `${prefix}: defaultSort column ${frame.defaultSort.column} does not map to row schema key ${rowKey}`, errors);
+    }
+  });
+
   if (errors.length > 0) {
     throw new Error(`Frame schema validation failed with ${errors.length} issue(s):\n${errors.map((e) => `- ${e}`).join('\n')}`);
   }
