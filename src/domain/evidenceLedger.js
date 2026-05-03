@@ -6,6 +6,8 @@ export function createDefaultEvidenceLedger(issueNum = '000') {
     fieldEntries: [],
     provenanceEntries: [],
     notes: [],
+    corrections: [],
+    lineage: [],
   };
 }
 
@@ -16,6 +18,9 @@ export function normalizeEvidenceLedger(raw, issueNum = '000') {
     const obj = entry && typeof entry === 'object' ? entry : {};
     return {
       id: String(obj.id || makeStableId(normalizedIssueNum, prefix, index)),
+      issueNum: String(obj.issueNum || normalizedIssueNum).trim(),
+      claimId: String(obj.claimId || '').trim(),
+      claimPath: String(obj.claimPath || '').trim(),
       fieldId: String(obj.fieldId || '').trim(),
       provenanceId: String(obj.provenanceId || '').trim(),
       noteId: String(obj.noteId || '').trim(),
@@ -27,6 +32,31 @@ export function normalizeEvidenceLedger(raw, issueNum = '000') {
     fieldEntries: Array.isArray(base.fieldEntries) ? base.fieldEntries.map((e, i) => normalizeEntry(e, 'field', i)) : [],
     provenanceEntries: Array.isArray(base.provenanceEntries) ? base.provenanceEntries.map((e, i) => normalizeEntry(e, 'prov', i)) : [],
     notes: Array.isArray(base.notes) ? base.notes.map((e, i) => normalizeEntry(e, 'note', i)) : [],
+    corrections: Array.isArray(base.corrections) ? base.corrections.map((entry, index) => {
+      const obj = entry && typeof entry === 'object' ? entry : {};
+      return {
+        id: String(obj.id || makeStableId(normalizedIssueNum, 'corr', index)),
+        artifactId: String(obj.artifactId || '').trim(),
+        issueNum: String(obj.issueNum || normalizedIssueNum).trim(),
+        reviewerId: String(obj.reviewerId || '').trim(),
+        reviewerName: String(obj.reviewerName || '').trim(),
+        note: String(obj.note || '').trim(),
+        supersedesArtifactId: String(obj.supersedesArtifactId || '').trim(),
+        superseded: Boolean(obj.superseded),
+        timestamp: String(obj.timestamp || '').trim(),
+      };
+    }) : [],
+    lineage: Array.isArray(base.lineage) ? base.lineage.map((entry, index) => {
+      const obj = entry && typeof entry === 'object' ? entry : {};
+      return {
+        id: String(obj.id || makeStableId(normalizedIssueNum, 'lineage', index)),
+        artifactId: String(obj.artifactId || '').trim(),
+        issueNum: String(obj.issueNum || normalizedIssueNum).trim(),
+        state: String(obj.state || 'current').trim(),
+        supersedesArtifactId: String(obj.supersedesArtifactId || '').trim(),
+        timestamp: String(obj.timestamp || '').trim(),
+      };
+    }) : [],
   };
 }
 
@@ -38,7 +68,10 @@ export function validateEvidenceLedger(raw, issueNum = '000') {
   if (!ledger.fieldEntries.length) missing.push('fieldEntries');
   if (!ledger.provenanceEntries.length) missing.push('provenanceEntries');
   if (!ledger.notes.length) missing.push('notes');
-  const incomplete = all.filter((entry) => !entry.id || !entry.content).length;
+  const incompleteEntries = all.filter((entry) => !entry.id || !entry.content || !entry.issueNum || !entry.claimId || !entry.claimPath);
+  const incomplete = incompleteEntries.length;
   if (incomplete) missing.push(`${incomplete} incomplete item(s)`);
+  const unboundClaims = all.filter((entry) => !entry.issueNum || !entry.claimId || !entry.claimPath).length;
+  if (unboundClaims) missing.push(`${unboundClaims} unbound claim item(s)`);
   return { total: all.length, complete: all.length - incomplete, missing, valid: missing.length === 0 };
 }
