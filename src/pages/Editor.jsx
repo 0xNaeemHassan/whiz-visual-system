@@ -37,6 +37,7 @@ import { useDialogFocus } from '../utils/focusTrap';
 import { validateCriticalNumericFields } from '../domain/criticalFieldValidator';
 import { createDefaultEvidenceLedger, normalizeEvidenceLedger, validateEvidenceLedger } from '../domain/evidenceLedger';
 import { scoreFrameComplexity, classifyComplexity } from '../domain/services/frameComplexityService.js';
+import { loadVaultPayload, storeVaultPayload } from '../security/localVault';
 
 /** @typedef {import('../types/canonical').FrameContent} FrameContent */
 /** @typedef {import('../types/canonical').StyleOverrides} StyleOverrides */
@@ -600,7 +601,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     d.bgGradient && updateMedia(prev=>({...prev,bgGradient:d.bgGradient}));
     d.patternOverlay && updateMedia(prev=>({...prev,patternOverlay:d.patternOverlay}));
   };
-  useEffect(()=>{try{const r=localStorage.getItem('whiz-autosave');if(r){const d=JSON.parse(r);const payload=d.payload||d;const checksum=d.checksum||null;const expected=computeAutosaveChecksum(payload);const hasIntegrityIssue=Boolean(checksum&&checksum!==expected);const hasRecoveryMarker=Boolean(d.interrupted||d.sessionEndedAt==null);if(payload.savedAt&&Date.now()-payload.savedAt<86400000){autosaveDataRef.current={...payload,revisionId:d.revisionId||`rev-${payload.savedAt}`,savedAt:payload.savedAt,createdAt:d.createdAt||payload.savedAt,updatedAt:d.updatedAt||payload.savedAt};setAutosaveRecoveryPlan({hasIntegrityIssue,hasRecoveryMarker,conflicts:{frameId:payload.frameId!==frameId,theme:JSON.stringify(payload.theme)!==JSON.stringify(theme),overrides:JSON.stringify(payload.overrides)!==JSON.stringify(overrides)}});setMergeSelection({ frameId: payload.frameId!==frameId, theme: JSON.stringify(payload.theme)!==JSON.stringify(theme), overrides: JSON.stringify(payload.overrides)!==JSON.stringify(overrides) });setShowAutosavePrompt(true);}}}catch(e){}},[]);
+  useEffect(()=>{let cancelled=false;(async()=>{try{const payload=await loadVaultPayload('whiz-autosave');if(!payload||cancelled)return;const checksum=payload.checksum||null;const autosavePayload=payload.payload||payload;const expected=computeAutosaveChecksum(autosavePayload);const hasIntegrityIssue=Boolean(checksum&&checksum!==expected);const hasRecoveryMarker=Boolean(payload.interrupted||payload.sessionEndedAt==null);if(autosavePayload.savedAt&&Date.now()-autosavePayload.savedAt<86400000){autosaveDataRef.current={...autosavePayload,revisionId:payload.revisionId||`rev-${autosavePayload.savedAt}`,savedAt:autosavePayload.savedAt,createdAt:payload.createdAt||autosavePayload.savedAt,updatedAt:payload.updatedAt||autosavePayload.savedAt};setAutosaveRecoveryPlan({hasIntegrityIssue,hasRecoveryMarker,conflicts:{frameId:autosavePayload.frameId!==frameId,theme:JSON.stringify(autosavePayload.theme)!==JSON.stringify(theme),overrides:JSON.stringify(autosavePayload.overrides)!==JSON.stringify(overrides)}});setMergeSelection({ frameId: autosavePayload.frameId!==frameId, theme: JSON.stringify(autosavePayload.theme)!==JSON.stringify(theme), overrides: JSON.stringify(autosavePayload.overrides)!==JSON.stringify(overrides) });setShowAutosavePrompt(true);}}}catch(e){}})();return()=>{cancelled=true;};},[]);
   const restoreAutosave=()=>{const d=autosaveDataRef.current;if(d){applyAutosaveSnapshot(d);showToast('Session restored from autosave.');}setShowAutosavePrompt(false);};
   const mergeAutosave = () => {
     const d = autosaveDataRef.current;
@@ -1096,7 +1097,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     if (!strictWhizMode && nextValue && !(await requestConfirmation({ title:`Enable ${effectKey}?`, message:'This can trigger Whiz compliance warnings.', confirmLabel:'Enable effect', skipKey:'enable-effect' }))) return;
     setWhizEffects(prev => ({ ...prev, [effectKey]: nextValue }));
   };
-  useEffect(()=>{if(!isActive)return;const t=setTimeout(()=>{try{localStorage.setItem('whiz-autosave',JSON.stringify({frameId,theme,content,overrides,aspectRatio,bgGradient,patternOverlay,savedAt:Date.now()}));}catch(e){}},3000);return()=>clearTimeout(t);},[isActive,content,overrides,frameId,theme,aspectRatio,bgGradient,patternOverlay]);
+  useEffect(()=>{if(!isActive)return;const t=setTimeout(()=>{storeVaultPayload('whiz-autosave',{frameId,theme,content,overrides,aspectRatio,bgGradient,patternOverlay,savedAt:Date.now()}).catch(()=>{});},3000);return()=>clearTimeout(t);},[isActive,content,overrides,frameId,theme,aspectRatio,bgGradient,patternOverlay]);
   const applyTheme=t=>layoutShiftObserverRef.current?.markAction('themeSwitch',()=>{setTheme(t);setActiveTheme(t);});
   const applyTemplate=t=>{
     const layoutBase = createTemplateForLayout(selectedFrame.layout);
