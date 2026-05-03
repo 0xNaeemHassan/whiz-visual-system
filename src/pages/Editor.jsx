@@ -229,10 +229,68 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   );
   const hasBlockingSpineContrastIssue = useMemo(() => complianceIssues.some((issue) => issue.startsWith('Rotated-spine contrast checks:')), [complianceIssues]);
   const editorValidation = useMemo(() => getEditorValidationReport({ overrides, content }), [overrides, content]);
+  const complianceAnchors = useMemo(() => {
+    const byId = {
+      'field-issueNum': { id: 'field-issueNum', label: 'Issue #', reason: 'Issue numbering powers archive sequencing + exported filenames.' },
+      'field-title': { id: 'field-title', label: 'Title', reason: 'Title drives the card headline and downstream indexing/search.' },
+      'field-topicTag': { id: 'field-topicTag', label: 'Topic tag', reason: 'Topic tags normalize taxonomy and slug generation for distribution.' },
+      'field-tickerSpeed': { id: 'field-tickerSpeed', label: 'Ticker speed', reason: 'Ticker cadence affects readability and contract-safe motion.' },
+      'field-sourceLinks': { id: 'field-sourceLinks', label: 'Source links', reason: 'Sources are required for publish-grade trust and fact traceability.' },
+      'field-nextDrop': { id: 'field-nextDrop', label: 'Next drop date', reason: 'Scheduling metadata keeps editorial calendars machine-readable.' },
+    };
+
+    const mapIssueToAnchor = (message) => {
+      if (message.includes('Title is required')) return 'field-title';
+      if (message.includes('Topic tag is required') || message.includes('Topic-tag normalization') || message.includes('Slug format drift')) return 'field-topicTag';
+      if (message.includes('Issue number')) return 'field-issueNum';
+      if (message.includes('Ticker speed') || message.includes('Ticker fidelity variance')) return 'field-tickerSpeed';
+      if (message.includes('Source links are required')) return 'field-sourceLinks';
+      if (message.includes('Next drop date')) return 'field-nextDrop';
+      return null;
+    };
+
+    const mapSeverity = (message) => {
+      if (message.includes('required') || message.includes('must')) return 'blocking';
+      if (message.includes('drift') || message.includes('normalization') || message.includes('format')) return 'warning';
+      return 'info';
+    };
+
+    const entries = [];
+    [...complianceIssues, ...(editorValidation?.errors || []), ...(editorValidation?.warnings || [])].forEach((message) => {
+      const anchorId = mapIssueToAnchor(message);
+      if (!anchorId) return;
+      entries.push({ ...byId[anchorId], message, severity: mapSeverity(message) });
+    });
+    return entries;
+  }, [complianceIssues, editorValidation]);
+  const complianceByAnchor = useMemo(() => complianceAnchors.reduce((acc, entry) => {
+    acc[entry.id] = acc[entry.id] || [];
+    acc[entry.id].push(entry);
+    return acc;
+  }, {}), [complianceAnchors]);
   const brandScore = useMemo(
     () => getBrandScore({ overrides, content }),
     [overrides, content],
   );
+  const jumpToField = useCallback((id) => {
+    const target = document.getElementById(id);
+    if (!target) return;
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    target.focus?.({ preventScroll: true });
+  }, []);
+  const getSeverityStyle = useCallback((severity) => ({
+    blocking: { color: '#FFB3B3', border: '1px solid rgba(255,90,90,.45)', background: 'rgba(70,10,10,.7)' },
+    warning: { color: '#FFDFA8', border: '1px solid rgba(229,178,58,.45)', background: 'rgba(61,44,5,.6)' },
+    info: { color: '#B6D5FF', border: '1px solid rgba(95,163,255,.45)', background: 'rgba(8,29,61,.55)' },
+  }[severity] || { color: 'var(--muted)', border: '1px solid var(--border)', background: 'var(--bg-3)' }), []);
+  const renderFieldCompliance = useCallback((anchorId) => {
+    const entries = complianceByAnchor[anchorId] || [];
+    if (!entries.length) return null;
+    return (<div style={{display:'grid',gap:6,marginTop:6}}>{entries.map((entry, idx) => {
+      const style = getSeverityStyle(entry.severity);
+      return <div key={`${anchorId}-${idx}`} style={{...style,padding:'6px 8px',borderRadius:6,fontSize:10,lineHeight:1.5}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}><strong style={{fontFamily:'var(--font-m)',fontSize:9,letterSpacing:'0.06em',textTransform:'uppercase'}}>{entry.severity}</strong><button className="btn btn-ghost btn-sm" style={{fontSize:9,padding:'1px 6px'}} onClick={()=>jumpToField(anchorId)}>Fix now</button></div><div>{entry.message}</div><div style={{opacity:0.8}}>Why this matters: {entry.reason}</div><div style={{opacity:0.9}}>Suggested fix: {entry.message.includes('Autofix:') ? entry.message.split('Autofix:')[1].trim() : `Update ${entry.label.toLowerCase()} to satisfy the validation rule.`}</div></div>;
+    })}</div>);
+  }, [complianceByAnchor, getSeverityStyle, jumpToField]);
 
   const applyStrictPolish = () => {
     updateStyle((prev) => ({
@@ -432,12 +490,13 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
             </div>
             {strictWhizMode && <div style={{fontSize:10,color:'var(--dim)',marginTop:6}}>Effects are disabled in Strict Whiz Mode.</div>}
           </div>
-          <div className="editor-section"><div className="editor-section-title">Metadata</div><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>{[['Issue #','issueNum'],['Date','date'],['Desk','desk'],['Volume','volume']].map(([l,k])=>(<div key={k} className="form-group" style={{marginBottom:0}}><label className="form-label">{l}</label><input value={content[k]} onChange={e=>updateContent(k,e.target.value)}/></div>))}</div><div className="form-group" style={{marginTop:8}}><label className="form-label">Topic Tag</label><input value={content.topicTag} onChange={e=>{const next=normalizeContentTaxonomy({...content,topicTag:e.target.value});updateContent('topicTag',next.content.topicTag);updateContent('slug',next.content.slug);if(next.compliance.autoCorrected.length)showToast('Topic/slug normalized on input.','info');if(next.compliance.hasInvalid)showToast(next.compliance.invalid.join(' '),'error');}}/></div>
+          <div className="editor-section"><div className="editor-section-title">Metadata</div><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>{[['Issue #','issueNum'],['Date','date'],['Desk','desk'],['Volume','volume']].map(([l,k])=>(<div key={k} className="form-group" style={{marginBottom:0}}><label className="form-label">{l}</label><input id={`field-${k}`} value={content[k]} onChange={e=>updateContent(k,e.target.value)}/></div>))}</div>{renderFieldCompliance('field-issueNum')}<div className="form-group" style={{marginTop:8}}><label className="form-label">Topic Tag</label><input id="field-topicTag" value={content.topicTag} onChange={e=>{const next=normalizeContentTaxonomy({...content,topicTag:e.target.value});updateContent('topicTag',next.content.topicTag);updateContent('slug',next.content.slug);if(next.compliance.autoCorrected.length)showToast('Topic/slug normalized on input.','info');if(next.compliance.hasInvalid)showToast(next.compliance.invalid.join(' '),'error');}}/>{renderFieldCompliance('field-topicTag')}</div>
       <div className="form-group">
         <label className="form-label">Ticker Speed (seconds) — {normalizeTickerSpeed(content.tickerSpeed)}s</label>
-        <input type="range" min={TICKER_CONTRACT.speed.min} max={TICKER_CONTRACT.speed.max} step={TICKER_CONTRACT.speed.step} value={normalizeTickerSpeed(content.tickerSpeed)}
+        <input id="field-tickerSpeed" type="range" min={TICKER_CONTRACT.speed.min} max={TICKER_CONTRACT.speed.max} step={TICKER_CONTRACT.speed.step} value={normalizeTickerSpeed(content.tickerSpeed)}
           onChange={e=>updateContent('tickerSpeed',normalizeTickerSpeed(parseInt(e.target.value, 10)))}
           style={{width:'100%',accentColor:'var(--accent)'}}/>
+        {renderFieldCompliance('field-tickerSpeed')}
       </div>
 <div className="form-group"><label className="form-label">Handle</label><input value={content.handle} onChange={e=>updateContent('handle',e.target.value)}/></div>
       {/* NOTE: Extended metadata fields */}
@@ -452,14 +511,16 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
       </div>
       <div className="form-group">
         <label className="form-label">Source Links</label>
-        <textarea className="form-control" rows={2} value={content.sourceLinks||''} onChange={e=>updateContent('sourceLinks',e.target.value)} placeholder="https://defillama.com/protocol/...\nhttps://dune.com/..." />
+        <textarea id="field-sourceLinks" className="form-control" rows={2} value={content.sourceLinks||''} onChange={e=>updateContent('sourceLinks',e.target.value)} placeholder="https://defillama.com/protocol/...\nhttps://dune.com/..." />
         {(content.status||'PUBLISHED')==='PUBLISHED' && !(content.sourceLinks||'').trim() && (
           <div style={{marginTop:4,fontFamily:'var(--font-m)',fontSize:10,color:'#FFB3B3'}}>Source links are required when status is PUBLISHED.</div>
         )}
+        {renderFieldCompliance('field-sourceLinks')}
       </div>
       <div className="form-group">
         <label className="form-label">Next Drop Date</label>
-        <input className="form-control" type="date" value={content.nextDrop||''} onChange={e=>updateContent('nextDrop',e.target.value)} />
+        <input id="field-nextDrop" className="form-control" type="date" value={content.nextDrop||''} onChange={e=>updateContent('nextDrop',e.target.value)} />
+        {renderFieldCompliance('field-nextDrop')}
       </div>
       <div className="form-group">
         <label className="form-label">Pull Quote</label>
@@ -470,7 +531,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
         <input className="form-control" type="url" value={content.heroUrl||content.logoUrl||''} onChange={e=>{updateContent('heroUrl',e.target.value);updateContent('logoUrl',e.target.value);}} placeholder="https://example.com/logo.png" />
       </div>
 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}><div className="form-group" style={{marginBottom:0}}><label className="form-label">@X</label><input value={content.socialX||''} onChange={e=>updateContent('socialX',e.target.value)}/></div><div className="form-group" style={{marginBottom:0}}><label className="form-label">@Sub</label><input value={content.socialSub||''} onChange={e=>updateContent('socialSub',e.target.value)}/></div></div></div>
-          <div className="editor-section"><div className="editor-section-title">Editorial</div><div className="form-group"><label className="form-label">Title</label><textarea value={content.title} onChange={e=>updateContent('title',e.target.value)} rows={2}/><div className={`char-count ${content.title.length>60?'warn':''} ${content.title.length>80?'over':''}`}>{content.title.length}/60</div></div><div className="form-group"><label className="form-label">Deck</label><textarea value={content.deck} onChange={e=>updateContent('deck',e.target.value)} rows={2}/><div className={`char-count ${content.deck.length>120?'warn':''}`}>{content.deck.length}/120</div></div><div className="form-group"><label className="form-label">Body</label><textarea value={content.body} onChange={e=>updateContent('body',e.target.value)} rows={4}/><div className={`char-count ${content.body.length>400?'warn':''}`}>{content.body.length}/400</div></div></div>
+          <div className="editor-section"><div className="editor-section-title">Editorial</div><div className="form-group"><label className="form-label">Title</label><textarea id="field-title" value={content.title} onChange={e=>updateContent('title',e.target.value)} rows={2}/><div className={`char-count ${content.title.length>60?'warn':''} ${content.title.length>80?'over':''}`}>{content.title.length}/60</div>{renderFieldCompliance('field-title')}</div><div className="form-group"><label className="form-label">Deck</label><textarea value={content.deck} onChange={e=>updateContent('deck',e.target.value)} rows={2}/><div className={`char-count ${content.deck.length>120?'warn':''}`}>{content.deck.length}/120</div></div><div className="form-group"><label className="form-label">Body</label><textarea value={content.body} onChange={e=>updateContent('body',e.target.value)} rows={4}/><div className={`char-count ${content.body.length>400?'warn':''}`}>{content.body.length}/400</div></div></div>
           <div className="editor-section">
             <div className="editor-section-title">Deep-Dive Scaffold</div>
             <div className="form-group"><label className="form-label">Thesis</label><textarea value={content.thesis||''} onChange={e=>updateContent('thesis',e.target.value)} rows={2} placeholder="What is the core investment/research claim?"/></div>
