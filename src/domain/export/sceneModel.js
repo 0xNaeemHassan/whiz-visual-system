@@ -1,7 +1,9 @@
 import { resolveRiskAccent } from '../riskAccentPolicy';
+import { buildCitationModel } from './citationModel';
 
 export function createSceneModel({ frameId, theme, content, overrides, aspectRatio, bgGradient, locale = 'en-US' }) {
   const accentResolution = resolveRiskAccent({ frameId, theme, overrides });
+  const citationMode = content?.exportCitationMode || content?.citationMode || 'off';
   return {
     frameId,
     dimensions: { width: aspectRatio.w, height: aspectRatio.h },
@@ -29,5 +31,6 @@ export function createSceneModel({ frameId, theme, content, overrides, aspectRat
       body: content?.body || '',
       handle: content?.handle || '',
     },
+    citations: buildCitationModel(content, citationMode),
   };
 }
