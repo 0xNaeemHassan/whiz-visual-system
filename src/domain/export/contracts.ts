@@ -1,4 +1,5 @@
 import type { ExportContract } from '../../types/canonical';
+import { resolveChannelProfile, type ExportChannel } from './channelProfiles';
 
 export const EXPORT_CONTRACT_VERSION = '1.0.0';
 
@@ -34,6 +35,7 @@ export function resolveExportContractPreset({
 }
 
 export function createExportContract({
+  channel,
   format,
   dimensions,
   quality = 0.92,
