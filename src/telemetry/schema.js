@@ -3,11 +3,13 @@ export const TELEMETRY_VERSION = '1.0.0';
 export const TELEMETRY_EVENTS = {
   LOAD: 'editor.load',
   SAVE: 'editor.save',
+  ACTION_BAR: 'editor.action_bar',
   UNDO: 'editor.undo',
   REDO: 'editor.redo',
   EXPORT_SUCCESS: 'editor.export.success',
   EXPORT_FAILURE: 'editor.export.failure',
   VALIDATION_ERROR: 'editor.validation.error',
+  DUPLICATE_AUTOPILOT_METRIC: 'editor.duplicate.autopilot.metric',
 };
 
 export const EVENT_PAYLOAD_SHAPES = {
@@ -19,6 +21,11 @@ export const EVENT_PAYLOAD_SHAPES = {
   [TELEMETRY_EVENTS.SAVE]: {
     saveId: 'string',
     saveName: 'string',
+  },
+  [TELEMETRY_EVENTS.ACTION_BAR]: {
+    action: 'save|load|duplicate|export|import|undo|redo',
+    group: 'primary|overflow',
+    surface: 'desktop|mobile',
   },
   [TELEMETRY_EVENTS.UNDO]: {
     scope: 'content|overrides',
@@ -41,6 +48,13 @@ export const EVENT_PAYLOAD_SHAPES = {
     count: 'number',
     issues: 'string[]',
     taxonomyAutoCorrected: 'boolean?',
+  },
+  [TELEMETRY_EVENTS.DUPLICATE_AUTOPILOT_METRIC]: {
+    stage: 'duplicated|issue_draft_created',
+    completed: 'boolean',
+    withWizard: 'boolean',
+    confidence: 'low|medium|high?',
+    provenanceRequired: 'boolean?',
   },
 };
 

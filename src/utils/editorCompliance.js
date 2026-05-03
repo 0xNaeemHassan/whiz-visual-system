@@ -287,6 +287,18 @@ export function getComplianceIssues({ overrides, content }) {
     issues.push('Footer schema integrity: required footer field set is out of sync.');
   }
 
+
+  const truncationPolicy = content?.truncationPolicy || {};
+  const allowedStrategies = new Set(['ellipsis', 'clamp', 'wrap']);
+  const globalStrategy = truncationPolicy?.global?.strategy;
+  if (globalStrategy && !allowedStrategies.has(globalStrategy)) {
+    issues.push(`Truncation policy invalid: strategy "${globalStrategy}" is unsupported.`);
+  }
+  const priorityFields = truncationPolicy?.priorityFields;
+  if (Array.isArray(priorityFields) && priorityFields.length > 4) {
+    issues.push('Truncation policy drift: keep priority fields to 4 or fewer.');
+  }
+
   const overflowMeta = content?.overflowPolicy || content?.overflowMeta;
   const hasAction = (actionSet, token) => Array.isArray(actionSet) && actionSet.includes(token);
   if (overflowMeta?.actions) {
@@ -306,6 +318,11 @@ export function getComplianceIssues({ overrides, content }) {
 
     const hierarchyLost = (actions.stats || []).some((entry) => hasAction(entry?.label, 'reduce-font') && hasAction(entry?.value, 'reduce-font'));
     if (hierarchyLost) issues.push('Stats-card hierarchy risk: fallback cannot preserve value-over-label contrast.');
+
+    if (overflowMeta?.truncation?.hasFallback) {
+      const suggestion = (overflowMeta?.truncation?.suggestions || [])[0] || 'Shorten text or promote key fields to truncation priority.';
+      issues.push(`Fallback truncation triggered. Auto-fix suggestion: ${suggestion}`);
+    }
   }
 
   return issues;
