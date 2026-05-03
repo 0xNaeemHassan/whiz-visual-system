@@ -28,11 +28,35 @@ function migrateAnyToEnvelope(rawValue) {
   return toEnvelope(rawValue, STORAGE_SCHEMA_VERSION);
 }
 
+function migrateLegacySaveRecord(save) {
+  if (!isObject(save)) return save;
+  const tags = Array.isArray(save.tags)
+    ? save.tags.filter((tag) => typeof tag === 'string').map((tag) => tag.trim()).filter(Boolean)
+    : [];
+  const folder = typeof save.folder === 'string' ? save.folder : '';
+  const status = typeof save.status === 'string' && save.status.trim() ? save.status.trim() : undefined;
+  return {
+    ...save,
+    tags,
+    folder,
+    ...(status ? { status } : {}),
+  };
+}
+
+function migrateLegacySaves(rawValue) {
+  const enveloped = migrateAnyToEnvelope(rawValue);
+  if (!Array.isArray(enveloped.data)) return enveloped;
+  return {
+    ...enveloped,
+    data: enveloped.data.map(migrateLegacySaveRecord),
+  };
+}
+
 const MIGRATIONS = {
   'whiz-autosave': [migrateAnyToEnvelope],
   'whiz-theme': [migrateAnyToEnvelope],
   // Applies to legacy or ad-hoc snapshot keys too.
-  'whiz-saves': [migrateAnyToEnvelope],
+  'whiz-saves': [migrateLegacySaves],
 };
 
 function getMigrationChain(key) {

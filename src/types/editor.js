@@ -1,6 +1,7 @@
 /** @typedef {{ id:number, tier:string, tierName:string, name:string, desc:string, tags:string[], layout:string, defaultAccentPolicy?:{ themeId:string } }} FrameDefinition */
-/** @typedef {{ label:string, value:string }} StatItem */
-/** @typedef {{ [key:string]: string }} TableRow */
+/** @typedef {{ source?:string, date?:string, confidence?:'low'|'medium'|'high'|string, notes?:string, links?:string }} Provenance */
+/** @typedef {{ label:string, value:string, provenance?:Provenance }} StatItem */
+/** @typedef {{ provenance?:Provenance, [key:string]: string|Provenance|undefined }} TableRow */
 /** @typedef {{ issueNum:string, date:string, desk:string, volume:string, topicTag:string, title:string, deck:string, body:string, handle:string, socialX?:string, socialSub?:string, status?:string, tickerSpeed?:number, sparkData?:string, stats:StatItem[], tableRows:TableRow[], tableHeaders:string[], bullPoints:string[], bearPoints:string[], thesis?:string, mechanismSteps?:string[], riskNotes?:string[], evidencePoints?:string[], bigNumber?:string, bigLabel?:string, verdict?:string, gridItems?:unknown[], timelineEvents?:unknown[], [key:string]: unknown }} FrameContent */
 /** @typedef {{ fontSize?:number, fontWeight?:number, color?:string|null, italic?:boolean, lineHeight?:number, letterSpacing?:number, textAlign?:'left'|'center'|'right', opacity?:number, background?:string|null, borderColor?:string|null }} TextStyleOverride */
 /** @typedef {{ frameBg?:string|null, spineColor?:string|null, tickerColor?:string|null, tickerBg?:string|null, title?:TextStyleOverride, deck?:TextStyleOverride, body?:TextStyleOverride, accent?:{color?:string|null, riskOverrideAcknowledged?:boolean}, tag?:TextStyleOverride, footer?:TextStyleOverride, statsColor?:string|null, bignumColor?:string|null, avatarColor?:string|null, ruleBg?:string|null, handleColor?:string|null, [key:string]: unknown }} StyleOverrides */
