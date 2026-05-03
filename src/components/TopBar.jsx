@@ -1,8 +1,13 @@
+import { useMemo, useRef, useState } from 'react';
+import { useUIEventContext } from '../state/UIEventContext';
 import { AccessibleIconButton } from './primitives';
+import { useDialogFocus } from '../utils/focusTrap';
 export default function TopBar({ title, page, onHamburger, showToast, activeTheme, navigateTo }) {
   const { activityEntries, unreadCount, markActivityLogRead } = useUIEventContext();
   const [showLog, setShowLog] = useState(false);
   const [severityFilter, setSeverityFilter] = useState('all');
+  const logDialogRef = useRef(null);
+  useDialogFocus({ isOpen: showLog, containerRef: logDialogRef });
   const filteredEntries = useMemo(() => (
     severityFilter === 'all'
       ? activityEntries
@@ -74,7 +79,10 @@ export default function TopBar({ title, page, onHamburger, showToast, activeThem
       {showLog && (
         <div
           id="activity-log-panel"
+          ref={logDialogRef}
+          tabIndex={-1}
           role="dialog"
+          aria-modal="true"
           aria-label="Activity log"
           style={{ position: 'absolute', top: 56, right: 16, zIndex: 30, width: 360, maxHeight: 360, overflow: 'auto', background: 'var(--bg-2)', border: '1px solid var(--border)', borderRadius: 'var(--r)', padding: 10 }}
         >
