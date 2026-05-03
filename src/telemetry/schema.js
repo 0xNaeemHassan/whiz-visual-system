@@ -14,6 +14,7 @@ export const TELEMETRY_EVENTS = {
   DUPLICATE_RESOLUTION: 'editor.duplicate.resolution',
   PLANNER_HEURISTIC_SCORED: 'planner.heuristic.scored',
   PLANNER_HEURISTIC_FEEDBACK: 'planner.heuristic.feedback',
+  INPUT_GUARDRAIL_BLOCKED: 'editor.input.guardrail.blocked',
 };
 
 export const EVENT_PAYLOAD_SHAPES = {
@@ -84,6 +85,12 @@ export const EVENT_PAYLOAD_SHAPES = {
     score: 'number',
     outcome: 'object',
     feedbackType: 'engagement_outcome',
+  },
+  [TELEMETRY_EVENTS.INPUT_GUARDRAIL_BLOCKED]: {
+    inputType: 'image|json_import|table_paste',
+    reason: 'payload_size|item_count|rate_limit',
+    droppedCount: 'number?',
+    maxAllowed: 'number?',
   },
 };
 
