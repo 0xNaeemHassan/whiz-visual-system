@@ -472,7 +472,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   }, [currentDatasetSnapshot, setDatasetSnapshotRecord, showToast]);
   const frameRef=useRef(null);const centerRef=useRef(null);
   const { registerHandlers } = useUIEventContext();
-  const[showAutosavePrompt,setShowAutosavePrompt]=useState(false);const autosaveDataRef=useRef(null);const[showShortcutHelp,setShowShortcutHelp]=useState(false);
+  const[showAutosavePrompt,setShowAutosavePrompt]=useState(false);const autosaveDataRef=useRef(null);const [autosaveRecoveryPlan, setAutosaveRecoveryPlan] = useState(null);const [mergeSelection, setMergeSelection] = useState({ frameId: false, theme: false, overrides: false });const[showShortcutHelp,setShowShortcutHelp]=useState(false);
   const [showTableImportModal, setShowTableImportModal] = useState(false);
   const [tableImportText, setTableImportText] = useState('');
   const [tableImportReport, setTableImportReport] = useState(null);
@@ -558,8 +558,32 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     showToast('New frame started');
   },[newFrameSignal]);
 
-  useEffect(()=>{try{const r=localStorage.getItem('whiz-autosave');if(r){const d=JSON.parse(r);if(d.savedAt&&Date.now()-d.savedAt<86400000){autosaveDataRef.current=d;setShowAutosavePrompt(true);}}}catch(e){}},[]);
-  const restoreAutosave=()=>{const d=autosaveDataRef.current;if(d){d.frameId&&setFrameId(d.frameId);d.theme&&(setTheme(d.theme),setActiveTheme(d.theme));d.content&&resetContent(normalizeContentWithProvenance({ ...d.content, evidenceLedger: d.content?.evidenceLedger || d.evidenceLedger }));d.overrides&&setOverrides(d.overrides);d.aspectRatio&&setAspectRatio(d.aspectRatio);d.bgGradient&&updateMedia(prev=>({...prev,bgGradient:d.bgGradient}));d.patternOverlay&&updateMedia(prev=>({...prev,patternOverlay:d.patternOverlay}));showToast('Restored');}setShowAutosavePrompt(false);};
+  const computeAutosaveChecksum = (payload) => {
+    const raw = JSON.stringify(payload);
+    let hash = 0;
+    for (let idx = 0; idx < raw.length; idx += 1) hash = ((hash << 5) - hash) + raw.charCodeAt(idx);
+    return `v1:${Math.abs(hash >>> 0).toString(16)}`;
+  };
+  const applyAutosaveSnapshot = (d, merge = {}) => {
+    if (!d) return;
+    if (!merge.sectioned || merge.frameId) d.frameId && setFrameId(d.frameId);
+    if (!merge.sectioned || merge.theme) d.theme && (setTheme(d.theme), setActiveTheme(d.theme));
+    d.content && resetContent(normalizeContentWithProvenance({ ...d.content, evidenceLedger: d.content?.evidenceLedger || d.evidenceLedger }));
+    if (!merge.sectioned || merge.overrides) d.overrides && setOverrides(d.overrides);
+    d.aspectRatio && setAspectRatio(d.aspectRatio);
+    d.bgGradient && updateMedia(prev=>({...prev,bgGradient:d.bgGradient}));
+    d.patternOverlay && updateMedia(prev=>({...prev,patternOverlay:d.patternOverlay}));
+  };
+  useEffect(()=>{try{const r=localStorage.getItem('whiz-autosave');if(r){const d=JSON.parse(r);const payload=d.payload||d;const checksum=d.checksum||null;const expected=computeAutosaveChecksum(payload);const hasIntegrityIssue=Boolean(checksum&&checksum!==expected);const hasRecoveryMarker=Boolean(d.interrupted||d.sessionEndedAt==null);if(payload.savedAt&&Date.now()-payload.savedAt<86400000){autosaveDataRef.current={...payload,revisionId:d.revisionId||`rev-${payload.savedAt}`,savedAt:payload.savedAt,createdAt:d.createdAt||payload.savedAt,updatedAt:d.updatedAt||payload.savedAt};setAutosaveRecoveryPlan({hasIntegrityIssue,hasRecoveryMarker,conflicts:{frameId:payload.frameId!==frameId,theme:JSON.stringify(payload.theme)!==JSON.stringify(theme),overrides:JSON.stringify(payload.overrides)!==JSON.stringify(overrides)}});setMergeSelection({ frameId: payload.frameId!==frameId, theme: JSON.stringify(payload.theme)!==JSON.stringify(theme), overrides: JSON.stringify(payload.overrides)!==JSON.stringify(overrides) });setShowAutosavePrompt(true);}}}catch(e){}},[]);
+  const restoreAutosave=()=>{const d=autosaveDataRef.current;if(d){applyAutosaveSnapshot(d);showToast('Session restored from autosave.');}setShowAutosavePrompt(false);};
+  const mergeAutosave = () => {
+    const d = autosaveDataRef.current;
+    if (!d) return;
+    applyAutosaveSnapshot(d, { sectioned: true, ...mergeSelection });
+    showToast('Merged selected autosave sections.');
+    setShowAutosavePrompt(false);
+  };
+  const discardAutosave = () => { localStorage.removeItem('whiz-autosave'); setShowAutosavePrompt(false); };
   const runTableImportValidation = () => {
     const headerCount = (content.tableHeaders || []).length || 5;
     setCollisionReviewDecisions({});
@@ -1028,7 +1052,22 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     if (!strictWhizMode && nextValue && !(await requestConfirmation({ title:`Enable ${effectKey}?`, message:'This can trigger Whiz compliance warnings.', confirmLabel:'Enable effect', skipKey:'enable-effect' }))) return;
     setWhizEffects(prev => ({ ...prev, [effectKey]: nextValue }));
   };
-  useEffect(()=>{if(!isActive)return;const t=setTimeout(()=>{try{localStorage.setItem('whiz-autosave',JSON.stringify({frameId,theme,content,overrides,aspectRatio,bgGradient,patternOverlay,savedAt:Date.now()}));}catch(e){}},3000);return()=>clearTimeout(t);},[isActive,content,overrides,frameId,theme,aspectRatio,bgGradient,patternOverlay]);
+  useEffect(()=>{if(!isActive)return;const t=setTimeout(()=>{try{const payload={frameId,theme,content,overrides,aspectRatio,bgGradient,patternOverlay,savedAt:Date.now()};localStorage.setItem('whiz-autosave',JSON.stringify({revisionId:`rev-${payload.savedAt}`,createdAt:autosaveDataRef.current?.createdAt||payload.savedAt,updatedAt:payload.savedAt,sessionEndedAt:null,interrupted:true,payload,checksum:computeAutosaveChecksum(payload)}));}catch(e){}},3000);return()=>clearTimeout(t);},[isActive,content,overrides,frameId,theme,aspectRatio,bgGradient,patternOverlay]);
+  useEffect(() => {
+    const markSessionEnd = () => {
+      try {
+        const raw = localStorage.getItem('whiz-autosave');
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        localStorage.setItem('whiz-autosave', JSON.stringify({ ...parsed, interrupted: false, sessionEndedAt: Date.now() }));
+      } catch (e) {}
+    };
+    window.addEventListener('beforeunload', markSessionEnd);
+    return () => {
+      markSessionEnd();
+      window.removeEventListener('beforeunload', markSessionEnd);
+    };
+  }, []);
   const applyTheme=t=>{setTheme(t);setActiveTheme(t);};
   const applyTemplate=t=>{
     const layoutBase = createTemplateForLayout(selectedFrame.layout);
@@ -1502,7 +1541,8 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
               <button className="btn btn-secondary btn-sm" style={{fontSize:9,padding:'2px 8px'}} disabled={isSectionLocked('timeline')} onClick={()=>updateContent('timelineEvents',[...(content.timelineEvents||[]),{date:'',label:'',sub:'',provenance:createDefaultProvenance()}])}>+ Event</button>
             </div>
             {(content.timelineEvents||[]).map((ev,i)=>(
-              <div key={i} style={{display:'grid',gridTemplateColumns:'80px 1fr 1fr auto auto auto',gap:4,marginBottom:4,alignItems:'center'}}>
+              <React.Fragment key={i}>
+              <div style={{display:'grid',gridTemplateColumns:'80px 1fr 1fr auto auto auto',gap:4,marginBottom:4,alignItems:'center'}}>
                 <input disabled={isSectionLocked('timeline')} value={ev.date||''} placeholder="Date" style={{fontSize:10,padding:'4px 6px'}} onChange={e=>{const raw=e.target.value;const normalized=normalizeDateInput(raw);const a=[...(content.timelineEvents||[])];a[i]={...a[i],date:normalized.valid?normalized.displayDate:raw};updateContent('timelineEvents',a);if(raw&&!normalized.valid){showToast(`Invalid timeline date. ${normalized.suggestions.join(' ')}`,'warning');}}}/>
                 <input disabled={isSectionLocked('timeline')} value={ev.label||''} placeholder="Event" style={{fontSize:10,padding:'4px 6px'}} onChange={e=>{const a=[...(content.timelineEvents||[])];a[i]={...a[i],label:e.target.value};updateContent('timelineEvents',a);}}/>
                 <input disabled={isSectionLocked('timeline')} value={ev.sub||''} placeholder="Note" style={{fontSize:10,padding:'4px 6px'}} onChange={e=>{const a=[...(content.timelineEvents||[])];a[i]={...a[i],sub:e.target.value};updateContent('timelineEvents',a);}}/>
@@ -1511,6 +1551,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
                 <button className="btn btn-danger btn-sm" style={{padding:'0 6px',height:28}} disabled={isSectionLocked('timeline')} onClick={()=>updateContent('timelineEvents',(content.timelineEvents||[]).filter((_,r)=>r!==i))}>✕</button>
               </div>
               <ProvenanceEditor disabled={isSectionLocked('timeline')} value={ev?.provenance} collapsed={false} onToggle={()=>{}} onChange={(provenance)=>{const a=[...(content.timelineEvents||[])];a[i]={...a[i],provenance:normalizeProvenance(provenance)};updateContent('timelineEvents',a);}}/>
+              </React.Fragment>
             ))}
             {(content.timelineEvents||[]).length===0&&<div style={{fontFamily:'var(--font-m)',fontSize:10,color:'var(--dim)',padding:'8px 0'}}>No events yet — click + Event to add</div>}
           </div>
@@ -1563,7 +1604,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
 
       {trustPreflightModal&&<div className="modal-overlay open" onClick={()=>setTrustPreflightModal(null)}><div className="modal" onClick={e=>e.stopPropagation()}><div className="modal-header"><span className="modal-title">Trust Preflight · {trustPreflightModal.entrypointLabel}</span><IconButton className="modal-close" label="Close trust preflight" onClick={()=>setTrustPreflightModal(null)}>✕</IconButton></div><div style={{fontSize:11,marginBottom:8}}>Blocking: {trustPreflightModal.result.blocking.length} · Warnings: {trustPreflightModal.result.warnings.length}</div><div style={{maxHeight:280,overflowY:'auto',display:'grid',gap:6}}>{[...trustPreflightModal.result.blocking,...trustPreflightModal.result.warnings].map((issue,idx)=><div key={`${issue.checkId}-${idx}`} style={{border:'1px solid var(--border)',borderRadius:6,padding:'6px 8px'}}><div style={{fontSize:10,textTransform:'uppercase',opacity:0.8}}>{issue.severity} · {issue.checkId}</div><div style={{fontSize:12}}>{issue.message}</div><div style={{fontSize:10,color:'var(--dim)'}}>{issue.fieldPath}</div></div>)}</div></div></div>}
       {showShortcutHelp&&<div className="modal-overlay open" onClick={()=>setShowShortcutHelp(false)}><div className="modal" onClick={e=>e.stopPropagation()}><div className="modal-header"><span className="modal-title">Keyboard + Shortcuts</span><IconButton className="modal-close" label="Close keyboard shortcuts help" onClick={()=>setShowShortcutHelp(false)}>✕</IconButton></div><div style={{fontSize:12,lineHeight:1.7}}><div><strong>Top bar:</strong> Save, load, undo/redo, export/import buttons are tab-focusable and support Enter/Space.</div><div><strong>Left nav:</strong> main route buttons are keyboard reachable in DOM order.</div><div><strong>Editor canvas:</strong> editable frame regions are selectable in Edit mode and escape clears selection.</div><div><strong>Right panel:</strong> sections, tabs, grouped selectors use roving tabindex patterns.</div><div><strong>Dialogs:</strong> close, confirm, and primary actions are keyboard-activatable.</div><div><strong>Toasts:</strong> dismiss button is focusable and operable from keyboard.</div><hr style={{margin:'10px 0',borderColor:'var(--border)'}}/><div><strong>Key map:</strong> ⌘/Ctrl+S save, ⌘/Ctrl+Z undo, ⌘/Ctrl+Shift+Z redo, ⌘/Ctrl+K command palette, Esc close overlays.</div></div></div></div>}
-      {showAutosavePrompt&&<div className="confirm-overlay" onClick={()=>setShowAutosavePrompt(false)}><div className="confirm-box" onClick={e=>e.stopPropagation()}><div className="confirm-title">Restore Session?</div><div className="confirm-msg">Found autosave from last session.</div><div className="confirm-actions"><button className="btn btn-secondary btn-sm" onClick={()=>setShowAutosavePrompt(false)}>Discard</button><button className="btn btn-primary btn-sm" onClick={restoreAutosave}>Restore</button></div></div></div>}
+      {showAutosavePrompt&&<div className="confirm-overlay" onClick={()=>setShowAutosavePrompt(false)}><div className="confirm-box" onClick={e=>e.stopPropagation()}><div className="confirm-title">Interrupted Session Detected</div><div className="confirm-msg">Revision {autosaveDataRef.current?.revisionId} · {autosaveDataRef.current?.updatedAt ? new Date(autosaveDataRef.current.updatedAt).toLocaleString() : 'Unknown time'}</div>{autosaveRecoveryPlan&&<div style={{fontSize:11,color:'var(--muted)',marginTop:6,display:'grid',gap:4}}><div>Integrity: {autosaveRecoveryPlan.hasIntegrityIssue ? 'Checksum mismatch' : 'Checksum verified'}</div><div>Status: {autosaveRecoveryPlan.hasRecoveryMarker ? 'Previous session interrupted' : 'Clean autosave found'}</div><label><input type="checkbox" checked={mergeSelection.frameId} onChange={()=>setMergeSelection(prev=>({...prev,frameId:!prev.frameId}))}/> Merge frame section {autosaveRecoveryPlan.conflicts.frameId ? '(conflict)' : '(no conflict)'}</label><label><input type="checkbox" checked={mergeSelection.theme} onChange={()=>setMergeSelection(prev=>({...prev,theme:!prev.theme}))}/> Merge theme section {autosaveRecoveryPlan.conflicts.theme ? '(conflict)' : '(no conflict)'}</label><label><input type="checkbox" checked={mergeSelection.overrides} onChange={()=>setMergeSelection(prev=>({...prev,overrides:!prev.overrides}))}/> Merge overrides section {autosaveRecoveryPlan.conflicts.overrides ? '(conflict)' : '(no conflict)'}</label></div>}<div className="confirm-actions"><button className="btn btn-secondary btn-sm" onClick={discardAutosave}>Discard</button><button className="btn btn-ghost btn-sm" onClick={mergeAutosave}>Merge selected</button><button className="btn btn-primary btn-sm" onClick={restoreAutosave}>Restore all</button></div></div></div>}
       <ConfirmDialog open={Boolean(confirmState)} title={confirmState?.title} message={confirmState?.message} details={confirmState?.details||[]} confirmLabel={confirmState?.confirmLabel} cancelLabel={confirmState?.cancelLabel} danger={Boolean(confirmState?.danger)} allowSkip={Boolean(confirmState?.skipKey)} skipChecked={Boolean(confirmState?.skipChecked)} onSkipChange={(checked)=>setConfirmState(prev=>prev?{...prev,skipChecked:checked}:prev)} onCancel={()=>{ if(!confirmState) return; logConfirmationEvent(confirmState.actionId, confirmState.title, 'cancelled'); confirmState.resolve(false); setConfirmState(null); }} onConfirm={()=>{ if(!confirmState) return; if(confirmState.skipKey && confirmState.skipChecked){setSessionConfirmSkips(prev=>({...prev,[confirmState.skipKey]:true}));} logConfirmationEvent(confirmState.actionId, confirmState.title, 'confirmed'); confirmState.resolve(true); setConfirmState(null); }} />
       <div className="editor-section"><div className="editor-section-title">Confirmation Activity</div><div style={{display:'grid',gap:4,maxHeight:120,overflowY:'auto',fontSize:10}}>{activityLog.length===0?<div style={{color:'var(--dim)'}}>No confirmation events yet.</div>:activityLog.map((entry)=><div key={entry.id}><strong>{entry.outcome}</strong> · {entry.actionId} · {entry.label} · {new Date(entry.ts).toLocaleTimeString()}</div>)}</div></div>
       {showMobileCommandSheet && <div className="mobile-command-sheet-overlay" onClick={()=>setShowMobileCommandSheet(false)}><div className="mobile-command-sheet" onClick={e=>e.stopPropagation()}><div className="mobile-command-sheet-handle"/><div className="editor-section-title">Command Sheet</div><div className="mobile-action-cluster"><button className="btn btn-secondary btn-sm" onClick={()=>{setRightTab('content');setMobileTab('content');setShowMobileCommandSheet(false);}}>Quick Edit</button><button className="btn btn-secondary btn-sm" onClick={exportJSON}>Export JSON</button><button className="btn btn-secondary btn-sm" onClick={exportHTML}>Export HTML</button><button className="btn btn-primary btn-sm" onClick={exportPNG}>Publish PNG</button></div><div className="mobile-qa-checklist"><div className="editor-section-title">Mobile QA (Pro workflows)</div>{Object.entries({quickEdit:'Quick edits save correctly',validate:'Validation summary visible',publish:'One-tap publish works',proRows:'Row drag/menu targets are touchable'}).map(([key,label])=><label key={key}><input type="checkbox" checked={mobileQaChecks[key]} onChange={()=>setMobileQaChecks(prev=>({...prev,[key]:!prev[key]}))}/><span>{label}</span></label>)}</div></div></div>}
