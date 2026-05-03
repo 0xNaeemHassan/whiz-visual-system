@@ -1,6 +1,6 @@
 import { normalizeContentTaxonomy } from '../../utils/contentNormalization';
 
-export function buildFrameSave({ frameId, theme, content, overrides, aspectRatio, bgGradient, patternOverlay, workflowPhase = "draft", phaseChecklist = null, sectionLocks = {} }) {
+export function buildFrameSave({ frameId, theme, content, overrides, aspectRatio, bgGradient, patternOverlay, workflowPhase = "draft", phaseChecklist = null, sectionLocks = {}, auditTrail = [] }) {
   const normalization = normalizeContentTaxonomy(content || {});
   return {
     frameId,
@@ -13,6 +13,7 @@ export function buildFrameSave({ frameId, theme, content, overrides, aspectRatio
     workflowPhase,
     sectionLocks,
     phaseChecklist: phaseChecklist || { draftAt: Date.now(), reviewAt: null, publishReadyAt: null, lastTransitionAt: Date.now() },
+    auditTrail: Array.isArray(auditTrail) ? auditTrail : [],
     savedAt: Date.now(),
     saveMetadata,
     telemetry: {
@@ -31,6 +32,7 @@ export function parseImportedState(raw) {
     ...raw,
     content: normalization.content,
     sectionLocks: raw.sectionLocks || null,
+    auditTrail: Array.isArray(raw.auditTrail) ? raw.auditTrail : [],
     telemetry: {
       ...(raw.telemetry || {}),
       taxonomyAutoCorrected: normalization.compliance.autoCorrected.length > 0,
