@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-05-03",
+  "notes": "Synthetic representative workloads for render, editor mutations, and export.",
+  "operations": {
+    "render": {
+      "baselineP95Ms": 16,
+      "maxRegressionPercent": 25
+    },
+    "editorMutations": {
+      "baselineP95Ms": 10,
+      "maxRegressionPercent": 25
+    },
+    "export": {
+      "baselineP95Ms": 8,
+      "maxRegressionPercent": 25
+    }
+  }
+}
