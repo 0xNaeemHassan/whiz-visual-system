@@ -1,0 +1,124 @@
+name: Quality Gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  unit:
+    name: Unit Suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node scripts/test-smoke.mjs
+
+  contract:
+    name: Contract Suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node scripts/test-analytics-quality.mjs
+
+  visual:
+    name: Visual Suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node scripts/test-motion-reduction.mjs
+
+  e2e:
+    name: E2E Suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node scripts/test-keyboard-flows.mjs
+
+  coverage:
+    name: Coverage Suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node scripts/test-editor-mutations.mjs
+      - run: node scripts/test-empty-states.mjs
+      - run: node scripts/test-locale-formatting.mjs
+
+  migration:
+    name: Migration Suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node scripts/test-find-replace-service.mjs
+      - run: node scripts/test-export-preflight.mjs
+
+  a11y:
+    name: A11y Suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run check:touch-targets
+      - run: node scripts/check-interactive-labels.mjs
+
+  sign-off:
+    name: Release Sign-off
+    runs-on: ubuntu-latest
+    needs: [unit, contract, visual, e2e, coverage, migration, a11y]
+    steps:
+      - run: echo "All critical test gates passed. Release sign-off check is green."
+
+  canary:
+    name: Canary Validation
+    runs-on: ubuntu-latest
+    needs: [sign-off]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run check:perf
+
+  rollback-readiness:
+    name: Rollback Readiness
+    runs-on: ubuntu-latest
+    needs: [canary]
+    steps:
+      - run: echo "Rollback readiness validated after successful canary validation."

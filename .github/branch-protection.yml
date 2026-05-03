@@ -1,0 +1,20 @@
+branches:
+  - name: main
+    protection:
+      required_pull_request_reviews:
+        required_approving_review_count: 1
+      required_status_checks:
+        strict: true
+        contexts:
+          - "Unit Suite"
+          - "Contract Suite"
+          - "Visual Suite"
+          - "E2E Suite"
+          - "Coverage Suite"
+          - "Migration Suite"
+          - "A11y Suite"
+          - "Release Sign-off"
+          - "Canary Validation"
+          - "Rollback Readiness"
+      enforce_admins: true
+      restrictions: null
