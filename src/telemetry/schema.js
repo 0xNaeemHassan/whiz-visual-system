@@ -8,6 +8,7 @@ export const TELEMETRY_EVENTS = {
   REDO: 'editor.redo',
   EXPORT_SUCCESS: 'editor.export.success',
   EXPORT_FAILURE: 'editor.export.failure',
+  EXPORT_CORRECTION_CREATED: 'editor.export.correction.created',
   VALIDATION_ERROR: 'editor.validation.error',
   DUPLICATE_AUTOPILOT_METRIC: 'editor.duplicate.autopilot.metric',
 };
@@ -42,6 +43,12 @@ export const EVENT_PAYLOAD_SHAPES = {
     format: 'png|webp',
     reason: 'string',
     strictMode: 'boolean',
+  },
+  [TELEMETRY_EVENTS.EXPORT_CORRECTION_CREATED]: {
+    artifactId: 'string',
+    issueNum: 'string|number',
+    correctedFieldCount: 'number',
+    supersedesPriorExport: 'boolean',
   },
   [TELEMETRY_EVENTS.VALIDATION_ERROR]: {
     context: 'export|import',
