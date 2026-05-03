@@ -1,99 +1,61 @@
 import { createExportContract } from './contracts';
+import { resolveExportProfile } from './exportProfileResolver';
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const classifyExportError = (error) => {
-  const code = String(error?.code || '').toUpperCase();
-  const name = String(error?.name || '').toUpperCase();
-  const message = String(error?.message || '').toLowerCase();
-  const nonRetryableSignals = ['VALIDATION', 'UNSUPPORTED', 'SECURITY', 'TYPE'];
-  if (nonRetryableSignals.some((signal) => code.includes(signal) || name.includes(signal))) {
-    return { retryable: false, reason: code || name || 'NON_RETRYABLE_CLASSIFIED' };
-  }
-  if (message.includes('invalid') || message.includes('unsupported') || message.includes('tainted canvas')) {
-    return { retryable: false, reason: 'NON_RETRYABLE_MESSAGE_CLASSIFIED' };
-  }
-  return { retryable: true, reason: 'RETRYABLE_DEFAULT' };
-};
+export async function exportFrame({ contractInput, sceneModel, sceneRenderer, simplifiedSceneRenderer = null, domFallbackRenderer, preflightResult = null, profileContext = {} }) {
+  const resolvedProfile = resolveExportProfile({
+    deviceClass: profileContext.deviceClass,
+    performanceTier: profileContext.performanceTier,
+    baseDimensions: contractInput?.dimensions,
+    format: contractInput?.format,
+  });
 
-async function runStepWithPolicy({
-  stepName,
-  execute,
-  timeoutMs = 4500,
-  maxRetries = 2,
-  initialBackoffMs = 150,
-  diagnostics,
-}) {
-  let attempt = 0;
-  while (attempt <= maxRetries) {
-    attempt += 1;
-    const attemptStartedAt = Date.now();
-    try {
-      const result = await Promise.race([
-        execute(),
-        new Promise((_, reject) => setTimeout(() => reject(Object.assign(new Error(`${stepName} timed out`), { code: 'STEP_TIMEOUT' })), timeoutMs)),
-      ]);
-      diagnostics.steps.push({
-        step: stepName,
-        status: 'success',
-        attempt,
-        durationMs: Date.now() - attemptStartedAt,
-      });
-      return result;
-    } catch (error) {
-      const classification = classifyExportError(error);
-      const canRetry = classification.retryable && attempt <= maxRetries;
-      const failureRecord = {
-        step: stepName,
-        status: 'failure',
-        attempt,
-        durationMs: Date.now() - attemptStartedAt,
-        errorCode: error?.code || null,
-        errorName: error?.name || null,
-        reason: error?.message || 'unknown export error',
-        retryable: classification.retryable,
-        classification: classification.reason,
-      };
-      diagnostics.steps.push(failureRecord);
-      diagnostics.failures.push(failureRecord);
-      if (!canRetry) throw error;
-      await wait(initialBackoffMs * 2 ** (attempt - 1));
-    }
-  }
-}
+  const contract = createExportContract({
+    ...contractInput,
+    dimensions: resolvedProfile.targetDimensions,
+    quality: contractInput?.quality ?? resolvedProfile.quality,
+  });
 
-export async function exportFrame({ contractInput, sceneModel, sceneRenderer, domFallbackRenderer, preflightResult = null }) {
-  const contract = createExportContract(contractInput);
   const exportMetadata = {
     preflight: preflightResult,
     citationMode: contract.citationMode || 'off',
+    layoutCost: sceneModel?.exportProfiling?.complexity || null,
+    degradations: {
+      disabledLayers: sceneModel?.exportProfiling?.disabledLayers || [],
+      reduceEffectComplexity: Boolean(sceneModel?.exportProfiling?.reduceEffectComplexity),
+      simplifyGradients: Boolean(sceneModel?.exportProfiling?.simplifyGradients),
+      maxImageDrawSize: sceneModel?.exportProfiling?.maxImageDrawSize || null,
+    },
     exportedAt: new Date().toISOString(),
+    exportProfileDecision: resolvedProfile,
   };
-  const diagnostics = {
-    policy: { timeoutMs: 4500, maxRetries: 2, backoff: 'exponential', nonRetryableClassifier: 'error-code-name-message' },
-    steps: [],
-    failures: [],
-    fallback: null,
-  };
-  try {
-    const canvas = await runStepWithPolicy({
-      stepName: 'scene-render',
-      execute: () => sceneRenderer(sceneModel, contract),
-      diagnostics,
-    });
-    return { canvas, contract, usedFallback: false, exportMetadata, diagnostics };
-  } catch (error) {
-    if (!domFallbackRenderer) throw error;
-    diagnostics.fallback = {
-      chosen: 'dom-snapshot',
-      triggerStep: 'scene-render',
-      triggerReason: error?.message || 'scene renderer failed',
-    };
-    const canvas = await runStepWithPolicy({
-      stepName: 'dom-fallback-render',
-      execute: () => domFallbackRenderer(contract, error),
-      diagnostics,
-    });
-    return { canvas, contract, usedFallback: true, fallbackReason: error?.message || 'scene renderer failed', exportMetadata, diagnostics };
+
+  const attempts = Math.max(1, Number(resolvedProfile.retryPolicy?.attempts || 1));
+  const backoffMs = Math.max(0, Number(resolvedProfile.retryPolicy?.backoffMs || 0));
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const canvas = await sceneRenderer(sceneModel, { ...contract, effects: resolvedProfile.effectToggles });
+      return { canvas, contract, usedFallback: false, rendererUsed: 'primary-renderer', exportMetadata };
+    } catch (primaryError) {
+      if (simplifiedSceneRenderer) {
+        try {
+          const canvas = await simplifiedSceneRenderer(sceneModel, { ...contract, quality: Math.min(contract.quality, 0.85), effects: { shadows: false, gradients: true, textures: false } });
+          return { canvas, contract, usedFallback: true, rendererUsed: 'simplified-renderer', fallbackReason: primaryError?.message || 'primary renderer failed', exportMetadata };
+        } catch {}
+      }
+
+      if (attempt < attempts) {
+        await wait(backoffMs);
+        continue;
+      }
+
+      if (!domFallbackRenderer) throw primaryError;
+      const canvas = await domFallbackRenderer(contract, primaryError);
+      return { canvas, contract, usedFallback: true, rendererUsed: 'dom-snapshot-fallback', fallbackReason: primaryError?.message || 'scene renderer failed', exportMetadata };
+    }
   }
+
+  throw new Error('Export failed without renderer result');
 }
