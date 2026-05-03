@@ -5,6 +5,7 @@ import { THEMES } from '../data/themes';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { useIntl } from '../i18n/IntlProvider';
 import { normalizePlannerIssue } from '../utils/schemaContracts';
+import { rankFrameCandidates } from '../domain/services/frameRecommendationService';
 
 const STATUSES = ['draft', 'planned', 'wip', 'done', 'published'];
 const CONFIDENCE = ['low', 'medium', 'high'];
@@ -105,6 +106,10 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
     confidence: CONFIDENCE.includes(issue.confidence) ? issue.confidence : 'medium',
     series: issue.series || '',
     assistantBrief: issue.assistantBrief || '',
+    recommendationIntent: issue.recommendationIntent || 'recap',
+    recommendationDataShape: issue.recommendationDataShape || 'table',
+    recommendationUrgency: issue.recommendationUrgency || 'medium',
+    recommendationFeedback: Array.isArray(issue.recommendationFeedback) ? issue.recommendationFeedback : [],
     targetMetric: issue.targetMetric || '',
     metricConfidence: issue.metricConfidence || '',
     metricSource: issue.metricSource || '',
@@ -150,6 +155,10 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
         confidence: draft.confidence || 'medium',
         series: draft.series || '',
         assistantBrief: draft.assistantBrief || '',
+        recommendationIntent: draft.recommendationIntent || 'recap',
+        recommendationDataShape: draft.recommendationDataShape || 'table',
+        recommendationUrgency: draft.recommendationUrgency || 'medium',
+        recommendationFeedback: draft.recommendationFeedback || [],
         targetMetric: draft.targetMetric || '',
         metricConfidence: draft.metricConfidence || '',
         metricSource: draft.metricSource || '',
@@ -167,11 +176,11 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
 
   const openIssueForm = (presetStatus) => {
     setEditingIssue(null);
-    setForm({ issueNum: String(nextNum).padStart(3,'0'), topic: '', frameId: '', themeId: '', status: presetStatus || 'draft', publishDate: '', notes: '', caption: '', sourceLinks: '', priority: 'medium', confidence: 'medium', series: '' });
+    setForm({ issueNum: String(nextNum).padStart(3,'0'), topic: '', frameId: '', themeId: '', status: presetStatus || 'draft', publishDate: '', notes: '', caption: '', sourceLinks: '', priority: 'medium', confidence: 'medium', series: '', recommendationIntent: 'recap', recommendationDataShape: 'table', recommendationUrgency: 'medium', recommendationFeedback: [] });
     setShowModal(true);
   };
 
-  const openEdit = (issue) => { setEditingIssue(issue.id); setForm({ confidence: 'medium', series: '', ...normalizeIssue(issue) }); setShowModal(true); };
+  const openEdit = (issue) => { setEditingIssue(issue.id); setForm({ confidence: 'medium', series: '', recommendationIntent: 'recap', recommendationDataShape: 'table', recommendationUrgency: 'medium', recommendationFeedback: [], ...normalizeIssue(issue) }); setShowModal(true); };
 
   // F5: Duplicate issue
   const duplicateIssue = (issue) => {
@@ -417,6 +426,20 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
   const stats = STATUSES.reduce((acc, s) => { acc[s] = issues.filter(i => i.status === s).length; return acc; }, {});
 
   // F10: Open in Editor with frame/theme pre-loaded
+
+  const frameSuggestions = useMemo(() => rankFrameCandidates({
+    dataShape: form.recommendationDataShape,
+    intent: form.recommendationIntent,
+    urgency: form.recommendationUrgency,
+    confidence: form.confidence,
+  }, { topN: 3, rejectFeedback: form.recommendationFeedback }), [form.recommendationDataShape, form.recommendationIntent, form.recommendationUrgency, form.confidence, form.recommendationFeedback]);
+
+  const rejectSuggestedFrame = (frameId, reason) => {
+    setForm((prev) => ({
+      ...prev,
+      recommendationFeedback: [...(prev.recommendationFeedback || []), { frameId, reason, at: Date.now() }],
+    }));
+  };
   const openInEditor = (issue) => {
     // Fix #21: pass full issue context so Editor can pre-fill content
     const frameId = issue.frameId ? Number(issue.frameId) : undefined;
@@ -632,6 +655,27 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
             <div className="form-group"><label className="form-label">Series</label><input value={form.series || ''} onChange={e => setForm(f => ({...f, series: e.target.value}))} placeholder="Stablecoin Risk Pt. 1" /></div>
           </div>
           <div className="form-group"><label className="form-label">Topic / Headline *</label><input value={form.topic} onChange={e => setForm(f => ({...f, topic: e.target.value}))} placeholder="The End of Mercenary Yield" autoFocus /></div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+            <div className="form-group"><label className="form-label">Intent</label><select value={form.recommendationIntent || 'recap'} onChange={e => setForm(f => ({...f, recommendationIntent: e.target.value}))}><option value="recap">Recap</option><option value="compare">Compare</option><option value="explain">Explain</option><option value="risk">Risk</option><option value="thesis">Thesis</option></select></div>
+            <div className="form-group"><label className="form-label">Data Shape</label><select value={form.recommendationDataShape || 'table'} onChange={e => setForm(f => ({...f, recommendationDataShape: e.target.value}))}><option value="table">Table</option><option value="timeline">Timeline</option><option value="split">Split</option><option value="grid">Grid</option><option value="stats">Stats</option></select></div>
+            <div className="form-group"><label className="form-label">Urgency</label><select value={form.recommendationUrgency || 'medium'} onChange={e => setForm(f => ({...f, recommendationUrgency: e.target.value}))}><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></div>
+          </div>
+          <div className="form-group" style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 10 }}>
+            <label className="form-label">Suggest best frame</label>
+            {frameSuggestions.map((suggestion) => (
+              <div key={suggestion.frameId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 8 }}>
+                <div style={{ fontSize: 12 }}>
+                  <strong>#{suggestion.rank} · F{suggestion.frameId} {suggestion.frameName}</strong>
+                  <div style={{ fontSize: 10, color: 'var(--muted)' }}>{suggestion.reasons.join(' • ')}</div>
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setForm(f => ({ ...f, frameId: String(suggestion.frameId) }))}>Use</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => rejectSuggestedFrame(suggestion.frameId, 'Not relevant')}>Reject</button>
+                </div>
+              </div>
+            ))}
+          </div>
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div className="form-group"><label className="form-label">Frame Template</label><select value={form.frameId} onChange={e => setForm(f => ({...f, frameId: e.target.value}))}><option value="">— Select —</option>{FRAMES.map(fr => <option key={fr.id} value={fr.id}>{fr.id}. {fr.name}</option>)}</select></div>
             <div className="form-group"><label className="form-label">Color Theme</label><select value={form.themeId} onChange={e => setForm(f => ({...f, themeId: e.target.value}))}><option value="">— Select —</option>{THEMES.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></div>
