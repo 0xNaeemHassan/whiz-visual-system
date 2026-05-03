@@ -68,7 +68,14 @@ export default function ImageUpload({ label, value, onChange, maxSize = 2, showT
 
   return (
     <div className="image-upload-wrap">
-      <div className="image-upload-label" onClick={() => value?.dataUrl && setExpanded(e => !e)} style={{ cursor: value?.dataUrl ? 'pointer' : 'default' }}>
+      <div
+        className="image-upload-label"
+        onClick={() => value?.dataUrl && setExpanded(e => !e)}
+        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && value?.dataUrl && setExpanded(v => !v)}
+        role={value?.dataUrl ? 'button' : undefined}
+        tabIndex={value?.dataUrl ? 0 : undefined}
+        style={{ cursor: value?.dataUrl ? 'pointer' : 'default' }}
+      >
         {label}
         {value?.dataUrl && <span style={{ marginLeft: 'auto', fontSize: 8, color: 'var(--dim)' }}>{expanded ? '▼' : '▶'} controls</span>}
       </div>
@@ -111,17 +118,17 @@ export default function ImageUpload({ label, value, onChange, maxSize = 2, showT
               </div>
               <div className="img-ctrl-row">
                 <span className="prop-label-text" style={{ width: 60 }}>Fit</span>
-                <div className="ww-grid" style={{ flex: 1 }}>
+                <div className="ww-grid" style={{ flex: 1 }} role="radiogroup" aria-label="Image fit mode">
                   {['contain', 'cover', 'fill'].map(f => (
-                    <button key={f} className={`ww-btn ${(value.fit || 'contain') === f ? 'on' : ''}`} onClick={() => update('fit', f)} style={{ fontSize: 9, padding: '3px 6px' }}>{f}</button>
+                    <button key={f} className={`ww-btn ${(value.fit || 'contain') === f ? 'on' : ''}`} onClick={() => update('fit', f)} role="radio" aria-checked={(value.fit || 'contain') === f} tabIndex={(value.fit || 'contain') === f ? 0 : -1} style={{ fontSize: 9, padding: '3px 6px' }}>{f}</button>
                   ))}
                 </div>
               </div>
               <div className="img-ctrl-row">
                 <span className="prop-label-text" style={{ width: 60 }}>Z-Index</span>
-                <div className="ww-grid" style={{ flex: 1 }}>
+                <div className="ww-grid" style={{ flex: 1 }} role="radiogroup" aria-label="Image layer depth">
                   {[{ l: 'Back', v: 2 }, { l: 'Mid', v: 5 }, { l: 'Front', v: 15 }].map(z => (
-                    <button key={z.v} className={`ww-btn ${(value.zIndex || 10) === z.v ? 'on' : ''}`} onClick={() => update('zIndex', z.v)} style={{ fontSize: 9, padding: '3px 6px' }}>{z.l}</button>
+                    <button key={z.v} className={`ww-btn ${(value.zIndex || 10) === z.v ? 'on' : ''}`} onClick={() => update('zIndex', z.v)} role="radio" aria-checked={(value.zIndex || 10) === z.v} tabIndex={(value.zIndex || 10) === z.v ? 0 : -1} style={{ fontSize: 9, padding: '3px 6px' }}>{z.l}</button>
                   ))}
                 </div>
               </div>
