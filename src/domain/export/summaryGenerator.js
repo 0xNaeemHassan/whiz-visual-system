@@ -62,6 +62,8 @@ export function buildSummaryText(summary = {}) {
     `Frame: #${summary.frameId || 'N/A'} (${summary.frameType || 'default'})`,
     `Trust Level: ${summary.trustLevel || 'Draft'}`,
     `Exported At: ${summary.exportedAt || 'N/A'}`,
+    `Export Preset: ${summary.exportPresetId || 'standard'}`,
+    `Export Params: ${summary.exportParameters ? `${summary.exportParameters.width}x${summary.exportParameters.height}, q=${summary.exportParameters.quality}, citation=${summary.exportParameters.citationMode}, effects=${summary.exportParameters.effectsPolicy}` : 'N/A'}`,
     'Key Values:',
     ...((summary.keyValues || []).map((kv) => `- ${kv.label || 'Unlabeled'}: ${kv.value || 'N/A'}`)),
     'Risk Flags:',
