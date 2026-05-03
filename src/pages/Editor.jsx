@@ -687,7 +687,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
       showToast(accepted?'Numeric corrections accepted.':'Numeric corrections rejected.','info');
     }
     if(JSON.stringify(normalizedContent)!==JSON.stringify(content)){setContent(normalizedContent,{immediate:true});}
-    return { normalizedContent, taxonomyAutoCorrected, numericCorrections: numericAudit };
+    return { normalizedContent, taxonomyAutoCorrected, numericCorrections: numericAudit, contract: numeric.contract };
   };
 
   const stateValidation = useMemo(() => validateEditorState({frameId,theme,content,overrides,uploadedImages},{strictMode:Boolean(strictMode)}), [frameId, theme, content, overrides, uploadedImages, strictMode]);
@@ -738,7 +738,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     setExporting(false);
   };
   const mutations = useMemo(() => buildMutationDispatcher({ setContent, setOverrides, setMedia: setMediaState, commitContent, commitOverrides, commitMedia }), [setContent, setOverrides, setMediaState, commitContent, commitOverrides, commitMedia]);
-  const updateContent=(k,v,forceImmediate=false)=>mutations.content(k,c=>{const next={...c,[k]:v};if(k==='date'){const normalized=normalizeDateInput(v);if(normalized.valid)return{...next,date:normalized.displayDate};}if(k==='timelineEvents'){return{...next,timelineEvents:normalizeTimelineEvents(v)};}if(k==='topicTag'||k==='slug'){return normalizeContentTaxonomy(next).content;}return next;},forceImmediate);
+  const updateContent=(k,v,forceImmediate=false)=>mutations.content(k,c=>{const next={...c,[k]:v};if(k==='date'){const normalized=normalizeDateInput(v);if(normalized.valid)return{...next,date:normalized.displayDate};}if(k==='timelineEvents'){return{...next,timelineEvents:normalizeTimelineEvents(v)};}if(k==='topicTag'||k==='slug'){return normalizeContentTaxonomy(next).content;}if(['bigNumber','bigValue','targetMetric','stats','tableRows'].includes(k)){return normalizeNumericFields(next).content;}return next;},forceImmediate);
   const isSectionLocked = (key) => Boolean(sectionLocks?.[key]);
   const toggleSectionLock = (sectionKey) => setSectionLocks(prev => ({ ...prev, [sectionKey]: !prev[sectionKey] }));
   const updateStyle=(updater)=>mutations.style(updater);
