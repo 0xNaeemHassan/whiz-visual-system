@@ -240,6 +240,10 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     [overrides, content],
   );
   const hasBlockingSpineContrastIssue = useMemo(() => complianceIssues.some((issue) => issue.startsWith('Rotated-spine contrast checks:')), [complianceIssues]);
+  const previewOverflow = useMemo(() => applyOverflowPolicy({ family: selectedFrame?.tier > 2 ? 'extended' : 'core', aspectRatio, content, ov: overrides, policy: content?.truncationPolicy || {} }), [selectedFrame?.tier, aspectRatio, content, overrides]);
+  const overflowMeta = { actions: previewOverflow?.actions, truncation: previewOverflow?.truncation };
+  const fallbackTruncation = Boolean(overflowMeta?.truncation?.hasFallback);
+  const truncationSuggestions = overflowMeta?.truncation?.suggestions || [];
   const editorValidation = useMemo(() => getEditorValidationReport({ overrides, content }), [overrides, content]);
   const complianceAnchors = useMemo(() => {
     const byId = {
