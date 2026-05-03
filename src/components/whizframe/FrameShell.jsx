@@ -152,7 +152,7 @@ export function FrameShell({ frameRef, frame, theme, content, trustLevel = 'Draf
         background: 'transparent', pointerEvents: 'none',
       }}>
         <span style={{
-          fontFamily: "'JetBrains Mono', monospace", fontSize: `${SPINE_DESIGN_TOKENS.label.fontSizePx}px`, letterSpacing: `${SPINE_DESIGN_TOKENS.label.letterSpacingEm}em`,
+          fontFamily: SPINE_DESIGN_TOKENS.label.fontFamily, fontSize: `${SPINE_DESIGN_TOKENS.label.fontSizePx}px`, letterSpacing: `${SPINE_DESIGN_TOKENS.label.letterSpacingEm}em`,
           textTransform: SPINE_DESIGN_TOKENS.label.textTransform, color: ov.spineColor || accentColor, opacity: SPINE_DESIGN_TOKENS.label.opacity,
           transform: `rotate(${SPINE_DESIGN_TOKENS.label.rotationDeg}deg)`, whiteSpace: 'nowrap', fontWeight: SPINE_DESIGN_TOKENS.label.fontWeight,
           userSelect: 'none',
