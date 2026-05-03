@@ -310,6 +310,10 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     nonBlocking: activeFramePitfalls.filter(p => p.severity !== 'high'),
   }), [activeFramePitfalls]);
   const runPitfallPreflight = () => {
+    if (!rolePermissions.canRunReadiness) {
+      showToast(roleReasons.readiness, 'warning');
+      return false;
+    }
     if (!activeFramePitfalls.length) return true;
     const highRiskLines = preExportChecklist.blocking.map((p) => `• ${p.warning}`);
     const mediumRiskLines = preExportChecklist.nonBlocking.map((p) => `• ${p.warning}`);
@@ -321,6 +325,19 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     if (mediumRiskLines.length && !window.confirm(`Non-blocking frame pitfalls:\n\n${mediumRiskLines.join('\n')}\n\nContinue export?`)) return false;
     return true;
   };
+
+  const rolePermissions = useMemo(() => ({
+    canRunReadiness: canRole(activeRole, 'run-readiness'),
+    canExportAssets: canRole(activeRole, 'export-assets'),
+    canPublish: canRole(activeRole, 'publish'),
+  }), [activeRole]);
+
+  const roleReasons = useMemo(() => ({
+    readiness: getRoleDisableReason(activeRole, 'run-readiness'),
+    exportAssets: getRoleDisableReason(activeRole, 'export-assets'),
+    publish: getRoleDisableReason(activeRole, 'publish'),
+  }), [activeRole]);
+
   const track = useMemo(() => createTelemetry({ frameId, layout: selectedFrame?.layout }), [frameId, selectedFrame?.layout]);
   useEffect(() => {
     const layoutBase = createTemplateForLayout(selectedFrame.layout);
@@ -506,6 +523,7 @@ Apply these auto-corrections?`);
   const exportHTML=()=>{const el=frameRef.current;if(!el)return;const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&family=Inter:wght@300..700&family=JetBrains+Mono:wght@400..700&display=swap" rel="stylesheet"><style>*{margin:0;padding:0;box-sizing:border-box}body{background:#0F1318;display:flex;justify-content:center;align-items:center;min-height:100vh}.whiz-frame{position:relative;overflow:hidden;flex-shrink:0}.wf-spine{position:absolute;left:0;top:0;bottom:0;width:3px;z-index:5}.wf-corner{position:absolute;width:16px;height:16px;z-index:6;opacity:.5}.wf-corner.tl{top:12px;left:12px;border-top:1.5px solid currentColor;border-left:1.5px solid currentColor}.wf-corner.tr{top:12px;right:12px;border-top:1.5px solid currentColor;border-right:1.5px solid currentColor}.wf-corner.bl{bottom:12px;left:12px;border-bottom:1.5px solid currentColor;border-left:1.5px solid currentColor}.wf-corner.br{bottom:12px;right:12px;border-bottom:1.5px solid currentColor;border-right:1.5px solid currentColor}.wf-content{position:relative;z-index:4;padding:40px 36px 32px 44px;display:flex;flex-direction:column;height:100%;box-sizing:border-box}.wf-title{font-family:'Space Grotesk',sans-serif;font-weight:700;letter-spacing:-.02em;line-height:1.05}.wf-deck{font-family:'Inter',sans-serif;line-height:1.6}.wf-body{font-family:'Inter',sans-serif;line-height:1.75}.wf-stat{display:flex;flex-direction:column;gap:4;padding:12px 14px;border-radius:6px}.wf-stat-val{font-family:'Space Grotesk',sans-serif;font-weight:700;line-height:1}.wf-stat-label{font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.1em}.wf-ticker{overflow:hidden;white-space:nowrap;height:${TICKER_CONTRACT.heightPx}px;display:flex;align-items:center;width:100%;position:relative;z-index:4}.wf-ticker-scroll{display:inline-block;animation:whiz-ticker-scroll ${TICKER_CONTRACT.speed.default}s linear infinite;font-family:${TICKER_CONTRACT.typography.fontFamily};font-size:${TICKER_CONTRACT.typography.fontSizePx}px;letter-spacing:${TICKER_CONTRACT.typography.letterSpacingEm}em;font-weight:${TICKER_CONTRACT.typography.fontWeight};text-transform:${TICKER_CONTRACT.typography.textTransform};padding-left:${TICKER_CONTRACT.padding.textInlineStartPct}%}.wf-section-head{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.15em;text-transform:uppercase;display:flex;align-items:center;gap:8px;margin-bottom:12px}.wf-section-head::before{content:'';width:12px;height:1.5px;background:currentColor;opacity:.5}.wf-handle{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.08em}.wf-table{width:100%;border-collapse:collapse}.wf-table th{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;text-align:left;padding:7px 10px;border-bottom:1px solid rgba(255,255,255,.06)}.wf-table td{font-family:'Inter',sans-serif;font-size:12px;padding:7px 10px;border-bottom:1px solid rgba(255,255,255,.04)}@keyframes whiz-ticker-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}</style></head><body>${el.outerHTML}</body></html>`;const b=new Blob([html],{type:'text/html'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=`whiz_export.html`;a.click();URL.revokeObjectURL(u);showToast('HTML exported');};
   const exportPNG=async()=>{if(!frameRef.current||exporting)return;if(!ensureActionAllowed('publish'))return;if(hasBlockingSpineContrastIssue){showToast('Publish blocked: rotated spine contrast is below threshold.','error');return;}const normalized=runNormalizationPreflight();if(!normalized)return;if(editorValidation.errors.length){showToast(`Export blocked: ${editorValidation.errors.join(' | ')}`,'error');return;}if(strictMode&&complianceIssues.length){showToast(`Strict mode blocked export (${complianceIssues.length} issues)`,'error');return;}if(!strictMode&&complianceIssues.length&&!window.confirm(`Whiz compliance warnings:\\n- ${complianceIssues.join('\\n- ')}\\n\\nExport anyway?`))return;if(editorValidation.warnings.length&&!window.confirm(`Editor validation warnings:\\n- ${editorValidation.warnings.join('\\n- ')}\\n\\nExport anyway?`))return;setExporting(true);showToast('Generating PNG...','info');try{const sceneModel=createSceneModel({frameId,theme,content:{...content,...normalized},overrides,aspectRatio,bgGradient});const{canvas,usedFallback}=await exportFrame({contractInput:{format:'png',dimensions:{width:aspectRatio.w,height:aspectRatio.h},quality:1,background:overrides.frameBg||theme.base,version:'1.0.0'},sceneModel,sceneRenderer:renderSceneToCanvas,domFallbackRenderer:(contract)=>renderDomSnapshotToCanvas(frameRef.current,{width:contract.dimensions.width,height:contract.dimensions.height,backgroundColor:contract.background})});try{canvas.toBlob(bl=>{bl&&navigator.clipboard?.write&&navigator.clipboard.write([new ClipboardItem({'image/png':bl})]).catch(()=>{});});}catch(e){}const u=canvas.toDataURL('image/png');const a=document.createElement('a');a.href=u;a.download=`${normalized.slug||'whiz_export'}.png`;a.click();showToast(`PNG exported at 2x${usedFallback?' (DOM fallback)':''}`);}catch(e){console.error(e);showToast(`Export failed: ${e.message||'unknown error'}`,'error');}setExporting(false);}
   const exportWebP=async()=>{
+    if(!rolePermissions.canExportAssets){showToast(roleReasons.exportAssets,'warning');return;}
     if(!frameRef.current||exporting)return;
     if(!ensureActionAllowed('export'))return;
     if(!runPitfallPreflight())return;
