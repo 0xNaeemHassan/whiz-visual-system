@@ -488,6 +488,27 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
     showToast('Cadence override logged', 'warning');
   };
 
+  const plannerScore = useMemo(() => evaluatePlannerScore(issues), [issues]);
+  const scoreTone = classifyScore(plannerScore.aggregateScore);
+  const scorePalette = {
+    green: { color: '#3CE6A6', label: 'Healthy' },
+    yellow: { color: '#E5B23A', label: 'Watch' },
+    red: { color: '#FF5A5A', label: 'Needs Attention' },
+  };
+  const scoreTrend = useMemo(() => {
+    const windows = Array.from({ length: 8 }, (_, idx) => {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - (7 * (7 - idx)));
+      const subset = issues.filter((issue) => {
+        if (!issue.publishDate) return false;
+        const d = new Date(issue.publishDate);
+        return !Number.isNaN(d.getTime()) && d <= cutoff;
+      });
+      return evaluatePlannerScore(subset, cutoff).aggregateScore;
+    });
+    return windows;
+  }, [issues]);
+
   // F10: Open in Editor with frame/theme pre-loaded
   const openInEditor = (issue) => {
     // Fix #21: pass full issue context so Editor can pre-fill content
@@ -756,6 +777,44 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
               </div>
             );
           })}
+        </div>
+      )}
+
+
+      {view === 'analytics' && (
+        <div className="card" style={{ display: 'grid', gap: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+            <div>
+              <div style={{ fontFamily: 'var(--font-m)', fontSize: 10, textTransform: 'uppercase', color: 'var(--muted)' }}>Planner quality score</div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+                <strong style={{ fontSize: 32, color: scorePalette[scoreTone].color }}>{plannerScore.aggregateScore}</strong>
+                <span style={{ color: scorePalette[scoreTone].color, fontFamily: 'var(--font-m)', fontSize: 11 }}>{scorePalette[scoreTone].label}</span>
+              </div>
+            </div>
+            <svg width="180" height="44" viewBox="0 0 180 44" role="img" aria-label="Score trend sparkline">
+              <polyline
+                fill="none"
+                stroke={scorePalette[scoreTone].color}
+                strokeWidth="2"
+                points={scoreTrend.map((point, index) => `${index * 24},${42 - (point / 100) * 38}`).join(' ')}
+              />
+            </svg>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 8 }}>
+            {Object.entries(plannerScore.breakdown).map(([key, value]) => {
+              const tone = classifyScore(value);
+              return (
+                <div key={key} style={{ border: '1px solid var(--border)', borderLeft: `4px solid ${scorePalette[tone].color}`, borderRadius: 'var(--r)', padding: 10 }}>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>{key}</div>
+                  <div style={{ fontSize: 20, color: scorePalette[tone].color, fontWeight: 700 }}>{value}</div>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ border: '1px dashed var(--border)', borderRadius: 'var(--r)', padding: 10 }}>
+            <strong style={{ fontSize: 12 }}>Recommendation ({plannerScore.weakestSubmetric})</strong>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>{plannerScore.recommendation}</div>
+          </div>
         </div>
       )}
 
