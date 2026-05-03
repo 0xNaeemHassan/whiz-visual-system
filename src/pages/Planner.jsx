@@ -5,6 +5,7 @@ import { THEMES } from '../data/themes';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { useIntl } from '../i18n/IntlProvider';
 import { normalizePlannerIssue } from '../utils/schemaContracts';
+import { evaluateCapacity, suggestRebalance } from '../domain/services/plannerCapacityService';
 
 const STATUSES = ['draft', 'planned', 'wip', 'done', 'published'];
 const CONFIDENCE = ['low', 'medium', 'high'];
@@ -95,8 +96,28 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
   const [editingIssue, setEditingIssue] = useState(null);
   const [form, setForm] = useState({
     issueNum: '', topic: '', frameId: '', themeId: '', status: 'draft', priority: 'medium',
-    publishDate: '', notes: '', caption: '', sourceLinks: '', confidence: 'medium', series: '',
+    publishDate: '', notes: '', caption: '', sourceLinks: '', confidence: 'medium', series: '', ownerId: '', reviewerId: '', complexityPoints: 3,
   });
+
+  const [capacityModel] = useLocalStorage('whiz-planner-capacity', {
+    creators: [
+      { id: 'alex', weeklySlots: 5, complexityBudget: 18, plannedPTO: [] },
+      { id: 'sam', weeklySlots: 5, complexityBudget: 18, plannedPTO: [] },
+    ],
+    reviewers: [
+      { id: 'riley', weeklySlots: 8, complexityBudget: 24, plannedPTO: [] },
+    ],
+  });
+  const capacitySignals = useMemo(() => evaluateCapacity({ issues, model: capacityModel }), [issues, capacityModel]);
+  const rebalanceSuggestions = useMemo(() => suggestRebalance({ issues, model: capacityModel }), [issues, capacityModel]);
+  const applyRebalance = () => {
+    if (!rebalanceSuggestions.length) return;
+    setIssues((prev) => prev.map((issue) => {
+      const move = rebalanceSuggestions.find((entry) => entry.issueId === issue.id);
+      return move ? { ...issue, ownerId: move.to } : issue;
+    }));
+    showToast(`Applied ${rebalanceSuggestions.length} rebalance suggestion(s).`);
+  };
   const normalizeIssueNum = (v) => String(v || '').replace(/\D/g, '').slice(-3).padStart(3, '0');
   const normalizeIssue = (issue) => ({
     ...normalizePlannerIssue(issue),
@@ -167,7 +188,7 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
 
   const openIssueForm = (presetStatus) => {
     setEditingIssue(null);
-    setForm({ issueNum: String(nextNum).padStart(3,'0'), topic: '', frameId: '', themeId: '', status: presetStatus || 'draft', publishDate: '', notes: '', caption: '', sourceLinks: '', priority: 'medium', confidence: 'medium', series: '' });
+    setForm({ issueNum: String(nextNum).padStart(3,'0'), topic: '', frameId: '', themeId: '', status: presetStatus || 'draft', publishDate: '', notes: '', caption: '', sourceLinks: '', priority: 'medium', confidence: 'medium', series: '', ownerId: '', reviewerId: '', complexityPoints: 3 });
     setShowModal(true);
   };
 
@@ -495,6 +516,21 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
         )}
       </div>
 
+      <div className="card" style={{ marginBottom: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <strong style={{ fontSize: 12 }}>Capacity model (creator/reviewer)</strong>
+          <button className="btn btn-secondary btn-sm" onClick={applyRebalance} disabled={!rebalanceSuggestions.length}>One-click rebalance ({rebalanceSuggestions.length})</button>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 8 }}>
+          {Object.values(capacitySignals.creator).map((person) => (
+            <div key={person.id} style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 8 }}>
+              <div style={{ fontWeight: 700 }}>{person.id} · {person.signal}</div>
+              <div style={{ fontSize: 11, color: 'var(--muted)' }}>slots {person.weeklySlotsUsed}/{person.weeklySlots} · complexity {person.complexityUsed}/{person.complexityBudget} · PTO conflicts {person.ptoCollisionCount}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Toolbar */}
       <div className="planner-toolbar">
         <div className="search-wrap" style={{ flex: 1, minWidth: 200 }}>
@@ -635,6 +671,11 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div className="form-group"><label className="form-label">Frame Template</label><select value={form.frameId} onChange={e => setForm(f => ({...f, frameId: e.target.value}))}><option value="">— Select —</option>{FRAMES.map(fr => <option key={fr.id} value={fr.id}>{fr.id}. {fr.name}</option>)}</select></div>
             <div className="form-group"><label className="form-label">Color Theme</label><select value={form.themeId} onChange={e => setForm(f => ({...f, themeId: e.target.value}))}><option value="">— Select —</option>{THEMES.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+            <div className="form-group"><label className="form-label">Creator</label><input value={form.ownerId || ''} onChange={e => setForm(f => ({...f, ownerId: e.target.value}))} placeholder="alex" /></div>
+            <div className="form-group"><label className="form-label">Reviewer</label><input value={form.reviewerId || ''} onChange={e => setForm(f => ({...f, reviewerId: e.target.value}))} placeholder="riley" /></div>
+            <div className="form-group"><label className="form-label">Complexity Points</label><input type="number" min="1" max="13" value={form.complexityPoints || 3} onChange={e => setForm(f => ({...f, complexityPoints: Number(e.target.value) || 3}))} /></div>
           </div>
           <div className="form-group">
             <label className="form-label">
