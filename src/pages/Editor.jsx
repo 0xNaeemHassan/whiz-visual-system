@@ -981,6 +981,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     const normalizationPreflight=runNormalizationPreflight();if(!normalizationPreflight)return;const { normalizedContent, taxonomyAutoCorrected }=normalizationPreflight;
     const v=validateEditorState({frameId,theme,content,overrides,uploadedImages});
     if(!v.valid){showToast(`Export blocked (${v.codes.join(', ')})`,'error');return;}
+    await waitForCriticalFonts({ profile:'export' });
     setExporting(true);showToast('Generating WebP…');
     try{setDatasetSnapshotRecord({snapshotId:currentDatasetSnapshot.snapshotId,hash:currentDatasetSnapshot.hash,schemaVersion:currentDatasetSnapshot.schemaVersion,savedAt:Date.now()});
       const sceneModel=createSceneModel({frameId,theme,content:{...content,...normalizedContent},overrides,aspectRatio,bgGradient});
