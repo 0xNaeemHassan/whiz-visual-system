@@ -21,6 +21,7 @@ import { buildMutationDispatcher } from './EditorMutations.js';
 import { normalizeDateInput, normalizeTimelineEvents } from '../domain/services/dateNormalizationService';
 import { SemanticChip } from '../components/primitives';
 import { getFramePitfalls } from '../data/framePitfalls';
+import { createEditorCommandRegistry, filterCommands, matchesShortcut } from '../domain/editorCommands';
 
 /** @typedef {import('../types/canonical').FrameContent} FrameContent */
 /** @typedef {import('../types/canonical').StyleOverrides} StyleOverrides */
@@ -143,6 +144,8 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
 
   const[showDeleteConfirm,setShowDeleteConfirm]=useState(null);const[saveSearch,setSaveSearch]=useState('');
   const[strictMode,setStrictMode]=useLocalStorage('whiz-strict-mode',true);
+  const[showCommandPalette,setShowCommandPalette]=useState(false);
+  const[paletteQuery,setPaletteQuery]=useState('');
   const[whizEffects,setWhizEffects]=useLocalStorage('whiz-effects',DEFAULT_EFFECTS);
   const frameRef=useRef(null);const centerRef=useRef(null);
   const { registerHandlers } = useUIEventContext();
@@ -260,27 +263,9 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     redoOverrideRef.current=redoOverride;
   });
 
-  useEffect(()=>{
-    const h=e=>{
-      if(!isActive)return;
-      if(e.metaKey||e.ctrlKey){
-        if(e.key==='s'){e.preventDefault();doSaveRef.current?.();}
-        if(e.key==='z'&&!e.shiftKey){e.preventDefault();
-          // Undo content history first; if nothing left, undo overrides
-          const didUndo=undoRef.current?.();
-          if(!didUndo){undoOverrideRef.current?.();track(TELEMETRY_EVENTS.UNDO,{scope:'overrides'});}
-          else track(TELEMETRY_EVENTS.UNDO,{scope:'content'});
-        }
-        if((e.key==='z'&&e.shiftKey)||e.key==='y'){e.preventDefault();
-          const didRedo=redoRef.current?.();
-          if(!didRedo){redoOverrideRef.current?.();track(TELEMETRY_EVENTS.REDO,{scope:'overrides'});}
-          else track(TELEMETRY_EVENTS.REDO,{scope:'content'});
-        }
-      }
-    };
-    window.addEventListener('keydown',h);
-    return()=>window.removeEventListener('keydown',h);
-  },[isActive]);
+  const runUndo=useCallback(()=>{const didUndo=undoRef.current?.();if(!didUndo){undoOverrideRef.current?.();track(TELEMETRY_EVENTS.UNDO,{scope:'overrides'});}else track(TELEMETRY_EVENTS.UNDO,{scope:'content'});},[track]);
+  const runRedo=useCallback(()=>{const didRedo=redoRef.current?.();if(!didRedo){redoOverrideRef.current?.();track(TELEMETRY_EVENTS.REDO,{scope:'overrides'});}else track(TELEMETRY_EVENTS.REDO,{scope:'content'});},[track]);
+
 
   useEffect(() => {
     if (!isActive) return undefined;
@@ -374,6 +359,29 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     showToast(`Template: ${t.name}`);
   };
   const filteredFrames=useMemo(()=>{if(!frameSearch)return FRAMES;const q=frameSearch.toLowerCase();return FRAMES.filter(f=>f.name.toLowerCase().includes(q)||f.tags.some(t=>t.includes(q))||f.layout.includes(q));},[frameSearch]);
+  const runValidationCheck = useCallback(() => {
+    if (editorValidation.errors.length) return showToast(`Validation errors: ${editorValidation.errors.join(' | ')}`, 'error');
+    if (editorValidation.warnings.length) return showToast(`Validation warnings: ${editorValidation.warnings.join(' | ')}`, 'warning');
+    showToast('Validation passed', 'info');
+  }, [editorValidation, showToast]);
+  const commandRegistry = useMemo(() => createEditorCommandRegistry({
+    openPalette: () => { setShowCommandPalette(true); setPaletteQuery(''); },
+    save: () => doSaveRef.current?.(),
+    load: () => { setSaveSearch(''); setShowLoadModal(true); },
+    exportPng: exportPNG,
+    exportWebp: exportWebP,
+    duplicate: () => { const n=`${content.title||'Frame'} (copy)`;setSaves(p=>[...p,{id:`s_${Date.now()}`,title:n,...buildSave()}]);showToast('Duplicated'); },
+    nextFrame: () => setFrameId((prev) => { const i = FRAMES.findIndex((f) => f.id === prev); return FRAMES[(i + 1) % FRAMES.length].id; }),
+    prevFrame: () => setFrameId((prev) => { const i = FRAMES.findIndex((f) => f.id === prev); return FRAMES[(i - 1 + FRAMES.length) % FRAMES.length].id; }),
+    validate: runValidationCheck,
+    toggleStrict: () => setStrictMode(v => !v),
+    undo: runUndo,
+    redo: runRedo,
+    hasSaves: () => saves.length > 0,
+    canUndoAny: () => canUndo,
+    canRedoAny: () => canRedo,
+  }), [exportPNG, exportWebP, content.title, showToast, runValidationCheck, runUndo, runRedo, saves.length, canUndo, canRedo]);
+  useEffect(()=>{const h=e=>{if(!isActive)return;const command=commandRegistry.find(c=>matchesShortcut(e,c.shortcut)||matchesShortcut(e,c.shortcut.replace('Cmd','Ctrl')));if(!command||!command.enabled())return;e.preventDefault();command.handler();};window.addEventListener('keydown',h);return()=>window.removeEventListener('keydown',h);},[isActive,commandRegistry]);
   // NOTE: Scroll frame list to top when search changes
   useEffect(()=>{if(frameListRef.current)frameListRef.current.scrollTop=0;},[frameSearch,filteredFrames]);
 
@@ -571,9 +579,10 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
           </div>
           <div className="editor-section"><div className="editor-section-title">Big Number</div><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}><div className="form-group" style={{marginBottom:0}}><label className="form-label">Label</label><input value={content.bigLabel||''} onChange={e=>updateContent('bigLabel',e.target.value)}/></div><div className="form-group" style={{marginBottom:0}}><label className="form-label">Value</label><input value={content.bigNumber||''} onChange={e=>updateContent('bigNumber',e.target.value)}/></div></div></div>
           <div className="editor-section"><div className="editor-section-title">Images</div><ImageUpload label="Logo" value={uploadedImages.logo} onChange={v=>updateMedia(p=>({...p,uploadedImages:{...p.uploadedImages,logo:v}}))} maxSize={2} showToast={showToast}/><ImageUpload label="Hero" value={uploadedImages.hero} onChange={v=>updateMedia(p=>({...p,uploadedImages:{...p.uploadedImages,hero:v}}))} maxSize={4} showToast={showToast}/><ImageUpload label="Badge" value={uploadedImages.badge} onChange={v=>updateMedia(p=>({...p,uploadedImages:{...p.uploadedImages,badge:v}}))} maxSize={1} showToast={showToast}/></div>
-          <div className="editor-section"><div className="editor-section-title">Frame Warnings</div>{activeFramePitfalls.length===0?<div style={{fontSize:11,color:'var(--dim)'}}>No known pitfalls for this frame.</div>:<div style={{display:'flex',flexDirection:'column',gap:6}}>{activeFramePitfalls.map(p=>(<div key={p.id} style={{fontSize:11,padding:'7px 8px',borderRadius:6,border:`1px solid ${p.severity==='high'?'rgba(235,87,87,0.45)':'rgba(229,178,58,0.45)'}`,background:p.severity==='high'?'rgba(235,87,87,0.08)':'rgba(229,178,58,0.1)'}}><div style={{fontFamily:'var(--font-m)',fontSize:9,letterSpacing:'0.08em',textTransform:'uppercase',marginBottom:4}}>{p.severity==='high'?'Blocking':'Non-blocking'}</div><div>{p.warning}</div><div style={{opacity:0.75,marginTop:4}}>Hint: {p.triggerHint}</div></div>))}</div>}</div><div className="editor-section"><div className="editor-section-title">Export</div><div style={{fontFamily:'var(--font-m)',fontSize:9,color:'var(--dim)',marginBottom:8,lineHeight:1.7}}>⌘S Save · ⌘Z Undo · ⌘⇧Z Redo</div><div style={{display:'flex',flexDirection:'column',gap:8}}><div style={{display:'flex',gap:6}}><button className="btn btn-primary btn-sm" style={{flex:1}} onClick={exportPNG} disabled={exporting}>{exporting?'…':`PNG`}</button><button className="btn btn-secondary btn-sm editor-action-btn" onClick={exportWebP} disabled={exporting}>WebP</button></div><div style={{display:'flex',gap:6}}><button className="btn btn-ghost btn-sm" style={{flex:1}} onClick={exportHTML}>HTML</button><button className="btn btn-ghost btn-sm" style={{flex:1}} onClick={exportJSON}>JSON</button></div><label className="import-label">↑ Import <input type="file" accept=".json" onChange={importJSON}/></label><button className="btn btn-secondary w-full" onClick={()=>setShowSaveModal(true)}>Save</button><button className="btn btn-ghost w-full" onClick={()=>{const n=`${content.title||'Frame'} (copy)`;setSaves(p=>[...p,{id:`s_${Date.now()}`,title:n,...buildSave()}]);showToast('Duplicated');}}>Duplicate</button>{saves.length>0&&<button className="btn btn-ghost w-full" onClick={()=>{setSaveSearch('');setShowLoadModal(true);}}>Load ({saves.length})</button>}</div></div>
+          <div className="editor-section"><div className="editor-section-title">Frame Warnings</div>{activeFramePitfalls.length===0?<div style={{fontSize:11,color:'var(--dim)'}}>No known pitfalls for this frame.</div>:<div style={{display:'flex',flexDirection:'column',gap:6}}>{activeFramePitfalls.map(p=>(<div key={p.id} style={{fontSize:11,padding:'7px 8px',borderRadius:6,border:`1px solid ${p.severity==='high'?'rgba(235,87,87,0.45)':'rgba(229,178,58,0.45)'}`,background:p.severity==='high'?'rgba(235,87,87,0.08)':'rgba(229,178,58,0.1)'}}><div style={{fontFamily:'var(--font-m)',fontSize:9,letterSpacing:'0.08em',textTransform:'uppercase',marginBottom:4}}>{p.severity==='high'?'Blocking':'Non-blocking'}</div><div>{p.warning}</div><div style={{opacity:0.75,marginTop:4}}>Hint: {p.triggerHint}</div></div>))}</div>}</div><div className="editor-section"><div className="editor-section-title">Export</div><div style={{fontFamily:'var(--font-m)',fontSize:9,color:'var(--dim)',marginBottom:8,lineHeight:1.7}}>⌘S Save · ⌘Z Undo · ⌘⇧Z Redo</div><div style={{display:'flex',flexDirection:'column',gap:8}}><div style={{display:'flex',gap:6}}><button className="btn btn-primary btn-sm" style={{flex:1}} onClick={exportPNG} disabled={exporting}>{exporting?'…':`PNG`}</button><button className="btn btn-secondary btn-sm editor-action-btn" onClick={exportWebP} disabled={exporting}>WebP</button></div><div style={{display:'flex',gap:6}}><button className="btn btn-ghost btn-sm" style={{flex:1}} onClick={exportHTML}>HTML</button><button className="btn btn-ghost btn-sm" style={{flex:1}} onClick={exportJSON}>JSON</button></div><label className="import-label">↑ Import <input type="file" accept=".json" onChange={importJSON}/></label><button className="btn btn-secondary w-full" onClick={()=>setShowSaveModal(true)}>Save</button><button className="btn btn-ghost w-full" onClick={()=>commandRegistry.find(c=>c.id==='duplicate')?.handler()}>Duplicate</button>{saves.length>0&&<button className="btn btn-ghost w-full" onClick={()=>commandRegistry.find(c=>c.id==='load')?.handler()}>Load ({saves.length})</button>}</div></div>
         </>)}
       </div>
+      {showCommandPalette&&<div className="modal-overlay open" onClick={e=>e.target===e.currentTarget&&setShowCommandPalette(false)}><div className="modal" style={{maxWidth:640}}><div className="modal-header"><span className="modal-title">Command Palette</span><button className="modal-close" onClick={()=>setShowCommandPalette(false)}>✕</button></div><input className="form-control" autoFocus placeholder="Type a command..." value={paletteQuery} onChange={e=>setPaletteQuery(e.target.value)} style={{marginBottom:12}}/>{Object.entries(filterCommands(commandRegistry.filter(c=>c.id!=='palette.open'),paletteQuery).reduce((groups,cmd)=>{(groups[cmd.category] ||= []).push(cmd);return groups;},{})).map(([group,items])=>(<div key={group} style={{marginBottom:10}}><div style={{fontSize:11,color:'var(--dim)',marginBottom:6,textTransform:'uppercase'}}>{group}</div><div style={{display:'flex',flexDirection:'column',gap:4}}>{items.map(cmd=>(<button key={cmd.id} className="btn btn-ghost" style={{justifyContent:'space-between',display:'flex',width:'100%'}} disabled={!cmd.enabled()} onClick={()=>{cmd.handler();setShowCommandPalette(false);}}><span>{cmd.label}</span><span style={{fontFamily:'var(--font-m)',fontSize:10,color:'var(--dim)'}}>{cmd.shortcut}</span></button>))}</div></div>))}</div></div>}
       {/* MODALS */}
       {showSaveModal&&<div className="modal-overlay open" onClick={e=>e.target===e.currentTarget&&setShowSaveModal(false)}><div className="modal"><div className="modal-header"><span className="modal-title">Save</span><button className="modal-close" onClick={()=>setShowSaveModal(false)}>✕</button></div><div className="form-group"><label className="form-label">Name</label><input value={saveName} onChange={e=>setSaveName(e.target.value)} placeholder={`${content.topicTag}`} onKeyDown={e=>e.key==='Enter'&&doSave()} autoFocus/></div><div className="modal-footer"><button className="btn btn-secondary" onClick={()=>setShowSaveModal(false)}>Cancel</button><button className="btn btn-primary" onClick={doSave}>Save</button></div></div></div>}
       {showLoadModal&&<div className="modal-overlay open" onClick={e=>e.target===e.currentTarget&&setShowLoadModal(false)}><div className="modal"><div className="modal-header"><span className="modal-title">Load</span><button className="modal-close" onClick={()=>setShowLoadModal(false)}>✕</button></div>{saves.length===0?<div className="empty-state">No saves.</div>:<div className="saves-list" style={{maxHeight:400,overflowY:'auto'}}>{saves.slice().reverse().map(s=>(<div key={s.id} className="save-item" onClick={()=>loadSave(s)}><div style={{width:32,height:32,borderRadius:6,background:s.theme?.base||'var(--bg-3)',border:`2px solid ${s.theme?.accent||'var(--border)'}`,flexShrink:0}}/><div className="save-item-info"><div className="save-item-name">{s.title}</div><div className="save-item-meta">#{s.frameId} · {new Date(s.savedAt).toLocaleDateString()}</div></div><button className="btn btn-danger btn-sm" onClick={e=>{e.stopPropagation();setShowDeleteConfirm(s.id);}}>✕</button></div>))}</div>}</div></div>}
