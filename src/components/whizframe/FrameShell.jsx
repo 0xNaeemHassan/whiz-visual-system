@@ -698,8 +698,8 @@ function PitchDeckLayout(props) {
   return (
     <>
       <div style={{ textAlign: 'center', marginBottom: 16, flexShrink: 0 }}>
-        {content.logoUrl
-          ? <img src={content.logoUrl} alt="logo" style={{ width: 48, height: 48, borderRadius: 12, objectFit: 'contain', margin: '0 auto 10px', display: 'block' }} />
+        {sanitizeUserUrl(content.logoUrl)
+          ? <img src={sanitizeUserUrl(content.logoUrl)} alt="logo" style={{ width: 48, height: 48, borderRadius: 12, objectFit: 'contain', margin: '0 auto 10px', display: 'block' }} />
           : <div style={{ width: 48, height: 48, borderRadius: 12, background: `${accentColor}20`, border: `1px solid ${accentColor}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px', fontFamily: "'Space Grotesk', sans-serif", fontSize: 20, fontWeight: 700, color: accentColor }}>{(content.title || '?').charAt(0)}</div>
         }
         <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 56, fontWeight: 700, color: resolvedOv.title?.color || 'var(--text-primary)', lineHeight: 1, letterSpacing: '-0.02em' }}>{resolvedContent.title}</div>
@@ -891,8 +891,8 @@ function CoverStoryLayout(props) {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative' }}>
       {/* Hero image or gradient fill */}
-      {content.heroUrl ? (
-        <img src={content.heroUrl} alt="hero" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.25, borderRadius: 6 }} />
+      {sanitizeUserUrl(content.heroUrl) ? (
+        <img src={sanitizeUserUrl(content.heroUrl)} alt="hero" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.25, borderRadius: 6 }} />
       ) : (
         <div style={{
           position: 'absolute', inset: 0, borderRadius: 6,
@@ -1255,8 +1255,8 @@ function FounderLayout(props) {
     <>
       {/* Top: profile */}
       <div style={{ display: 'flex', gap: 16, marginBottom: 16, flexShrink: 0 }}>
-        {content.heroUrl
-          ? <img src={content.heroUrl} alt="founder" style={{ width: 64, height: 64, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, border: `2px solid ${accentColor}40` }} />
+        {sanitizeUserUrl(content.heroUrl)
+          ? <img src={sanitizeUserUrl(content.heroUrl)} alt="founder" style={{ width: 64, height: 64, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, border: `2px solid ${accentColor}40` }} />
           : <div style={{ width: 64, height: 64, borderRadius: '50%', background: `${accentColor}18`, border: `2px solid ${accentColor}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif", color: accentColor, flexShrink: 0 }}>{(content.handle || '?').charAt(0).toUpperCase()}</div>
         }
         <div>

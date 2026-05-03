@@ -1,7 +1,8 @@
 import { useState, useCallback } from 'react';
 import { applyStorageMigrations, isEnvelope, shouldEnvelopeKey, toEnvelope } from '../storage/migrations.js';
+import { secureStorage } from '../storage/secureStorage.js';
 
-export function readLocalStorageValue(key, initialValue, storage = window.localStorage, dispatchEvent = window.dispatchEvent.bind(window)) {
+export function readLocalStorageValue(key, initialValue, storage = secureStorage.raw, dispatchEvent = window.dispatchEvent.bind(window)) {
   try {
     const item = storage.getItem(key);
     if (!item) return { value: initialValue, recovered: false };
@@ -35,16 +36,16 @@ export function useLocalStorage(key, initialValue) {
       const newValue = value instanceof Function ? value(prev) : value;
       try {
         const valueToStore = shouldEnvelopeKey(key) ? toEnvelope(newValue) : newValue;
-        window.localStorage.setItem(key, JSON.stringify(valueToStore));
+        secureStorage.raw.setItem(key, JSON.stringify(valueToStore));
       } catch (e) {
         if (e.name === 'QuotaExceededError') {
           console.error(`localStorage quota exceeded for "${key}". Attempting cleanup...`);
           try {
             // Clear autosave and image data to free the most space
-            localStorage.removeItem('whiz-autosave');
-            localStorage.removeItem('whiz-images');
+            secureStorage.raw.removeItem('whiz-autosave');
+            secureStorage.raw.removeItem('whiz-images');
             const valueToStore = shouldEnvelopeKey(key) ? toEnvelope(newValue) : newValue;
-            window.localStorage.setItem(key, JSON.stringify(valueToStore));
+            secureStorage.raw.setItem(key, JSON.stringify(valueToStore));
           } catch (e2) {
             console.error(`Still exceeded after cleanup for "${key}"`, e2);
           }

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { secureStorage } from '../storage/secureStorage';
 
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> },
@@ -18,14 +19,14 @@ export default function Sidebar({ page, onNav, open, theme, formSections = [], a
 
   useEffect(() => {
     try {
-      const saved = JSON.parse(localStorage.getItem(UI_STATE_KEY) || '{}');
+      const saved = secureStorage.uiState.get(UI_STATE_KEY, {});
       setSectionOpen(saved.sectionOpen || {});
       if (panelRef.current && typeof saved.scrollTop === 'number') panelRef.current.scrollTop = saved.scrollTop;
     } catch {}
   }, []);
 
   useEffect(() => {
-    localStorage.setItem(UI_STATE_KEY, JSON.stringify({ sectionOpen, scrollTop: panelRef.current?.scrollTop || 0 }));
+    secureStorage.uiState.set(UI_STATE_KEY, { sectionOpen, scrollTop: panelRef.current?.scrollTop || 0 });
   }, [sectionOpen]);
 
   const completion = useMemo(() => Object.fromEntries(formSections.map(s => [s.id, (s.fields || []).every(f => !validationErrors[f.id])])), [formSections, validationErrors]);
