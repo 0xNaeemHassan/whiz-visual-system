@@ -47,33 +47,43 @@ function evaluateLayoutConstraints({ layout, content }) {
   const rows = Array.isArray(content?.tableRows) ? content.tableRows : [];
   const stats = Array.isArray(content?.stats) ? content.stats : [];
   constraints.forEach((rule) => {
-    if (rule.type === 'sum') {
+    if (rule.type === 'sum' || rule.type === 'totalsReconciliation') {
       rows.forEach((row, idx) => {
         const total = toNum(row?.[rule.totalField]);
         const parts = rule.partFields.map((f) => toNum(row?.[f]));
         if (total == null || parts.some((v) => v == null)) return;
         const actual = parts.reduce((a, b) => a + b, 0);
-        if (Math.abs(total - actual) > (rule.tolerance ?? 0)) findings.push({ severity: rule.severity, path: `content.tableRows[${idx}]`, message: `Sum consistency failed at content.tableRows[${idx}]: expected ${rule.totalField}=${actual}, actual=${total}.` });
+        if (Math.abs(total - actual) > (rule.tolerance ?? 0)) findings.push({ severity: rule.severity, code: 'TOTALS_RECONCILIATION_FAILED', path: `content.tableRows[${idx}]`, field: rule.totalField, message: `Totals reconciliation failed at content.tableRows[${idx}].${rule.totalField}: expected ${actual}, actual=${total}.`, detail: { rowIndex: idx, expected: actual, actual, partFields: rule.partFields } });
       });
     }
-    if (rule.type === 'percentage') {
+    if (rule.type === 'percentage' || rule.type === 'percentageDenominator') {
       rows.forEach((row, idx) => {
         const pct = toNum(row?.[rule.field]);
         const denom = toNum(row?.[rule.denominatorField]);
         if (pct == null || denom == null) return;
-        if (denom <= 0) findings.push({ severity: rule.severity, path: `content.tableRows[${idx}].${rule.denominatorField}`, message: `Percentage denominator sanity failed at content.tableRows[${idx}].${rule.denominatorField}: expected > 0, actual=${denom}.` });
+        if (denom <= 0) findings.push({ severity: rule.severity, code: 'PERCENTAGE_DENOMINATOR_INVALID', path: `content.tableRows[${idx}].${rule.denominatorField}`, field: rule.denominatorField, message: `Percentage denominator sanity failed at content.tableRows[${idx}].${rule.denominatorField}: expected > 0, actual=${denom}.`, detail: { rowIndex: idx, field: rule.field, denominatorField: rule.denominatorField, denominator: denom } });
       });
     }
-    if (rule.type === 'rank') {
+    if (rule.type === 'rank' || rule.type === 'rankOrder') {
       let previous = -1;
       rows.forEach((row, idx) => {
         const rank = String(row?.[rule.field] || '').trim().toUpperCase();
         if (!rank) return;
         const orderIndex = rule.order.indexOf(rank);
         if (orderIndex === -1) return;
-        if (orderIndex < previous) findings.push({ severity: rule.severity, path: `content.tableRows[${idx}].${rule.field}`, message: `Rank ordering failed at content.tableRows[${idx}].${rule.field}: expected non-decreasing ${rule.order.join(' > ')}, actual=${rank}.` });
+        if (orderIndex < previous) findings.push({ severity: rule.severity, code: 'RANK_ORDER_INCONSISTENT', path: `content.tableRows[${idx}].${rule.field}`, field: rule.field, message: `Rank ordering failed at content.tableRows[${idx}].${rule.field}: expected non-decreasing ${rule.order.join(' > ')}, actual=${rank}.`, detail: { rowIndex: idx, rank, order: rule.order } });
         previous = orderIndex;
       });
+    }
+    if (rule.type === 'sumTo100') {
+      const total = stats.reduce((acc, item) => {
+        const value = toNum(item?.[rule.field]);
+        if (value == null) return acc;
+        return acc + value;
+      }, 0);
+      if (stats.length && Math.abs(total - 100) > (rule.tolerance ?? 0)) {
+        findings.push({ severity: rule.severity, code: 'SUM_TO_100_FAILED', path: `content.stats`, field: rule.field, message: `Sum-to-100 failed at content.stats.${rule.field}: expected 100, actual=${total}.`, detail: { expected: 100, actual: total, tolerance: rule.tolerance ?? 0 } });
+      }
     }
     if (rule.type === 'monotonicDate') {
       let prevTs = null;
@@ -193,7 +203,7 @@ export function validateEditorState(state, options = {}) {
   const constraintFindings = evaluateLayoutConstraints({ layout, content });
   const blockingFindings = constraintFindings.filter((f) => f.severity === 'blocking');
   const warningFindings = constraintFindings.filter((f) => f.severity !== 'blocking');
-  blockingFindings.forEach((f) => push(errors, CODES.TABLE_ROWS_INVALID, f.path, f.message));
+  blockingFindings.forEach((f) => push(errors, CODES.TABLE_ROWS_INVALID, f.path, f.message, { severity: f.severity, field: f.field, detail: f.detail, constraintCode: f.code }));
 
   return { valid: errors.length === 0, errors, warnings: warningFindings, codes: [...new Set(errors.map((e) => e.code))], sanitizedOverrides: strictMode && sanitizeStrictStyle ? overrides : undefined, findings: constraintFindings };
 }

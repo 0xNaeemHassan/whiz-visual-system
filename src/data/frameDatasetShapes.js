@@ -89,6 +89,19 @@ export const LAYOUT_CRITICAL_FIELD_REGISTRY = {
   timeline: { ...DEFAULT_CRITICAL_FIELD_RULES, table: { enabled: false } },
 };
 
+export const LAYOUT_DATASET_CONSTRAINTS = Object.freeze({
+  table: [
+    { type: 'totalsReconciliation', severity: 'blocking', totalField: 'col5', partFields: ['col2', 'col3', 'col4'], tolerance: 0.01 },
+    { type: 'percentageDenominator', severity: 'blocking', field: 'col4', denominatorField: 'col3' },
+  ],
+  scorecard: [
+    { type: 'rankOrder', severity: 'blocking', field: 'col3', order: ['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D', 'F'] },
+  ],
+  stats: [
+    { type: 'sumTo100', severity: 'blocking', field: 'value', tolerance: 0.5 },
+  ],
+});
+
 export function getCriticalFieldRegistry(layout) {
   return LAYOUT_CRITICAL_FIELD_REGISTRY[layout] || LAYOUT_CRITICAL_FIELD_REGISTRY.default;
 }
