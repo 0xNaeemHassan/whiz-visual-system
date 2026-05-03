@@ -1,0 +1,95 @@
+{
+  "adapterId": "notion-ready-payload",
+  "status": "offline-fallback",
+  "reason": "Adapter token is not configured. Returning offline package.",
+  "context": {
+    "issueNumber": 42,
+    "tags": [
+      "macro",
+      "altcoins"
+    ],
+    "sources": [
+      {
+        "label": "FOMC Minutes",
+        "url": "https://example.com/fomc"
+      },
+      {
+        "label": "https://example.com/dune",
+        "url": null
+      }
+    ],
+    "coverAsset": {
+      "url": "https://cdn.example.com/cover.png",
+      "alt": "BTC heatmap",
+      "credit": "Whiz Studio"
+    },
+    "canonicalSlug": "issue-42-liquidity-shift"
+  },
+  "payload": {
+    "parent": {
+      "type": "database_id",
+      "database_id": "local-placeholder-db"
+    },
+    "properties": {
+      "Name": {
+        "title": [
+          {
+            "text": {
+              "content": "Liquidity Shift"
+            }
+          }
+        ]
+      },
+      "Issue #": {
+        "number": 42
+      },
+      "Tags": {
+        "multi_select": [
+          {
+            "name": "macro"
+          },
+          {
+            "name": "altcoins"
+          }
+        ]
+      },
+      "Canonical Slug": {
+        "rich_text": [
+          {
+            "text": {
+              "content": "issue-42-liquidity-shift"
+            }
+          }
+        ]
+      },
+      "Sources": {
+        "rich_text": [
+          {
+            "text": {
+              "content": "https://example.com/fomc\nhttps://example.com/dune"
+            }
+          }
+        ]
+      },
+      "Cover Asset": {
+        "url": "https://cdn.example.com/cover.png"
+      }
+    },
+    "children": [
+      {
+        "object": "block",
+        "type": "paragraph",
+        "paragraph": {
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Risk remains bid while treasury duration reprices."
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

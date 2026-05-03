@@ -6,6 +6,7 @@ import { useLocalStorage } from '../hooks/useLocalStorage';
 import { SemanticChip } from '../components/primitives';
 import { FRAME_GUIDANCE_BY_ID } from '../data/frameGuidance';
 import { useIntl } from '../i18n/IntlProvider';
+import { rankRecommendedFrames } from '../domain/services/frameRecommendationService';
 
 
 // M-05: LazyCard — only render frame card when visible in viewport
@@ -115,6 +116,15 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
   const hasLoadFailure = !Array.isArray(FRAMES);
   const hasActiveFilters = Boolean(search || tierFilter !== 'ALL' || layoutFilter || tagFilter || structureFilter !== 'all' || difficultyFilter || showFavOnly);
   const emptyStateKind = hasLoadFailure ? 'failed' : sourceFrames.length === 0 ? 'no-data' : filtered.length === 0 ? 'filtered-zero' : null;
+  const recommendations = useMemo(() => rankRecommendedFrames({
+    frames: filtered,
+    topic: search,
+    intent: tagFilter || '',
+    dataShape: layoutFilter || 'generic',
+    complexityBudget: difficultyFilter === 'easy' ? 'low' : difficultyFilter === 'hard' ? 'high' : 'medium',
+    historicalPerformance: { byFrameId: Object.fromEntries(recentlyUsed.map((id, index) => [String(id), Math.max(0.01, 0.1 - (index * 0.01))])) },
+    topK: 3,
+  }), [filtered, search, tagFilter, layoutFilter, difficultyFilter, recentlyUsed]);
 
   return (
     <>
@@ -185,6 +195,25 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
           <button className={`view-btn ${view==='list'?'active':''}`} onClick={() => setView('list')} aria-label="List view">List</button>
         </div>
       </div>
+      {recommendations.recommendations.length > 0 && (
+        <div className="card" style={{ marginBottom: 12, padding: 10 }}>
+          <div style={{ fontFamily: 'var(--font-m)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--dim)', marginBottom: 8 }}>
+            Recommended Frames ({recommendations.inferredIntent})
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {recommendations.recommendations.map((item) => (
+              <button key={item.frame.id} className="btn btn-ghost btn-sm" onClick={() => navigateTo('editor', item.frame.id)}>
+                {item.frame.id}. {item.frame.name} · {Math.round(item.confidence * 100)}%
+              </button>
+            ))}
+          </div>
+          {recommendations.fallback && (
+            <div style={{ fontSize: 10, color: 'var(--dim)', marginTop: 6 }}>
+              {recommendations.fallback.reason}. Fallback: {recommendations.fallback.fallbackFrameIds.join(', ')}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* M-06: Recently Used section */}
       {recentlyUsed.length > 0 && (

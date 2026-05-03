@@ -1,0 +1,28 @@
+{
+  "cases": [
+    {
+      "name": "comparison_table_low_complexity",
+      "input": {
+        "intent": "comparison",
+        "topic": "top protocols by tvl",
+        "dataShape": "table",
+        "complexityBudget": "low",
+        "historicalPerformance": { "byFrameId": { "16": 0.12, "21": 0.04, "35": -0.1 } },
+        "topK": 3
+      },
+      "expectedTopFrameIds": [16, 19, 20]
+    },
+    {
+      "name": "risk_timeline_medium",
+      "input": {
+        "intent": "risk",
+        "topic": "stablecoin depeg postmortem timeline",
+        "dataShape": "timeline",
+        "complexityBudget": "medium",
+        "historicalPerformance": { "byFrameId": { "24": 0.2, "25": 0.1 } },
+        "topK": 3
+      },
+      "expectedTopFrameIds": [24, 25, 3]
+    }
+  ]
+}
