@@ -3,6 +3,7 @@ import { FRAMES, TIER_NAMES } from '../data/frames';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { TICKER_CONTRACT } from '../domain/tickerContract';
 import { SemanticChip } from '../components/primitives';
+import { computeMilestoneProgress } from '../domain/services/milestoneTrackerService';
 
 export default function Dashboard({ navigateTo, showToast, activeTheme }) {
   const [saves] = useLocalStorage('whiz-saves', []);
@@ -18,6 +19,7 @@ export default function Dashboard({ navigateTo, showToast, activeTheme }) {
   // D7: Last edited timestamp
   const lastEdited = saves.length > 0 ? new Date(saves.reduce((mx, s) => Math.max(mx, s.savedAt || 0), 0)).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : null;
   const lastPublished = issues.filter(i => i.status === 'published').length > 0 ? 'Yes' : 'No';
+  const milestoneProgress = useMemo(() => computeMilestoneProgress({ issues, frames: FRAMES }), [issues]);
 
   const sep = TICKER_CONTRACT.separator;
   const tickerText = `WHIZ.DEFI${sep}BRAND OS v8.0${sep}50 FRAMES${sep}10 THEMES${sep}ALPHA UNLOCKED${sep}TERMINAL MODE${sep}RESEARCH NOTE MODE${sep}DASHBOARD MODE${sep}`;
@@ -67,6 +69,12 @@ export default function Dashboard({ navigateTo, showToast, activeTheme }) {
             <div className="stat-sub">{s.sub}</div>
           </div>
         ))}
+      </div>
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}><strong>Milestone Tracker</strong><span style={{ fontFamily: 'var(--font-m)', fontSize: 10, color: 'var(--dim)' }}>{Math.round(milestoneProgress.progress * 100)}%</span></div>
+        <div style={{ height: 8, background: 'var(--bg-3)', borderRadius: 999, overflow: 'hidden', marginBottom: 8 }}><div style={{ width: `${Math.round(milestoneProgress.progress * 100)}%`, height: '100%', background: activeTheme.accent }} /></div>
+        <div style={{ fontSize: 12, color: 'var(--muted)' }}>Next milestone: {milestoneProgress.nextMilestone.label}</div>
       </div>
 
       {/* Main grid */}

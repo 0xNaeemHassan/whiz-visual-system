@@ -53,6 +53,53 @@ export function normalizeIssue(issue = {}) {
   };
 }
 
+export function aggregateOutcomeWindows(issues = [], now = new Date()) {
+  const windows = { d7: [], d30: [], d90: [] };
+  const msByWindow = { d7: 7 * 86400000, d30: 30 * 86400000, d90: 90 * 86400000 };
+  issues.forEach((issue) => {
+    const outcome = issue?.outcomes;
+    const recordedAt = outcome?.recordedAt || issue?.publishDate;
+    const date = recordedAt ? new Date(recordedAt) : null;
+    if (!date || Number.isNaN(date.getTime())) return;
+    const age = now.getTime() - date.getTime();
+    Object.entries(msByWindow).forEach(([windowKey, maxAge]) => {
+      if (age <= maxAge && age >= 0) windows[windowKey].push(issue);
+    });
+  });
+  return windows;
+}
+
+export function computeRecommendationDeltas(issues = []) {
+  const scored = issues.filter((issue) => Number.isFinite(issue?.outcomes?.engagementRate) || Number.isFinite(issue?.outcomes?.conversionProxy));
+  const topicScores = new Map();
+  const frameScores = new Map();
+  const cadenceBySeries = new Map();
+  scored.forEach((issue) => {
+    const score = (Number(issue?.outcomes?.engagementRate) || 0) * 0.6 + (Number(issue?.outcomes?.conversionProxy) || 0) * 0.4;
+    const topic = String(issue.topic || '').trim();
+    const frame = String(issue.frameId || '').trim();
+    if (topic) topicScores.set(topic, [...(topicScores.get(topic) || []), score]);
+    if (frame) frameScores.set(frame, [...(frameScores.get(frame) || []), score]);
+    if (issue.series && issue.publishDate) cadenceBySeries.set(issue.series, [...(cadenceBySeries.get(issue.series) || []), issue.publishDate]);
+  });
+  const avg = (arr = []) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+  const topTopic = [...topicScores.entries()].sort((a, b) => avg(b[1]) - avg(a[1]))[0];
+  const topFrame = [...frameScores.entries()].sort((a, b) => avg(b[1]) - avg(a[1]))[0];
+  return {
+    heuristicPriors: {
+      topic: topTopic ? { key: topTopic[0], score: avg(topTopic[1]) } : null,
+      frame: topFrame ? { key: topFrame[0], score: avg(topFrame[1]) } : null,
+    },
+    cadenceSuggestion: [...cadenceBySeries.entries()].map(([series, dates]) => {
+      const sorted = dates.map((d) => new Date(d)).filter((d) => !Number.isNaN(d.getTime())).sort((a, b) => a - b);
+      if (sorted.length < 2) return { series, cadenceDays: null };
+      const gaps = [];
+      for (let i = 1; i < sorted.length; i += 1) gaps.push(Math.round((sorted[i] - sorted[i - 1]) / 86400000));
+      return { series, cadenceDays: Math.round(avg(gaps)) };
+    }).filter((item) => item.cadenceDays != null),
+  };
+}
+
 export function validateEditorImport(payload) {
   return Boolean(payload && typeof payload === 'object' && !Array.isArray(payload));
 }
