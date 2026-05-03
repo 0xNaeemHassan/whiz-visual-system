@@ -685,7 +685,7 @@ Apply these auto-corrections?`);
     if (!strictWhizMode && nextValue && !window.confirm(`Enable ${effectKey}? This can trigger Whiz compliance warnings.`)) return;
     setWhizEffects(prev => ({ ...prev, [effectKey]: nextValue }));
   };
-  useEffect(()=>{if(!isActive)return;const t=setTimeout(()=>{try{localStorage.setItem('whiz-autosave',JSON.stringify({frameId,theme,content,overrides,aspectRatio,bgGradient,patternOverlay,savedAt:Date.now()}));}catch(e){}},3000);return()=>clearTimeout(t);},[content,overrides,frameId,theme,aspectRatio,bgGradient,patternOverlay]);
+  useEffect(()=>{if(!isActive)return;const t=setTimeout(()=>{try{localStorage.setItem('whiz-autosave',JSON.stringify({frameId,theme,content,overrides,aspectRatio,bgGradient,patternOverlay,savedAt:Date.now()}));}catch(e){}},3000);return()=>clearTimeout(t);},[isActive,content,overrides,frameId,theme,aspectRatio,bgGradient,patternOverlay]);
   const applyTheme=t=>{setTheme(t);setActiveTheme(t);};
   const applyTemplate=t=>{
     const layoutBase = createTemplateForLayout(selectedFrame.layout);
@@ -794,7 +794,7 @@ Apply these auto-corrections?`);
     canUndoAny: () => canUndo,
     canRedoAny: () => canRedo,
   }), [exportPNG, exportWebP, content.title, showToast, runValidationCheck, runUndo, runRedo, saves.length, canUndo, canRedo]);
-  useEffect(()=>{const h=e=>{if(!isActive)return;const command=commandRegistry.find(c=>matchesShortcut(e,c.shortcut)||matchesShortcut(e,c.shortcut.replace('Cmd','Ctrl')));if(!command||!command.enabled())return;e.preventDefault();command.handler();};window.addEventListener('keydown',h);return()=>window.removeEventListener('keydown',h);},[isActive,commandRegistry]);
+  useEffect(()=>{if(!isActive)return undefined;const h=e=>{const command=commandRegistry.find(c=>matchesShortcut(e,c.shortcut)||matchesShortcut(e,c.shortcut.replace('Cmd','Ctrl')));if(!command||!command.enabled())return;e.preventDefault();command.handler();};window.addEventListener('keydown',h);return()=>window.removeEventListener('keydown',h);},[isActive,commandRegistry]);
   // NOTE: Scroll frame list to top when search changes
   useEffect(()=>{if(frameListRef.current)frameListRef.current.scrollTop=0;},[frameSearch,filteredFrames]);
 
