@@ -7,6 +7,7 @@ import { useIntl } from '../i18n/IntlProvider';
 import { normalizePlannerIssue } from '../utils/schemaContracts';
 import { computeCadencePolicy, CADENCE_SLOT_STATE } from '../domain/services/cadencePolicyEngine';
 import { DEFAULT_CADENCE_CONFIG } from '../state/editorStore';
+import { loadVaultPayload } from '../security/localVault';
 
 const STATUSES = ['draft', 'planned', 'wip', 'done', 'published'];
 const CONFIDENCE = ['low', 'medium', 'high'];
@@ -172,47 +173,51 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
   const nextIssueNum = issueAllocator.peekNext();
 
   useEffect(() => {
-    try {
-      const rawDraft = localStorage.getItem('whiz-planner-issue-draft');
-      if (!rawDraft) return;
-      const draft = normalizeIssue(JSON.parse(rawDraft));
-      localStorage.removeItem('whiz-planner-issue-draft');
-      setEditingIssue(null);
-      setForm({
-        issueNum: draft.issueNum || nextIssueNum,
-        topic: draft.topic || '',
-        frameId: draft.frameId || '',
-        themeId: draft.themeId || '',
-        status: draft.status || 'draft',
-        publishDate: draft.publishDate || '',
-        notes: draft.notes || '',
-        caption: draft.caption || '',
-        sourceLinks: draft.sourceLinks || '',
-        priority: draft.priority || 'medium',
-        confidence: draft.confidence || 'medium',
-        series: draft.series || '',
-        assistantBrief: draft.assistantBrief || '',
-        recommendationIntent: draft.recommendationIntent || 'recap',
-        recommendationDataShape: draft.recommendationDataShape || 'table',
-        recommendationUrgency: draft.recommendationUrgency || 'medium',
-        recommendationFeedback: draft.recommendationFeedback || [],
-        targetMetric: draft.targetMetric || '',
-        metricConfidence: draft.metricConfidence || '',
-        metricSource: draft.metricSource || '',
-        metricValue: draft.metricValue || '',
-        metricUnit: draft.metricUnit || '',
-        metricProvenance: draft.metricProvenance || [],
-        series_id: draft.series_id || '',
-        part_number: draft.part_number ?? '',
-        prev_issue: draft.prev_issue || '',
-        next_issue: draft.next_issue || '',
-        continuity_status: draft.continuity_status || 'healthy',
-      });
-      setShowModal(true);
-      showToast('Loaded draft from Editor duplicate');
-    } catch (error) {
-      localStorage.removeItem('whiz-planner-issue-draft');
-    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const loadedDraft = await loadVaultPayload('whiz-planner-issue-draft');
+        if (!loadedDraft || cancelled) return;
+        const draft = normalizeIssue(loadedDraft);
+        localStorage.removeItem('whiz-planner-issue-draft');
+        setEditingIssue(null);
+        setForm({
+          issueNum: draft.issueNum || nextIssueNum,
+          topic: draft.topic || '',
+          frameId: draft.frameId || '',
+          themeId: draft.themeId || '',
+          status: draft.status || 'draft',
+          publishDate: draft.publishDate || '',
+          notes: draft.notes || '',
+          caption: draft.caption || '',
+          sourceLinks: draft.sourceLinks || '',
+          priority: draft.priority || 'medium',
+          confidence: draft.confidence || 'medium',
+          series: draft.series || '',
+          assistantBrief: draft.assistantBrief || '',
+          recommendationIntent: draft.recommendationIntent || 'recap',
+          recommendationDataShape: draft.recommendationDataShape || 'table',
+          recommendationUrgency: draft.recommendationUrgency || 'medium',
+          recommendationFeedback: draft.recommendationFeedback || [],
+          targetMetric: draft.targetMetric || '',
+          metricConfidence: draft.metricConfidence || '',
+          metricSource: draft.metricSource || '',
+          metricValue: draft.metricValue || '',
+          metricUnit: draft.metricUnit || '',
+          metricProvenance: draft.metricProvenance || [],
+          series_id: draft.series_id || '',
+          part_number: draft.part_number ?? '',
+          prev_issue: draft.prev_issue || '',
+          next_issue: draft.next_issue || '',
+          continuity_status: draft.continuity_status || 'healthy',
+        });
+        setShowModal(true);
+        showToast('Loaded draft from Editor duplicate');
+      } catch (error) {
+        localStorage.removeItem('whiz-planner-issue-draft');
+      }
+    })();
+    return () => { cancelled = true; };
   }, [nextIssueNum, showToast]);
 
 
