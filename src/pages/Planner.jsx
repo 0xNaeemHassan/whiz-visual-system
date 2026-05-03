@@ -5,6 +5,7 @@ import { THEMES } from '../data/themes';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { useIntl } from '../i18n/IntlProvider';
 import { normalizePlannerIssue } from '../utils/schemaContracts';
+import { analyzeSeriesIntegrity, suggestNextPart } from '../domain/services/seriesContinuityService';
 
 const STATUSES = ['draft', 'planned', 'wip', 'done', 'published'];
 const CONFIDENCE = ['low', 'medium', 'high'];
@@ -96,6 +97,7 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
   const [form, setForm] = useState({
     issueNum: '', topic: '', frameId: '', themeId: '', status: 'draft', priority: 'medium',
     publishDate: '', notes: '', caption: '', sourceLinks: '', confidence: 'medium', series: '',
+    series_id: '', part_number: '', prev_issue: '', next_issue: '', continuity_status: 'healthy',
   });
   const normalizeIssueNum = (v) => String(v || '').replace(/\D/g, '').slice(-3).padStart(3, '0');
   const normalizeIssue = (issue) => ({
@@ -111,6 +113,11 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
     metricValue: issue.metricValue || '',
     metricUnit: issue.metricUnit || '',
     metricProvenance: Array.isArray(issue.metricProvenance) ? issue.metricProvenance : [],
+    series_id: issue.series_id || '',
+    part_number: issue.part_number ?? '',
+    prev_issue: issue.prev_issue || '',
+    next_issue: issue.next_issue || '',
+    continuity_status: issue.continuity_status || 'healthy',
   });
   const existingIssueNums = new Set(issues.map(i => String(i.issueNum || '').padStart(3, '0')));
 
@@ -156,6 +163,11 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
         metricValue: draft.metricValue || '',
         metricUnit: draft.metricUnit || '',
         metricProvenance: draft.metricProvenance || [],
+        series_id: draft.series_id || '',
+        part_number: draft.part_number ?? '',
+        prev_issue: draft.prev_issue || '',
+        next_issue: draft.next_issue || '',
+        continuity_status: draft.continuity_status || 'healthy',
       });
       setShowModal(true);
       showToast('Loaded draft from Editor duplicate');
@@ -167,7 +179,7 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
 
   const openIssueForm = (presetStatus) => {
     setEditingIssue(null);
-    setForm({ issueNum: String(nextNum).padStart(3,'0'), topic: '', frameId: '', themeId: '', status: presetStatus || 'draft', publishDate: '', notes: '', caption: '', sourceLinks: '', priority: 'medium', confidence: 'medium', series: '' });
+    setForm({ issueNum: String(nextNum).padStart(3,'0'), topic: '', frameId: '', themeId: '', status: presetStatus || 'draft', publishDate: '', notes: '', caption: '', sourceLinks: '', priority: 'medium', confidence: 'medium', series: '', series_id: '', part_number: '', prev_issue: '', next_issue: '', continuity_status: 'healthy' });
     setShowModal(true);
   };
 
@@ -518,7 +530,23 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
       </div>
 
       {/* Table View */}
-      {view === 'table' && (
+                <div className="panel" style={{ marginBottom: 12 }}>
+            <div className="panel-title">Series Continuity</div>
+            <div style={{ display: 'grid', gap: 8 }}>
+              {continuityReport.length === 0 && <div style={{ fontSize: 12, color: 'var(--muted)' }}>No series chains yet.</div>}
+              {continuityReport.map((entry) => (
+                <div key={entry.seriesId} style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 8 }}>
+                  <div style={{ fontWeight: 600 }}>{entry.seriesId} · {entry.status}</div>
+                  <div style={{ fontSize: 11, color: 'var(--muted)' }}>Missing: {entry.missingParts.join(', ') || 'none'} · Duplicate: {entry.duplicateParts.join(', ') || 'none'}</div>
+                  <div style={{ marginTop: 6, display: 'flex', gap: 6 }}>
+                    <button className="btn btn-ghost btn-sm" onClick={() => applyContinuityFix(entry.seriesId, 'missing')}>Fix missing part</button>
+                    <button className="btn btn-ghost btn-sm" onClick={() => applyContinuityFix(entry.seriesId, 'duplicate')}>Review duplicates</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+{view === 'table' && (
         <div className="card" style={{ padding: 0 }}>
           <div className="data-table-wrap">
           {filtered.length === 0 ? (
@@ -630,6 +658,8 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div className="form-group"><label className="form-label">Confidence</label><select value={form.confidence || 'medium'} onChange={e => setForm(f => ({...f, confidence: e.target.value}))}>{CONFIDENCE.map(s => <option key={s} value={s}>{s.toUpperCase()}</option>)}</select></div>
             <div className="form-group"><label className="form-label">Series</label><input value={form.series || ''} onChange={e => setForm(f => ({...f, series: e.target.value}))} placeholder="Stablecoin Risk Pt. 1" /></div>
+            <div className="form-group"><label className="form-label">Series ID</label><input value={form.series_id || ''} onChange={e => setForm(f => ({...f, series_id: e.target.value}))} /></div>
+            <div className="form-group"><label className="form-label">Part #</label><input value={form.part_number || ''} onChange={e => setForm(f => ({...f, part_number: e.target.value.replace(/\D/g,'')}))} /></div>
           </div>
           <div className="form-group"><label className="form-label">Topic / Headline *</label><input value={form.topic} onChange={e => setForm(f => ({...f, topic: e.target.value}))} placeholder="The End of Mercenary Yield" autoFocus /></div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
