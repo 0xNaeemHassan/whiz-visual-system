@@ -28,6 +28,7 @@ const CODES = {
   IMAGE_ROTATION_OOB: 'IMAGE_ROTATION_OOB',
   STRICT_STYLE_OVERRIDE_BLOCKED: 'STRICT_STYLE_OVERRIDE_BLOCKED',
   RISK_ACCENT_OVERRIDE_UNACKNOWLEDGED: 'RISK_ACCENT_OVERRIDE_UNACKNOWLEDGED',
+  CONSTRAINT_VIOLATION: 'CONSTRAINT_VIOLATION',
 };
 
 const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -146,6 +147,11 @@ export function validateEditorState(state, options = {}) {
     if (content.tickerSpeed != null && !inRange(Number(content.tickerSpeed), TICKER_CONTRACT.speed.min, TICKER_CONTRACT.speed.max)) {
       push(errors, CODES.TICKER_SPEED_OOB, 'content.tickerSpeed', `Ticker speed must be between ${TICKER_CONTRACT.speed.min} and ${TICKER_CONTRACT.speed.max} seconds.`);
     }
+
+    const constraintViolations = evaluateConstraintRegistry({ frameId, content });
+    constraintViolations.forEach((violation) => {
+      push(errors, violation.code || CODES.CONSTRAINT_VIOLATION, violation.path || 'content', violation.message, { ruleId: violation.ruleId, detail: violation.detail });
+    });
   }
 
   if (overrides) {
