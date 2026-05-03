@@ -831,6 +831,7 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
                       </td>
                       <td><span title={heuristic.reasonCodes.join(', ')} style={{ fontFamily: 'var(--font-m)', fontSize: 11, color: 'var(--muted)' }}>{heuristic.scorePercent}%</span></td>
                       <td><span style={{ fontFamily: 'var(--font-m)', fontSize: 11, color: 'var(--muted)' }}>{issue.publishDate || '—'}</span></td>
+                      <td><div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>{Object.entries(driftData.drift).map(([type, value]) => (<span key={type} title={`${type} drift ${value.score}`} style={{ fontSize:9, padding:'2px 5px', borderRadius:999, border:'1px solid var(--border)', color:value.severity==='critical'?'#FF5A5A':value.severity==='warn'?'#E5B23A':'#6FA8FF' }}>{type[0].toUpperCase()}:{value.score}</span>))}</div></td>
                       <td><span style={{ fontSize: 11, color: 'var(--muted)', maxWidth: 160, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{issue.notes || '—'}</span></td>
                       <td>
                         <div style={{ display: 'flex', gap: 4 }}>
