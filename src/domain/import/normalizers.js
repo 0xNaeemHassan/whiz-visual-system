@@ -7,6 +7,15 @@ function toNumber(v, fallback = 0) { const n = Number(v); return Number.isFinite
 function toStringArray(v) { return Array.isArray(v) ? v.map((x) => toString(x)).filter(Boolean) : []; }
 function toObject(v, fallback = {}) { return v && typeof v === 'object' && !Array.isArray(v) ? v : fallback; }
 
+function normalizeGlossaryGroup(group, term = '') {
+  const explicit = toString(group).trim().toUpperCase();
+  if (/^[A-Z]$/.test(explicit)) return explicit;
+  const trimmedTerm = toString(term).trim();
+  if (!trimmedTerm) return '#';
+  const first = trimmedTerm.charAt(0).toUpperCase();
+  return /^[A-Z]$/.test(first) ? first : '#';
+}
+
 function coerce(type, value) {
   switch (type) {
     case 'string': return toString(value);
@@ -15,7 +24,13 @@ function coerce(type, value) {
     case 'objectOrNull': return value == null ? null : toObject(value, null);
     case 'stringArray': return toStringArray(value);
     case 'statArray': return Array.isArray(value) ? value.map((s) => ({ label: toString(s?.label), value: toString(s?.value) })) : [];
-    case 'tableRows': return Array.isArray(value) ? value.map((row) => toObject(row, {})) : [];
+    case 'tableRows': return Array.isArray(value) ? value.map((row) => {
+      const normalizedRow = toObject(row, {});
+      const term = toString(normalizedRow.term || normalizedRow.col1);
+      const definition = toString(normalizedRow.definition || normalizedRow.col2);
+      const group = normalizeGlossaryGroup(normalizedRow.group, term);
+      return { ...normalizedRow, term, definition, group, col1: term, col2: definition };
+    }) : [];
     case 'gridItems': return Array.isArray(value) ? value.map((it) => ({ title: toString(it?.title), value: toString(it?.value), sub: toString(it?.sub) })) : [];
     case 'timelineEvents': return normalizeTimelineEvents(value);
     default: return value;

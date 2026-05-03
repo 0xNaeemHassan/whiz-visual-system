@@ -966,25 +966,59 @@ function ReceiptLayout(props) {
 function GlossaryLayout(props) {
   const { content, ov, accentColor, SectionHead } = props;
   const rows = content.tableRows || [];
-  const mid = Math.ceil(rows.length / 2);
-  const col1 = rows.slice(0, mid);
-  const col2 = rows.slice(mid);
+  const letterSections = Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i));
+  const normalizeGroup = (row) => {
+    const explicit = `${row?.group || ''}`.trim().toUpperCase();
+    if (/^[A-Z]$/.test(explicit)) return explicit;
+    const term = `${row?.term || row?.col1 || ''}`.trim();
+    const first = term.charAt(0).toUpperCase();
+    return /^[A-Z]$/.test(first) ? first : '#';
+  };
+
+  const normalizedRows = rows
+    .map((row) => {
+      const term = `${row?.term || row?.col1 || ''}`.trim();
+      const definition = `${row?.definition || row?.col2 || ''}`.trim();
+      const group = normalizeGroup(row);
+      return { ...row, term, definition, group };
+    })
+    .filter((row) => row.term || row.definition)
+    .sort((a, b) => {
+      if (a.group === '#' && b.group !== '#') return 1;
+      if (b.group === '#' && a.group !== '#') return -1;
+      return a.term.localeCompare(b.term);
+    });
+
+  const sections = [...letterSections, '#']
+    .map((letter) => ({ letter, rows: normalizedRows.filter((row) => row.group === letter) }))
+    .filter((section) => section.rows.length > 0);
+
+  const mid = Math.ceil(sections.length / 2);
+  const columns = [sections.slice(0, mid), sections.slice(mid)];
+
   return (
     <>
       <SectionHead>{content.topicTag || 'GLOSSARY'}</SectionHead>
       <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 36, fontWeight: 700, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 6 }}>{resolvedContent.title}</div>
       <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 16, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
       <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 20px', overflow: 'hidden' }}>
-        {[col1, col2].map((col, ci) => (
+        {columns.map((column, ci) => (
           <div key={ci}>
-            {col.map((row, i) => (
-              <div key={i} style={{ display: 'flex', gap: 10, marginBottom: 8, paddingBottom: 8, borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, color: accentColor, width: 80, flexShrink: 0, paddingTop: 1 }}>
-                  {row.col1}
+            {column.map((section) => (
+              <div key={section.letter} style={{ marginBottom: 10 }}>
+                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, color: accentColor, marginBottom: 6 }}>
+                  {section.letter}
                 </div>
-                <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 11, color: '#8B95A3', lineHeight: 1.5, flex: 1 }}>
-                  {row.col2}
-                </div>
+                {section.rows.map((row, i) => (
+                  <div key={`${section.letter}-${i}`} style={{ display: 'flex', gap: 10, marginBottom: 8, paddingBottom: 8, borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, color: accentColor, width: 80, flexShrink: 0, paddingTop: 1 }}>
+                      {row.term}
+                    </div>
+                    <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 11, color: '#8B95A3', lineHeight: 1.5, flex: 1 }}>
+                      {row.definition}
+                    </div>
+                  </div>
+                ))}
               </div>
             ))}
           </div>
