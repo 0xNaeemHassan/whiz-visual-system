@@ -11,7 +11,8 @@
     "test": "node scripts/test-smoke.mjs && node scripts/test-analytics-quality.mjs && node scripts/test-motion-reduction.mjs && node scripts/test-keyboard-flows.mjs",
     "check:chips": "node scripts/check-semantic-chips.mjs",
     "lint:naming": "eslint src --ext .js,.jsx --rule \"naming/file-naming-convention:error\" --rule \"naming/hook-api-naming:error\" --rule \"naming/service-symbol-naming:error\" --rule \"naming/comment-prefix-convention:error\"",
-    "check:touch-targets": "node scripts/check-touch-targets.mjs"
+    "check:touch-targets": "node scripts/check-touch-targets.mjs",
+    "check:perf": "node scripts/perf-smoke-check.mjs"
   },
   "dependencies": {
     "html2canvas": "^1.4.1",
