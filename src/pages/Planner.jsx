@@ -13,6 +13,16 @@ const KANBAN_COLS = [
   { id: 'done', label: 'DONE', color: '#3CE6A6' },
   { id: 'published', label: 'PUBLISHED', color: '#B97AFF' },
 ];
+const ANALYTICS_STATUS_META = {
+  draft: { label: 'Draft', color: '#8B95A3' },
+  planned: { label: 'Planned', color: '#6FA8FF' },
+  wip: { label: 'In Progress', color: '#E5B23A' },
+  done: { label: 'Done', color: '#3CE6A6' },
+  published: { label: 'Published', color: '#B97AFF' },
+};
+const ANALYTICS_STATUSES = ['draft', 'planned', 'wip', 'done', 'published'];
+const analyticsStatusesExistInStatuses = ANALYTICS_STATUSES.every((status) => STATUSES.includes(status));
+console.assert(analyticsStatusesExistInStatuses, 'Planner analytics statuses must exist in STATUSES');
 
 // F1: Kanban drag-and-drop helpers
 function useDragDrop(onDrop) {
@@ -59,10 +69,10 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
   const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
   // M-09: Analytics computed values
-  const statusCounts = ['draft','scheduled','published','archived'].map(s => ({
-    label: s.charAt(0).toUpperCase() + s.slice(1),
+  const statusCounts = ANALYTICS_STATUSES.map((s) => ({
+    label: ANALYTICS_STATUS_META[s].label,
     count: issues.filter(i => i.status === s).length,
-    color: s === 'published' ? '#3CE6A6' : s === 'scheduled' ? '#7B8EF8' : s === 'archived' ? '#555' : '#8B95A3',
+    color: ANALYTICS_STATUS_META[s].color,
   }));
   const frameUsage = Object.entries(
     issues.filter(i => i.frameId).reduce((a, i) => { a[i.frameId] = (a[i.frameId] || 0) + 1; return a; }, {})
