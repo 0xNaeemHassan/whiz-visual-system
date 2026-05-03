@@ -2,16 +2,19 @@
 import { getLayoutComponent } from './LayoutRegistry';
 import { coreLayoutKeys } from './layouts/CoreLayouts';
 import { applyOverflowPolicy } from './layouts/OverflowPolicy';
+import { ensureMinEdgeSpacing, getLayoutTuning, placeNodes } from './layouts/layoutUtils';
 import { TICKER_CONTRACT, normalizeTickerSpeed } from '../../domain/tickerContract';
 import { SPINE_DESIGN_TOKENS } from '../../domain/spineDesignTokens';
 import { FrameFooter } from './FrameFooter';
 import SemanticChip from '../SemanticChip';
+import { resolveRiskAccent } from '../../domain/riskAccentPolicy';
 
 export function FrameShell({ frameRef, frame, theme, content, editMode, selectedEl, onSelectEl, styleOverrides, showGrid, aspectRatio, uploadedImages, bgGradient, patternOverlay, strictWhizMode = false, whizEffects = { glow: true, noise: true, intenseAccent: false } }) {
   const ov = styleOverrides || {};
   const sel = (key, e) => { if (editMode) { e?.stopPropagation(); onSelectEl?.(selectedEl === key ? null : key); } };
   const ec = (key) => editMode ? `wf-editable${selectedEl === key ? ' wf-sel' : ''}` : '';
-  const accentColor = ov.accent?.color || theme.accent;
+  const accentResolution = resolveRiskAccent({ frameId: frame?.id, theme, overrides: ov });
+  const accentColor = accentResolution.accent;
   const noiseEnabled = !strictWhizMode && whizEffects?.noise !== false;
   const glowEnabled = !strictWhizMode && whizEffects?.glow !== false;
   const intenseAccentEnabled = !strictWhizMode && whizEffects?.intenseAccent === true;
@@ -715,9 +718,22 @@ function PitchDeckLayout(props) {
         </div>
       )}
       <div style={{ flex: 1, overflow: 'hidden' }}>
+        {content.thesis && (
+          <div style={{ marginBottom: 10, padding: '10px 12px', border: `1px solid ${accentColor}20`, background: `${accentColor}08`, borderRadius: 8 }}>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, letterSpacing: '0.14em', color: accentColor, marginBottom: 4 }}>THESIS</div>
+            <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 13, color: '#C8D0D8', lineHeight: 1.5 }}>{content.thesis}</div>
+          </div>
+        )}
         {(resolvedContent.body || '').split('\n\n').slice(0, 2).map((para, i) => (
           <div key={i} style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', lineHeight: 1.65, marginBottom: 14 }}>{para}</div>
         ))}
+        {(content.mechanismSteps?.length > 0 || content.evidencePoints?.length > 0 || content.riskNotes?.length > 0) && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <MiniList title="MECHANISM" items={content.mechanismSteps} color={accentColor} />
+            <MiniList title="EVIDENCE" items={content.evidencePoints} color="#3CE6A6" />
+            <MiniList title="RISKS" items={content.riskNotes} color="#FF8A3D" />
+          </div>
+        )}
         {content.pullQuote && (
           <div style={{ padding: '12px 16px', borderLeft: `3px solid ${accentColor}`, background: `${accentColor}08`, borderRadius: '0 6px 6px 0', margin: '14px 0' }}>
             <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 14, fontWeight: 600, color: '#F4F5F7', fontStyle: 'italic' }}>"{content.pullQuote}"</div>
@@ -725,6 +741,18 @@ function PitchDeckLayout(props) {
         )}
       </div>
     </>
+  );
+}
+
+function MiniList({ title, items = [], color }) {
+  if (!items?.length) return null;
+  return (
+    <div style={{ padding: '8px 10px', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6, background: 'rgba(255,255,255,0.02)' }}>
+      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, letterSpacing: '0.12em', color, marginBottom: 4 }}>{title}</div>
+      {items.slice(0, 3).map((item, i) => (
+        <div key={i} style={{ fontFamily: "'Inter', sans-serif", fontSize: 11, color: '#8B95A3', lineHeight: 1.45, marginBottom: 3 }}>• {item}</div>
+      ))}
+    </div>
   );
 }
 
@@ -1296,24 +1324,28 @@ function FlowLayout(props) {
 // ─── BracketLayout (Frame 38) ──────────────────────────────────────────────
 // Tournament-style: 8 strategies → 4 → 2 → WINNER
 function BracketLayout(props) {
-  const { content, ov, accentColor, SectionHead } = props;
-  const rows = content.tableRows || [];
-  const r1 = rows.length >= 8 ? rows.slice(0, 8) : Array.from({length: 8}, (_, i) => ({ col1: `Strategy ${i+1}`, col2: `${(Math.random()*20+5).toFixed(1)}%` }));
-  const r2 = rows.slice(8, 12).concat(Array.from({length: Math.max(0, 4 - rows.slice(8,12).length)}, (_, i) => ({ col1: r1[i * 2]?.col1 || `Winner ${i+1}` })));
-  const r3 = rows.slice(12, 14).concat(Array.from({length: Math.max(0, 2 - rows.slice(12,14).length)}, (_, i) => ({ col1: r2[i * 2]?.col1 || `Semi ${i+1}` })));
-  const winner = rows[14]?.col1 || r3[0]?.col1 || r1[0]?.col1;
+  const { content, accentColor, SectionHead } = props;
+  const progression = computeBracketProgression(content);
+  const round1 = progression.bracketRound1 || [];
+  const round2 = progression.bracketRound2 || [];
+  const round3 = progression.bracketRound3 || [];
+  const winner = progression.bracketWinner || {};
 
-  const MatchCard = ({ name, sub, isWinner }) => (
+  const MatchCard = ({ side = {} }) => (
     <div style={{
       padding: '5px 8px', borderRadius: 4, marginBottom: 3,
-      background: isWinner ? `${accentColor}20` : 'rgba(255,255,255,0.03)',
-      border: `1px solid ${isWinner ? accentColor : 'rgba(255,255,255,0.06)'}`,
-      minWidth: 80,
+      background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', minWidth: 114,
     }}>
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 10, fontWeight: isWinner ? 700 : 400, color: isWinner ? accentColor : '#C8D0D8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name || '—'}</div>
-      {sub && <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: '#5A6478' }}>{sub}</div>}
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 10, color: '#C8D0D8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {(side.seed ? `#${side.seed} ` : '') + (side.name || '—')}
+        </div>
+        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#8B95A3' }}>{side.score || '—'}</div>
+      </div>
     </div>
   );
+
+  const MatchPair = ({ match }) => <><MatchCard side={{ seed: match.leftSeed, name: match.leftName, score: match.leftScore }} /><MatchCard side={{ seed: match.rightSeed, name: match.rightName, score: match.rightScore }} /></>;
 
   return (
     <>
@@ -1321,29 +1353,18 @@ function BracketLayout(props) {
       <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 4 }}>{resolvedContent.title}</div>
       <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 12, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
       <div style={{ flex: 1, display: 'flex', gap: 12, alignItems: 'center' }}>
-        {/* Round 1 */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-evenly' }}>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: '#3A4560', textAlign: 'center', marginBottom: 6 }}>ROUND 1</div>
-          {r1.map((s, i) => <MatchCard key={i} name={s.col1} sub={s.col2} />)}
-        </div>
+        <div style={{ flex: 1 }}><div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: '#3A4560', textAlign: 'center', marginBottom: 6 }}>ROUND 1</div>{round1.map((m,i)=><MatchPair key={i} match={m} />)}</div>
         <div style={{ color: `${accentColor}30`, fontSize: 12 }}>▸</div>
-        {/* Round 2 */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-evenly', padding: '16px 0' }}>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: '#3A4560', textAlign: 'center', marginBottom: 6 }}>SEMIS</div>
-          {r2.slice(0, 4).map((s, i) => <MatchCard key={i} name={s.col1} />)}
-        </div>
+        <div style={{ flex: 1 }}><div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: '#3A4560', textAlign: 'center', marginBottom: 6 }}>SEMIS</div>{round2.map((m,i)=><MatchPair key={i} match={m} />)}</div>
         <div style={{ color: `${accentColor}30`, fontSize: 12 }}>▸</div>
-        {/* Final */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-evenly', padding: '32px 0' }}>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: '#3A4560', textAlign: 'center', marginBottom: 6 }}>FINAL</div>
-          {r3.slice(0, 2).map((s, i) => <MatchCard key={i} name={s.col1} />)}
-        </div>
+        <div style={{ flex: 1 }}><div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: '#3A4560', textAlign: 'center', marginBottom: 6 }}>FINAL</div>{round3.map((m,i)=><MatchPair key={i} match={m} />)}</div>
         <div style={{ color: accentColor, fontSize: 12 }}>★</div>
-        {/* Winner */}
         <div style={{ flex: 1 }}>
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: accentColor, textAlign: 'center', marginBottom: 8, letterSpacing: '0.1em' }}>WHIZ PICK</div>
           <div style={{ textAlign: 'center', padding: '12px 8px', background: `${accentColor}18`, border: `2px solid ${accentColor}`, borderRadius: 8 }}>
-            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 12, fontWeight: 700, color: accentColor }}>{winner}</div>
+            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 12, fontWeight: 700, color: accentColor }}>
+              {(winner.seed ? `#${winner.seed} ` : '') + (winner.name || 'TBD')}
+            </div>
           </div>
         </div>
       </div>
@@ -1723,6 +1744,18 @@ function ConstellationLayout(props) {
     {col1:'Arbitrum',col2:'L2',col4:'55',col5:'50'},
   ];
   const nodes = rows.length >= 4 ? rows : defaultNodes;
+  const { density, spacing } = getLayoutTuning(content);
+  const placedNodes = placeNodes({
+    nodes: nodes.map((node, i) => ({
+      ...node,
+      x: parseFloat(node.col4) || (15 + (i * 12) % 80),
+      y: (parseFloat(node.col5) || (30 + (i * 17) % 55)) + 20,
+    })),
+    bounds: { left: 8, top: 28, right: 92, bottom: 90 },
+    nodeSize: { width: 34 * density, height: 34 * density },
+    edgePadding: 6 + (12 * spacing),
+    minNodeGap: 4 + (10 * spacing),
+  });
   // Group by category for connecting lines
   const cats = [...new Set(nodes.map(n => n.col2))];
   return (
@@ -1750,14 +1783,12 @@ function ConstellationLayout(props) {
         </div>
       </div>
       {/* Nodes */}
-      {nodes.map((node, i) => {
-        const x = parseFloat(node.col4) || (15 + (i * 12) % 80);
-        const y = parseFloat(node.col5) || (30 + (i * 17) % 55);
+      {placedNodes.map(({ node, x, y }, i) => {
         const color = CATEGORY_COLORS[node.col2] || accentColor;
         return (
           <div key={i} style={{
             position: 'absolute',
-            left: `${x}%`, top: `${y + 20}%`,
+            left: `${x}%`, top: `${y}%`,
             transform: 'translate(-50%, -50%)',
             textAlign: 'center', zIndex: 1,
           }}>
@@ -1834,6 +1865,7 @@ function StackLayout(props) {
 function TradeRoutesLayout(props) {
   const { content, ov, accentColor, SectionHead } = props;
   const rows = content.tableRows || [];
+  const { density, spacing } = getLayoutTuning(content);
   const HUBS = rows.length > 0
     ? rows
     : [
@@ -1853,12 +1885,12 @@ function TradeRoutesLayout(props) {
         {HUBS.map((route, i) => {
           const color = VOL_COLORS[i % VOL_COLORS.length];
           return (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', marginBottom: 10, gap: 10 }}>
+            <div key={i} style={{ display: 'flex', alignItems: 'center', marginBottom: Math.round(6 + spacing * 8), gap: Math.round(8 + spacing * 4) }}>
               {/* Source */}
               <div style={{ width: 80, fontFamily: "'Space Grotesk', sans-serif", fontSize: 11, fontWeight: 700, color: '#F4F5F7', textAlign: 'right', flexShrink: 0 }}>{route.col1}</div>
               {/* Flow arc */}
               <div style={{ flex: 1, position: 'relative', height: 24, display: 'flex', alignItems: 'center' }}>
-                <div style={{ height: 2, background: `linear-gradient(90deg, ${color}60, ${color}, ${color}60)`, flex: 1, borderRadius: 1 }} />
+                <div style={{ height: Math.max(1, Math.round(1 + (density * 1.6))), background: `linear-gradient(90deg, ${color}60, ${color}, ${color}60)`, flex: 1, borderRadius: 1 }} />
                 {/* Arrow */}
                 <div style={{ position: 'absolute', right: 0, width: 0, height: 0, borderLeft: `6px solid ${color}`, borderTop: '4px solid transparent', borderBottom: '4px solid transparent' }} />
                 {/* Volume label */}
@@ -2062,6 +2094,7 @@ function TimelineLayout(props) {
 
 function NetworkLayout(props) {
   const { content, ov, accentColor, SectionHead } = props;
+  const { density, spacing } = getLayoutTuning(content);
   // B7: Real network visualization using stats as nodes
   const nodes = content.stats || [];
   return (
@@ -2080,11 +2113,20 @@ function NetworkLayout(props) {
             {content.topicTag?.split(' ')[0] || 'HUB'}
           </div>
           {/* Orbital nodes */}
-          {nodes.slice(0, 6).map((n, i) => {
-            const angle = (i / Math.min(nodes.length, 6)) * Math.PI * 2 - Math.PI / 2;
-            const rx = 120, ry = 100;
-            const x = 50 + (rx * Math.cos(angle)) / 280 * 100;
-            const y = 50 + (ry * Math.sin(angle)) / 280 * 100;
+          {placeNodes({
+            nodes: nodes.slice(0, 6).map((n, i) => {
+              const angle = (i / Math.min(nodes.length, 6)) * Math.PI * 2 - Math.PI / 2;
+              const point = ensureMinEdgeSpacing({
+                x: 50 + ((110 * spacing * Math.cos(angle)) / 280) * 100,
+                y: 50 + ((95 * spacing * Math.sin(angle)) / 280) * 100,
+              }, { left: 12, top: 12, right: 88, bottom: 88 }, 4 + spacing * 6);
+              return { ...n, x: point.x, y: point.y };
+            }),
+            bounds: { left: 12, top: 12, right: 88, bottom: 88 },
+            nodeSize: { width: 64 * density, height: 40 * density },
+            edgePadding: 4 + (8 * spacing),
+            minNodeGap: 3 + (9 * spacing),
+          }).map(({ node: n, x, y }, i) => {
             return (
               <div key={i}>
                 {/* Connection line */}

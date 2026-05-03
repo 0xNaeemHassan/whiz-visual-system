@@ -1,4 +1,7 @@
+import { resolveRiskAccent } from '../riskAccentPolicy';
+
 export function createSceneModel({ frameId, theme, content, overrides, aspectRatio, bgGradient }) {
+  const accentResolution = resolveRiskAccent({ frameId, theme, overrides });
   return {
     frameId,
     dimensions: { width: aspectRatio.w, height: aspectRatio.h },
@@ -7,7 +10,7 @@ export function createSceneModel({ frameId, theme, content, overrides, aspectRat
       gradient: bgGradient || null,
     },
     palette: {
-      accent: overrides?.accent?.color || theme?.accent || '#4CC2FF',
+      accent: accentResolution.accent,
       textPrimary: overrides?.title?.color || '#F4F5F7',
       textSecondary: overrides?.deck?.color || '#8B95A3',
       body: overrides?.body?.color || '#8B95A3',
