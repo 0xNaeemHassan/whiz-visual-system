@@ -5,6 +5,7 @@ import { computeTierCoverageMetrics } from '../domain/services/tierCoverageServi
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { SemanticChip } from '../components/primitives';
 import { FRAME_GUIDANCE_BY_ID } from '../data/frameGuidance';
+import { useIntl } from '../i18n/IntlProvider';
 
 
 // M-05: LazyCard — only render frame card when visible in viewport
@@ -63,9 +64,11 @@ function MiniFrame({ accent, layout }) {
 
 export default function Library({ navigateTo, showToast, activeTheme }) {
   const [search, setSearch] = useState('');
+  const { t } = useIntl();
   const [tierFilter, setTierFilter] = useState('ALL');
   const [tagFilter, setTagFilter] = useState('');
   const [layoutFilter, setLayoutFilter] = useState('');
+  const [difficultyFilter, setDifficultyFilter] = useState('');
   const [structureFilter, setStructureFilter] = useState('all');
   const [view, setView] = useState('grid');
   const [previewFrame, setPreviewFrame] = useState(null); // Fix #61: preview modal
@@ -84,6 +87,7 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
     if (tierFilter !== 'ALL') f = f.filter(fr => fr.tier === tierFilter);
     if (layoutFilter) f = f.filter(fr => fr.layout === layoutFilter);
     if (structureFilter !== 'all') f = f.filter(fr => fr.structureClass === structureFilter);
+    if (difficultyFilter) f = f.filter(fr => fr.difficulty === difficultyFilter);
     if (search) { const q = search.toLowerCase(); f = f.filter(fr => fr.name.toLowerCase().includes(q) || fr.desc.toLowerCase().includes(q) || fr.tags.some(t => t.includes(q)) || fr.layout.includes(q)); }
     if (tagFilter) f = f.filter(fr => fr.tags.includes(tagFilter));
     if (showFavOnly) f = f.filter(fr => favorites.includes(fr.id)); // Fix #59
@@ -93,7 +97,7 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
     else if (sortBy === 'tier') f = [...f].sort((a,b) => a.tier.localeCompare(b.tier));
     else if (sortBy === 'effort') f = [...f].sort((a,b) => effortSortDir === 'asc' ? a.effortMinutes - b.effortMinutes : b.effortMinutes - a.effortMinutes);
     return f;
-  }, [search, tierFilter, tagFilter, layoutFilter, structureFilter, sortBy, showFavOnly, favorites]);
+  }, [search, tierFilter, tagFilter, layoutFilter, structureFilter, difficultyFilter, sortBy, showFavOnly, favorites]);
 
   const allTags = useMemo(() => {
     const s = new Set(); FRAMES.forEach(f => f.tags.forEach(t => s.add(t))); return Array.from(s).sort();
@@ -109,7 +113,7 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
   }), []);
   const sourceFrames = Array.isArray(FRAMES) ? FRAMES : [];
   const hasLoadFailure = !Array.isArray(FRAMES);
-  const hasActiveFilters = Boolean(search || tierFilter !== 'ALL' || layoutFilter || tagFilter || structureFilter !== 'all' || showFavOnly);
+  const hasActiveFilters = Boolean(search || tierFilter !== 'ALL' || layoutFilter || tagFilter || structureFilter !== 'all' || difficultyFilter || showFavOnly);
   const emptyStateKind = hasLoadFailure ? 'failed' : sourceFrames.length === 0 ? 'no-data' : filtered.length === 0 ? 'filtered-zero' : null;
 
   return (
@@ -272,23 +276,23 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
       {emptyStateKind ? (
         <div className="card" role="status" aria-live="polite" tabIndex={0} style={{ padding: 16 }}>
           <h2 style={{ margin: 0, marginBottom: 8, fontSize: 18 }}>
-            {emptyStateKind === 'failed' ? 'Failed to load frames' : emptyStateKind === 'filtered-zero' ? 'No frames match current filters' : 'No frame data yet'}
+            {emptyStateKind === 'failed' ? t('library.empty.failedTitle') : emptyStateKind === 'filtered-zero' ? t('library.empty.filteredTitle') : t('library.empty.noDataTitle')}
           </h2>
           <p style={{ margin: 0, marginBottom: 10, color: 'var(--muted)', lineHeight: 1.5 }}>
             {emptyStateKind === 'failed'
-              ? 'The library dataset is unavailable right now.'
+              ? t('library.empty.failedBody')
               : emptyStateKind === 'filtered-zero'
-                ? 'Try broadening your search or clearing one or more filters.'
-                : 'Add templates to get started with a frame scaffold.'}
+                ? t('library.empty.filteredBody')
+                : t('library.empty.noDataBody')}
           </p>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button className="btn btn-secondary btn-sm" onClick={() => { setSearch(''); setTierFilter('ALL'); setTagFilter(''); setLayoutFilter(''); setStructureFilter('all'); setShowFavOnly(false); }}>
-              Clear filters
+              {t('library.empty.clearFilters')}
             </button>
-            <button className="btn btn-ghost btn-sm" onClick={() => setView('list')}>Paste table in list workflow</button>
-            <button className="btn btn-primary btn-sm" onClick={() => navigateTo('editor', 1)}>Generate scaffold</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => setView('list')}>{t('library.empty.listWorkflow')}</button>
+            <button className="btn btn-primary btn-sm" onClick={() => navigateTo('editor', 1)}>{t('library.empty.scaffold')}</button>
           </div>
-          {hasActiveFilters && <p style={{ marginTop: 10, marginBottom: 0, fontSize: 11, color: 'var(--dim)' }}>Tip: keyboard users can Tab to filter chips and press Enter/Space to quickly adjust scope.</p>}
+          {hasActiveFilters && <p style={{ marginTop: 10, marginBottom: 0, fontSize: 11, color: 'var(--dim)' }}>{t('library.empty.filtersTip')}</p>}
         </div>
       ) : view === 'grid' ? (
         <div className="frames-grid">
