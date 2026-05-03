@@ -8,7 +8,7 @@ export const TELEMETRY_EVENTS = {
   REDO: 'editor.redo',
   EXPORT_SUCCESS: 'editor.export.success',
   EXPORT_FAILURE: 'editor.export.failure',
-  EXPORT_CORRECTION_CREATED: 'editor.export.correction.created',
+  EXPORT_BLOCKED_PROVENANCE: 'editor.export.blocked.provenance',
   VALIDATION_ERROR: 'editor.validation.error',
   DUPLICATE_AUTOPILOT_METRIC: 'editor.duplicate.autopilot.metric',
 };
@@ -44,11 +44,10 @@ export const EVENT_PAYLOAD_SHAPES = {
     reason: 'string',
     strictMode: 'boolean',
   },
-  [TELEMETRY_EVENTS.EXPORT_CORRECTION_CREATED]: {
-    artifactId: 'string',
-    issueNum: 'string|number',
-    correctedFieldCount: 'number',
-    supersedesPriorExport: 'boolean',
+  [TELEMETRY_EVENTS.EXPORT_BLOCKED_PROVENANCE]: {
+    format: 'png|webp|html|json|manifest',
+    issueCount: 'number',
+    issuePaths: 'string[]',
   },
   [TELEMETRY_EVENTS.VALIDATION_ERROR]: {
     context: 'export|import',
