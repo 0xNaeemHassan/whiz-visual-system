@@ -128,7 +128,44 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
     setShowModal(true);
   };
 
+
   const nextNum = issues.length > 0 ? Math.max(...issues.map(i => Number(i.issueNum) || 0)) + 1 : 1;
+
+  useEffect(() => {
+    try {
+      const rawDraft = localStorage.getItem('whiz-planner-issue-draft');
+      if (!rawDraft) return;
+      const draft = normalizeIssue(JSON.parse(rawDraft));
+      localStorage.removeItem('whiz-planner-issue-draft');
+      setEditingIssue(null);
+      setForm({
+        issueNum: draft.issueNum || String(nextNum).padStart(3, '0'),
+        topic: draft.topic || '',
+        frameId: draft.frameId || '',
+        themeId: draft.themeId || '',
+        status: draft.status || 'draft',
+        publishDate: draft.publishDate || '',
+        notes: draft.notes || '',
+        caption: draft.caption || '',
+        sourceLinks: draft.sourceLinks || '',
+        priority: draft.priority || 'medium',
+        confidence: draft.confidence || 'medium',
+        series: draft.series || '',
+        assistantBrief: draft.assistantBrief || '',
+        targetMetric: draft.targetMetric || '',
+        metricConfidence: draft.metricConfidence || '',
+        metricSource: draft.metricSource || '',
+        metricValue: draft.metricValue || '',
+        metricUnit: draft.metricUnit || '',
+        metricProvenance: draft.metricProvenance || [],
+      });
+      setShowModal(true);
+      showToast('Loaded draft from Editor duplicate');
+    } catch (error) {
+      localStorage.removeItem('whiz-planner-issue-draft');
+    }
+  }, [nextNum, showToast]);
+
 
   const openAdd = (presetStatus) => {
     setEditingIssue(null);
