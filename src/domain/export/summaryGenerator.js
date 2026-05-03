@@ -29,6 +29,7 @@ export function generateExportSummary({ frame, content = {}, complianceIssues = 
     thesis,
     keyValues,
     riskFlags: [...complianceIssues, ...validationWarnings].filter(Boolean),
+    trustLevel: safe(content.trustLevel) || 'Draft',
     dataTimestamps: Array.from(timestamps),
     exportedAt: new Date().toISOString(),
   };
@@ -50,6 +51,7 @@ export function buildSummaryText(summary = {}) {
     `Title: ${summary.title || 'N/A'}`,
     `Thesis: ${summary.thesis || 'N/A'}`,
     `Frame: #${summary.frameId || 'N/A'} (${summary.frameType || 'default'})`,
+    `Trust Level: ${summary.trustLevel || 'Draft'}`,
     `Exported At: ${summary.exportedAt || 'N/A'}`,
     'Key Values:',
     ...((summary.keyValues || []).map((kv) => `- ${kv.label || 'Unlabeled'}: ${kv.value || 'N/A'}`)),
