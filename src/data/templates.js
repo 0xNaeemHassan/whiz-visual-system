@@ -28,6 +28,20 @@ export const FRAME_TEMPLATES = {
     stats:[{label:'TVL',value:'$3.2B'},{label:'24H VOL',value:'$140M'},{label:'APY',value:'14.1%'},{label:'CHAINS',value:'6'}],
     body: 'Pendle splits yield-bearing tokens into two components: Principal Tokens (PT) and Yield Tokens (YT). This separation allows traders to take fixed-rate positions or speculate on yield direction.\n\nThe protocol has seen exponential growth in 2024-2025 as institutional appetite for yield derivatives grows.',
     pullQuote: 'The AMM that lets you trade time itself.',
+    thesis: 'Yield derivatives become a core fixed-income primitive once rates and carry are tradable on-chain.',
+    mechanismSteps: [
+      'Split yield-bearing assets into principal and future-yield claims.',
+      'Route PT/YT into concentrated AMM pools for price discovery.',
+      'Let users choose fixed yield (PT) or variable yield exposure (YT).',
+    ],
+    riskNotes: [
+      'Yield compression can reduce YT upside in lower-rate regimes.',
+      'Smart contract and oracle dependencies remain material.',
+    ],
+    evidencePoints: [
+      'Sustained TVL growth across multiple chains.',
+      'Improving daily volume and open interest in PT/YT markets.',
+    ],
   },
   // Frame 13 — Bull/Bear Split
   13: {
@@ -38,6 +52,14 @@ export const FRAME_TEMPLATES = {
     bearPoints: ['Fragmented liquidity reduces capital efficiency across the ecosystem','Bridge risks multiply as cross-rollup activity grows','No dominant L2 means no clear winner to bet on'],
     bigLabel: 'BULL CASE',
     verdict: 'BEAR CASE',
+    thesis: 'The L2 endgame is a fragmented but interoperable market, not winner-take-all.',
+    mechanismSteps: [
+      'Distribution channels seed users into different rollup ecosystems.',
+      'Developer tooling standards reduce switching costs across stacks.',
+      'Liquidity routers abstract fragmentation at execution time.',
+    ],
+    riskNotes: ['Bridge and messaging failures remain systemic risk vectors.'],
+    evidencePoints: ['TVL and activity are growing across multiple leading rollups in parallel.'],
   },
   // Frame 15 — The Audit Sheet
   15: {
@@ -55,6 +77,14 @@ export const FRAME_TEMPLATES = {
       {col1:'Catalysts',col2:'GHO stablecoin expansion',col3:'B+'},
       {col1:'Risk',col2:'Smart contract risk low; governance risk exists',col3:'B+'},
     ],
+    thesis: 'Aave remains the benchmark blue-chip lender due to durable product-market fit and governance execution.',
+    mechanismSteps: [
+      'Assess protocol quality across team, product, security, and market traction.',
+      'Translate each axis into a letter-grade scorecard.',
+      'Weight aggregate output toward downside protection and sustainability.',
+    ],
+    riskNotes: ['Governance capture and parameter mistakes can degrade risk posture quickly.'],
+    evidencePoints: ['Multi-year operating history with repeated audits and active governance cadence.'],
   },
   // Frame 16 — Leaderboard
   16: {

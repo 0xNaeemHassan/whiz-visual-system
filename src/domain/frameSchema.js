@@ -133,6 +133,19 @@ function validateTemplateEntry(frameId, template, frameById, errors) {
       });
     }
   }
+
+  if (frame?.tier === 'B') {
+    assert(isNonEmptyString(template.thesis), `${prefix}: Tier B requires non-empty thesis`, errors);
+    ['mechanismSteps', 'riskNotes', 'evidencePoints'].forEach((field) => {
+      assert(Array.isArray(template[field]), `${prefix}: Tier B requires ${field} array`, errors);
+      if (Array.isArray(template[field])) {
+        assert(template[field].length > 0, `${prefix}: Tier B ${field} must not be empty`, errors);
+        template[field].forEach((entry, idx) => {
+          assert(isNonEmptyString(entry), `${prefix}: Tier B ${field}[${idx}] must be non-empty`, errors);
+        });
+      }
+    });
+  }
 }
 
 
