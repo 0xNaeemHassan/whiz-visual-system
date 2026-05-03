@@ -20,6 +20,7 @@ export function prepareLayoutPayload({ frame, aspectRatio, content, styleOverrid
     content,
     ov,
     baseTitleSize: getBaseTitleSize(content, ov),
+    policy: content?.truncationPolicy || {},
   });
 
   const resolvedContent = {
@@ -28,6 +29,7 @@ export function prepareLayoutPayload({ frame, aspectRatio, content, styleOverrid
       actions: overflowResult.actions,
       budget: overflowResult.budget,
       primitiveBudgets: overflowResult.primitiveBudgets,
+      truncation: overflowResult.truncation,
     },
   };
 

@@ -3,6 +3,7 @@ export const TELEMETRY_VERSION = '1.0.0';
 export const TELEMETRY_EVENTS = {
   LOAD: 'editor.load',
   SAVE: 'editor.save',
+  ACTION_BAR: 'editor.action_bar',
   UNDO: 'editor.undo',
   REDO: 'editor.redo',
   EXPORT_SUCCESS: 'editor.export.success',
@@ -20,6 +21,11 @@ export const EVENT_PAYLOAD_SHAPES = {
   [TELEMETRY_EVENTS.SAVE]: {
     saveId: 'string',
     saveName: 'string',
+  },
+  [TELEMETRY_EVENTS.ACTION_BAR]: {
+    action: 'save|load|duplicate|export|import|undo|redo',
+    group: 'primary|overflow',
+    surface: 'desktop|mobile',
   },
   [TELEMETRY_EVENTS.UNDO]: {
     scope: 'content|overrides',
