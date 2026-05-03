@@ -5,6 +5,7 @@ import { THEMES } from '../data/themes';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { useIntl } from '../i18n/IntlProvider';
 import { normalizePlannerIssue } from '../utils/schemaContracts';
+import { createEngagementOutcomeFeedback, scoreEngagementHeuristic } from '../domain/services/engagementHeuristicService';
 
 const STATUSES = ['draft', 'planned', 'wip', 'done', 'published'];
 const CONFIDENCE = ['low', 'medium', 'high'];
@@ -114,7 +115,7 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
   });
   const existingIssueNums = new Set(issues.map(i => String(i.issueNum || '').padStart(3, '0')));
 
-  const { registerHandlers } = useUIEventContext();
+  const { registerHandlers, addActivityEntry } = useUIEventContext();
 
   // Escape handler routed via UI event context
   useEffect(() => {
@@ -214,7 +215,19 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
     }
   };
 
-  const updateStatus = (id, status) => setIssues(prev => prev.map(i => i.id === id ? { ...i, status } : i));
+  const updateStatus = (id, status) => setIssues(prev => prev.map((i) => {
+    if (i.id !== id) return i;
+    if (status === 'published' && i.status !== 'published') {
+      const heuristic = heuristicByIssueId[i.id] || scoreEngagementHeuristic({ issue: i, issues: prev });
+      const feedback = createEngagementOutcomeFeedback({
+        issueId: i.id,
+        score: heuristic.score,
+        outcome: { publishedAt: new Date().toISOString(), topic: i.topic || '' },
+      });
+      addActivityEntry({ type: 'telemetry', status: 'info', message: `Heuristic feedback captured for #${i.issueNum || '---'}`, metadata: feedback });
+    }
+    return { ...i, status };
+  }));
 
   // F1: Drop handler for kanban
   const handleKanbanDrop = useCallback((issueId, targetStatus) => {
@@ -413,6 +426,10 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
     if (seriesFocusFilter) f = f.filter(i => (i.series || '').trim() === seriesFocusFilter && (i.confidence || 'medium') === 'low');
     return f.sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0));
   }, [issues, statusFilter, search, seriesFocusFilter]);
+  const heuristicByIssueId = useMemo(() => issues.reduce((acc, issue) => {
+    acc[issue.id] = scoreEngagementHeuristic({ issue, issues });
+    return acc;
+  }, {}), [issues]);
 
   const stats = STATUSES.reduce((acc, s) => { acc[s] = issues.filter(i => i.status === s).length; return acc; }, {});
 
@@ -530,12 +547,13 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
             </div>
           ) : (
             <table className="data-table">
-              <thead><tr><th>#</th><th>Topic</th><th>Frame</th><th>Theme</th><th>Status</th><th>Date</th><th>Notes</th><th></th></tr></thead>
+              <thead><tr><th>#</th><th>Topic</th><th>Frame</th><th>Theme</th><th>Status</th><th>Banger Potential</th><th>Date</th><th>Notes</th><th></th></tr></thead>
               <tbody>
                 {filtered.map(issue => {
                   const frame = FRAMES.find(f => String(f.id) === String(issue.frameId));
                   const theme = THEMES.find(t => t.id === issue.themeId);
                   const statusCol = KANBAN_COLS.find(c => c.id === issue.status);
+                  const heuristic = heuristicByIssueId[issue.id] || scoreEngagementHeuristic({ issue, issues });
                   return (
                     <tr key={issue.id}>
                       <td><span style={{ fontFamily: 'var(--font-m)', color: 'var(--dim)' }}>#{issue.issueNum}</span></td>
@@ -551,6 +569,7 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
                           </select>
                         </div>
                       </td>
+                      <td><span title={heuristic.reasonCodes.join(', ')} style={{ fontFamily: 'var(--font-m)', fontSize: 11, color: 'var(--muted)' }}>{heuristic.scorePercent}%</span></td>
                       <td><span style={{ fontFamily: 'var(--font-m)', fontSize: 11, color: 'var(--muted)' }}>{issue.publishDate || '—'}</span></td>
                       <td><span style={{ fontSize: 11, color: 'var(--muted)', maxWidth: 160, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{issue.notes || '—'}</span></td>
                       <td>
@@ -591,6 +610,7 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
                   ) : colIssues.map(issue => {
                     const frame = FRAMES.find(f => String(f.id) === String(issue.frameId));
                     const theme = THEMES.find(t => t.id === issue.themeId);
+                    const heuristic = heuristicByIssueId[issue.id] || scoreEngagementHeuristic({ issue, issues });
                     return (
                       <div key={issue.id} className="kanban-card" data-status={issue.status}
                         draggable onDragStart={() => dnd.startDrag(issue.id)}
@@ -603,6 +623,7 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
                           {frame && <span style={{ fontFamily: 'var(--font-m)', fontSize: 9, color: 'var(--dim)' }}>F{frame.id}</span>}
                           {theme && <span style={{ width: 6, height: 6, borderRadius: '50%', background: theme.accent, flexShrink: 0, display: 'inline-block' }} />}
                           {issue.publishDate && <span style={{ fontFamily: 'var(--font-m)', fontSize: 9, color: 'var(--dim)' }}>{issue.publishDate}</span>}
+                          <span style={{ fontFamily: 'var(--font-m)', fontSize: 9, color: 'var(--dim)' }}>⚡ {heuristic.scorePercent}%</span>
                         </div>
                       </div>
                     );
@@ -632,6 +653,10 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
             <div className="form-group"><label className="form-label">Series</label><input value={form.series || ''} onChange={e => setForm(f => ({...f, series: e.target.value}))} placeholder="Stablecoin Risk Pt. 1" /></div>
           </div>
           <div className="form-group"><label className="form-label">Topic / Headline *</label><input value={form.topic} onChange={e => setForm(f => ({...f, topic: e.target.value}))} placeholder="The End of Mercenary Yield" autoFocus /></div>
+          {(() => {
+            const heuristic = scoreEngagementHeuristic({ issue: form, issues });
+            return <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8 }}><strong style={{ color: 'var(--text)' }}>Banger Potential: {heuristic.scorePercent}%</strong> · advisory only · {heuristic.reasonCodes.join(', ')}</div>;
+          })()}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div className="form-group"><label className="form-label">Frame Template</label><select value={form.frameId} onChange={e => setForm(f => ({...f, frameId: e.target.value}))}><option value="">— Select —</option>{FRAMES.map(fr => <option key={fr.id} value={fr.id}>{fr.id}. {fr.name}</option>)}</select></div>
             <div className="form-group"><label className="form-label">Color Theme</label><select value={form.themeId} onChange={e => setForm(f => ({...f, themeId: e.target.value}))}><option value="">— Select —</option>{THEMES.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></div>
