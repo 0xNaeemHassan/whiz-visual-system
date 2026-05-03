@@ -21,6 +21,7 @@ import { normalizeContentTaxonomy } from '../utils/contentNormalization';
 import { validateEditorState } from '../utils/editorStateValidation';
 import { buildMutationDispatcher } from './EditorMutations.js';
 import { normalizeDateInput, normalizeTimelineEvents } from '../domain/services/dateNormalizationService';
+import { detectRowSeriesDeltas, inferMetricType } from '../domain/services/rowDeltaDetector';
 import { SemanticChip, AccessibleIconButton, LabeledField, IconButton } from '../components/primitives';
 import { getFramePitfalls } from '../data/framePitfalls';
 import { createEditorCommandRegistry, filterCommands, matchesShortcut } from '../domain/editorCommands';
@@ -312,6 +313,14 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const [showTableImportModal, setShowTableImportModal] = useState(false);
   const [tableImportText, setTableImportText] = useState('');
   const [tableImportReport, setTableImportReport] = useState(null);
+  const [rowDeltaFlags, setRowDeltaFlags] = useState([]);
+  useEffect(() => {
+    const scan = detectRowSeriesDeltas(content.tableRows || [], { metricType: inferMetricType(content.tableRows?.[0]?.col3) });
+    setRowDeltaFlags((prev) => scan.flags.map((flag) => {
+      const prior = prev.find((p) => p.rowIndex === flag.rowIndex);
+      return prior ? { ...flag, acknowledged: Boolean(prior.acknowledged) } : flag;
+    }));
+  }, [content.tableRows]);
   useDialogFocus({ isOpen: showSaveModal, containerRef: saveModalRef, initialFocusRef: saveNameInputRef });
   const focusableSelector = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
   const bindFocusTrap = useCallback((isOpen, selector) => {
@@ -407,8 +416,14 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     }).filter((entry) => entry.errors.length);
     const validRows = allEntries.filter((entry) => !invalidRows.some((invalidEntry) => invalidEntry.rowIndex === entry.rowIndex)).map((entry) => entry.row);
     const report = { ...baseReport, validRows, invalidRows };
+    const anomalyScan = detectRowSeriesDeltas(validRows, { metricType: inferMetricType(validRows[0]?.col3) });
+    report.anomalyFlags = anomalyScan.flags;
     setTableImportReport(report);
-    showToast(`Validated ${report.parsedRows.length} rows: ${report.validRows.length} valid / ${report.invalidRows.length} invalid.`, report.invalidRows.length ? 'warning' : 'success');
+    if (anomalyScan.flags.length) {
+      showToast(`Validated ${report.parsedRows.length} rows. ${anomalyScan.flags.length} anomaly flags require review.`, 'warning');
+    } else {
+      showToast(`Validated ${report.parsedRows.length} rows: ${report.validRows.length} valid / ${report.invalidRows.length} invalid.`, report.invalidRows.length ? 'warning' : 'success');
+    }
   };
 
   const applyValidImportedRows = () => {
@@ -416,7 +431,10 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
       showToast('No valid rows to apply.', 'warning');
       return;
     }
-    updateContent('tableRows', [...(content.tableRows || []), ...tableImportReport.validRows.map((row)=>({ ...row, provenance: createDefaultProvenance() }))]);
+    const nextRows = [...(content.tableRows || []), ...tableImportReport.validRows.map((row)=>({ ...row, provenance: createDefaultProvenance() }))];
+    updateContent('tableRows', nextRows);
+    const scan = detectRowSeriesDeltas(nextRows, { metricType: inferMetricType(nextRows[0]?.col3) });
+    setRowDeltaFlags(scan.flags);
     showToast(`Applied ${tableImportReport.validRows.length} valid rows.`, 'success');
   };
 
