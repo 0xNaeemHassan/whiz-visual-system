@@ -1,5 +1,5 @@
 import type { ExportContract } from '../../types/canonical';
-import { resolveChannelProfile, type ExportChannel } from './channelProfiles';
+import { resolveChannelProfile, type ExportChannel } from './channelProfiles.ts';
 
 export const EXPORT_CONTRACT_VERSION = '1.0.0';
 
