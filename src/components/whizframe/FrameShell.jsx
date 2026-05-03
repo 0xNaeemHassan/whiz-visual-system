@@ -5,7 +5,7 @@ import { TICKER_CONTRACT, normalizeTickerSpeed } from '../../domain/tickerContra
 import { SPINE_DESIGN_TOKENS } from '../../domain/spineDesignTokens';
 import { calculateReceiptSummary } from '../../domain/services/receiptCalcService';
 import { FrameFooter } from './FrameFooter';
-import SemanticChip from '../SemanticChip';
+import SemanticChip, { SemanticMarker, semanticLabel } from '../SemanticChip';
 import { resolveRiskAccent } from '../../domain/riskAccentPolicy';
 
 export function FrameShell({ frameRef, frame, theme, content, editMode, selectedEl, onSelectEl, styleOverrides, showGrid, aspectRatio, uploadedImages, bgGradient, patternOverlay, strictWhizMode = false, whizEffects = { glow: true, noise: true, intenseAccent: false } }) {
@@ -552,10 +552,17 @@ function TierListLayout(props) {
           );
         })}
       </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8, marginBottom: 8 }}>
+        {displayTiers.map((tier) => (
+          <SemanticChip key={tier} role="tier" tone={tier} style={{ fontSize: 9, padding: '2px 7px' }}>
+            {tier} ▦ Tier {tier}
+          </SemanticChip>
+        ))}
+      </div>
       <div style={{
         fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: 'var(--text-muted)',
         paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.05)', marginTop: 8,
-      }}>{resolvedContent.body?.split('\n')[0] || 'Criteria: TVL × team × product × momentum'}</div>
+      }}>{resolvedContent.body?.split('\n')[0] || 'Criteria: TVL × team × product × momentum. Legend uses text + shape markers.'}</div>
     </>
   );
 }
@@ -1116,14 +1123,19 @@ function ThreatModelLayout(props) {
     { key: 'go', label: 'GOVERNANCE', color: '#E5B23A', items: rows.filter((_, i) => i % 4 === 2) },
     { key: 'op', label: 'OPERATIONAL', color: '#9DB4D0', items: rows.filter((_, i) => i % 4 === 3) },
   ];
-  const SeverityDots = ({ level }) => {
+  const severityTone = (level) => { const n = parseInt(level) || 3; return n >= 5 ? 'critical' : n >= 4 ? 'high' : n >= 3 ? 'medium' : 'low'; };
+  const SeverityBadge = ({ level }) => {
     const n = parseInt(level) || 3;
+    const tone = severityTone(level);
     return (
-      <span>
-        {Array.from({ length: 5 }, (_, i) => (
-          <span key={i} style={{ color: i < n ? '#FF5A5A' : '#2A3040', fontSize: 8 }}>●</span>
-        ))}
-      </span>
+      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        <SemanticMarker role="severity" tone={tone} text={`${semanticLabel('severity', tone)} (${n}/5)`} style={{ fontSize: 9, padding: '2px 6px' }} />
+        <span aria-hidden="true">
+          {Array.from({ length: 5 }, (_, i) => (
+            <span key={i} style={{ color: i < n ? '#FF5A5A' : '#2A3040', fontSize: 8 }}>●</span>
+          ))}
+        </span>
+      </div>
     );
   };
   return (
