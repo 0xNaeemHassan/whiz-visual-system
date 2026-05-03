@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint src --ext .js,.jsx && npm run check:chips",
-    "test": "node scripts/test-smoke.mjs && node scripts/test-analytics-quality.mjs && node scripts/test-motion-reduction.mjs && node scripts/test-keyboard-flows.mjs",
+    "test": "node scripts/test-smoke.mjs && node scripts/test-analytics-quality.mjs && node scripts/test-motion-reduction.mjs && node scripts/test-keyboard-flows.mjs && node scripts/test-storage-migrations.mjs",
     "check:chips": "node scripts/check-semantic-chips.mjs",
     "lint:naming": "eslint src --ext .js,.jsx --rule \"naming/file-naming-convention:error\" --rule \"naming/hook-api-naming:error\" --rule \"naming/service-symbol-naming:error\" --rule \"naming/comment-prefix-convention:error\"",
     "check:touch-targets": "node scripts/check-touch-targets.mjs",
