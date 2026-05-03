@@ -18,6 +18,7 @@ import { CONTENT_TEMPLATES } from '../data/templates';
 import { createDefaultContent, createDefaultOverrides, createDefaultEditorState } from '../domain/editorDefaults.js';
 import { nearestTypeScale, getComplianceIssues, getBrandScore, getEditorValidationReport, validateEditorTextMinimum } from '../utils/editorCompliance';
 import { normalizeContentTaxonomy } from '../utils/contentNormalization';
+import { CANONICAL_TAGS, normalizeCanonicalTagList } from '../data/canonicalTags';
 import { validateEditorState } from '../utils/editorStateValidation';
 import { buildMutationDispatcher } from './EditorMutations.js';
 import { createEditorSelectors, measureSelectorPhase, STATIC_MEDIA_STATE, updateSliceImmutable } from '../state/editorStore.js';
@@ -971,6 +972,8 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     }
     loadSave(pendingLoadSave);
   };
+
+  const migrateLegacySaveTags=()=>{const before=saves;let changed=0;const next=before.map((save)=>{const normalized=normalizeCanonicalTagList(save?.tags||[]);const same=JSON.stringify(normalized.valid)===JSON.stringify(save?.tags||[]);if(!same)changed+=1;return{...save,tags:normalized.valid};});if(changed>0){setSaves(next);showToast(`Migrated ${changed} save(s) to canonical tags.`,'success');}else showToast('All save tags already canonical.','info');};
   const confirmDel=async(id)=>{const ok=await requestConfirmation({ ...DESTRUCTIVE_ACTION_POLICY.deleteSave, actionId:`${DESTRUCTIVE_ACTION_POLICY.deleteSave.actionId}:${id}` });if(!ok)return;setSaves(p=>p.filter(s=>s.id!==id));showToast('Deleted','info');};
   const runNormalizationPreflight=async()=>{
     const result=normalizeContentTaxonomy(content);

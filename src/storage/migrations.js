@@ -39,9 +39,10 @@ function migrateAnyToEnvelope(rawValue) {
 function migrateLegacySaveRecord(save) {
   if (!isObject(save)) return save;
   const { status: legacyStatus, ...rest } = save;
-  const tags = Array.isArray(save.tags)
+  const legacyTags = Array.isArray(save.tags)
     ? save.tags.filter((tag) => typeof tag === 'string').map((tag) => tag.trim()).filter(Boolean)
     : [];
+  const tags = normalizeCanonicalTagList(legacyTags).valid;
   const folder = typeof save.folder === 'string' ? save.folder : '';
   const status = typeof legacyStatus === 'string' && legacyStatus.trim() ? legacyStatus.trim() : undefined;
   return {
