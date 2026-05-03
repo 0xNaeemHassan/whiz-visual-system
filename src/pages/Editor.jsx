@@ -365,6 +365,13 @@ const hashString = (input = '') => {
   return `fnv1a:${(hash >>> 0).toString(16).padStart(8, '0')}`;
 };
 const hashValue = (value) => hashString(stableStringify(value));
+const buildIntegrityDigest = async (input = '') => {
+  if (!(window?.crypto?.subtle) || !(window?.TextEncoder)) return null;
+  const bytes = new TextEncoder().encode(String(input));
+  const digest = await window.crypto.subtle.digest('SHA-256', bytes);
+  const hex = Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
+  return `sha256:${hex}`;
+};
 function DesignPanel({selectedEl,setSelectedEl,overrides,setOverrides,theme,bgGradient,setBgGradient,showToast,resetOverrides,setPatternOverlay,strictMode}){
   const currentOverrides = overrides;
   const setOverrideValue = (key, value) => setOverrides((previousOverrides) => ({ ...previousOverrides, [key]: value }));
@@ -621,12 +628,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     showToast('New frame started');
   },[newFrameSignal]);
 
-  const computeAutosaveChecksum = (payload) => {
-    const raw = JSON.stringify(payload);
-    let hash = 0;
-    for (let idx = 0; idx < raw.length; idx += 1) hash = ((hash << 5) - hash) + raw.charCodeAt(idx);
-    return `v1:${Math.abs(hash >>> 0).toString(16)}`;
-  };
+  const computeAutosaveChecksum = (payload) => hashString(stableStringify(payload));
   const applyAutosaveSnapshot = (d, merge = {}) => {
     if (!d) return;
     if (!merge.sectioned || merge.frameId) d.frameId && setFrameId(d.frameId);
