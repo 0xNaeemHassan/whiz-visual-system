@@ -148,6 +148,32 @@ const normalizeImportedTableRows = ({ rows, headerCount }) => rows.map((cells) =
   for (let idx = 0; idx < headerCount; idx += 1) row[`col${idx + 1}`] = String(cells[idx] || '').trim();
   return row;
 });
+const ENTITY_ALIAS_MAP = Object.freeze({ '&': 'and', '+': 'and', '@': 'at', 'co.': 'company', 'corp.': 'corporation' });
+const normalizeEntityKey = (value = '') => {
+  const lowered = String(value || '').trim().toLowerCase();
+  const aliased = Object.entries(ENTITY_ALIAS_MAP).reduce((acc, [symbol, replacement]) => acc.replaceAll(symbol, ` ${replacement} `), lowered);
+  return aliased.replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
+};
+const fuzzyDistance = (a = '', b = '') => {
+  if (a === b) return 0;
+  const matrix = Array.from({ length: a.length + 1 }, () => Array(b.length + 1).fill(0));
+  for (let i = 0; i <= a.length; i += 1) matrix[i][0] = i;
+  for (let j = 0; j <= b.length; j += 1) matrix[0][j] = j;
+  for (let i = 1; i <= a.length; i += 1) for (let j = 1; j <= b.length; j += 1) matrix[i][j] = Math.min(matrix[i - 1][j] + 1, matrix[i][j - 1] + 1, matrix[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return matrix[a.length][b.length];
+};
+const detectEntityCollisions = (rows = []) => {
+  const keyed = rows.map((row, index) => ({ index, raw: String(row?.col1 || ''), normalized: normalizeEntityKey(row?.col1 || '') })).filter((entry) => entry.normalized);
+  const duplicateGroups = Object.values(keyed.reduce((acc, entry) => ({ ...acc, [entry.normalized]: [...(acc[entry.normalized] || []), entry] }), {})).filter((group) => group.length > 1);
+  const fuzzyPairs = [];
+  for (let i = 0; i < keyed.length; i += 1) for (let j = i + 1; j < keyed.length; j += 1) {
+    if (keyed[i].normalized === keyed[j].normalized) continue;
+    const distance = fuzzyDistance(keyed[i].normalized, keyed[j].normalized);
+    const confidence = 1 - (distance / Math.max(keyed[i].normalized.length, keyed[j].normalized.length, 1));
+    if (confidence >= 0.82) fuzzyPairs.push({ left: keyed[i], right: keyed[j], confidence });
+  }
+  return { duplicateGroups, fuzzyPairs };
+};
 
 const buildTableImportReport = ({ rawText, headerCount, currentContent }) => {
   const parsedRows = parseDelimitedRows(rawText);
@@ -189,7 +215,7 @@ const buildTableImportReport = ({ rawText, headerCount, currentContent }) => {
     else validRows.push(row);
   });
 
-  return { parsedRows, validRows, invalidRows };
+  return { parsedRows, validRows, invalidRows, collisionReport: detectEntityCollisions(normalizedRows) };
 };
 
 const TABLE_CELL_MAX_LENGTH = 120;
@@ -465,6 +491,11 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     setTableImportReport((prev) => prev ? { ...prev, invalidRows: [] } : prev);
     showToast('Discarded invalid rows from import batch.', 'info');
   };
+  useEffect(() => {
+    if (!tableImportReport) return;
+    const collisionReport = detectEntityCollisions(tableImportReport.validRows || []);
+    track(TELEMETRY_EVENTS.DUPLICATE_RESOLUTION,{source:'row_edit',duplicateGroups:collisionReport.duplicateGroups.length,fuzzyPairs:collisionReport.fuzzyPairs.length,unresolvedHighConfidence:collisionReport.fuzzyPairs.filter((pair)=>pair.confidence>=0.9).length});
+  }, [tableImportText]);
   const exportInvalidImportRows = () => {
     if (!tableImportReport?.invalidRows?.length) {
       showToast('No invalid rows to export.', 'info');
@@ -739,6 +770,9 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     if(!validateCriticalExportFields('webp'))return;
     if(!rolePermissions.canExportAssets){showToast(roleReasons.exportAssets,'warning');return;}
     if(!frameRef.current||exporting)return;
+    const exportCollisionReport=detectEntityCollisions(content.tableRows||[]);
+    const unresolvedHighConfidenceDuplicates=exportCollisionReport.fuzzyPairs.filter((pair)=>pair.confidence>=0.9).length;
+    if(strictMode&&unresolvedHighConfidenceDuplicates>0){showToast(`Strict export blocked: resolve ${unresolvedHighConfidenceDuplicates} high-confidence duplicate entity collisions.`,'error');return;}
     if(!ensureActionAllowed('export'))return;
     if(!(await runPitfallPreflight()))return;
     if(hasBlockingSpineContrastIssue){showToast('Publish blocked: rotated spine contrast is below threshold.','error');return;}

@@ -11,6 +11,7 @@ export const TELEMETRY_EVENTS = {
   EXPORT_BLOCKED_PROVENANCE: 'editor.export.blocked.provenance',
   VALIDATION_ERROR: 'editor.validation.error',
   DUPLICATE_AUTOPILOT_METRIC: 'editor.duplicate.autopilot.metric',
+  DUPLICATE_RESOLUTION: 'editor.duplicate.resolution',
 };
 
 export const EVENT_PAYLOAD_SHAPES = {
@@ -61,6 +62,13 @@ export const EVENT_PAYLOAD_SHAPES = {
     withWizard: 'boolean',
     confidence: 'low|medium|high?',
     provenanceRequired: 'boolean?',
+  },
+  [TELEMETRY_EVENTS.DUPLICATE_RESOLUTION]: {
+    source: 'import_validate|row_edit|resolution',
+    duplicateGroups: 'number',
+    fuzzyPairs: 'number',
+    unresolvedHighConfidence: 'number',
+    action: 'merge|keep_both?',
   },
 };
 
