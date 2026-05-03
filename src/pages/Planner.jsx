@@ -10,6 +10,7 @@ import { DEFAULT_CADENCE_CONFIG } from '../state/editorStore';
 
 const STATUSES = ['draft', 'planned', 'wip', 'done', 'published'];
 const CONFIDENCE = ['low', 'medium', 'high'];
+const CLAIM_TYPES = ['fast_metrics', 'slower_indicators', 'evergreen_context'];
 const KANBAN_COLS = [
   { id: 'draft', label: 'DRAFT', color: '#8B95A3' },
   { id: 'planned', label: 'PLANNED', color: '#6FA8FF' },
@@ -949,6 +950,7 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div className="form-group"><label className="form-label">Confidence</label><select value={form.confidence || 'medium'} onChange={e => setForm(f => ({...f, confidence: e.target.value}))}>{CONFIDENCE.map(s => <option key={s} value={s}>{s.toUpperCase()}</option>)}</select></div>
+            <div className="form-group"><label className="form-label">Claim Type</label><select value={form.claimType || 'slower_indicators'} onChange={e => setForm(f => ({...f, claimType: e.target.value}))}>{CLAIM_TYPES.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
             <div className="form-group"><label className="form-label">Series</label><input value={form.series || ''} onChange={e => setForm(f => ({...f, series: e.target.value}))} placeholder="Stablecoin Risk Pt. 1" /></div>
             <div className="form-group"><label className="form-label">Series ID</label><input value={form.series_id || ''} onChange={e => setForm(f => ({...f, series_id: e.target.value}))} /></div>
             <div className="form-group"><label className="form-label">Part #</label><input value={form.part_number || ''} onChange={e => setForm(f => ({...f, part_number: e.target.value.replace(/\D/g,'')}))} /></div>
