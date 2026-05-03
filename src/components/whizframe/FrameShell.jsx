@@ -9,13 +9,14 @@ import SemanticChip from '../SemanticChip';
 import { resolveRiskAccent } from '../../domain/riskAccentPolicy';
 
 export function FrameShell({ frameRef, frame, theme, content, editMode, selectedEl, onSelectEl, styleOverrides, showGrid, aspectRatio, uploadedImages, bgGradient, patternOverlay, strictWhizMode = false, whizEffects = { glow: true, noise: true, intenseAccent: false } }) {
+  const reduceMotion = typeof document !== 'undefined' && document.documentElement?.dataset?.motion === 'reduce';
   const ov = styleOverrides || {};
   const sel = (key, e) => { if (editMode) { e?.stopPropagation(); onSelectEl?.(selectedEl === key ? null : key); } };
   const ec = (key) => editMode ? `wf-editable${selectedEl === key ? ' wf-sel' : ''}` : '';
   const accentResolution = resolveRiskAccent({ frameId: frame?.id, theme, overrides: ov });
   const accentColor = accentResolution.accent;
   const noiseEnabled = !strictWhizMode && whizEffects?.noise !== false;
-  const glowEnabled = !strictWhizMode && whizEffects?.glow !== false;
+  const glowEnabled = !reduceMotion && !strictWhizMode && whizEffects?.glow !== false;
   const intenseAccentEnabled = !strictWhizMode && whizEffects?.intenseAccent === true;
   const accentIntensity = intenseAccentEnabled ? '70' : '50';
 
@@ -122,7 +123,7 @@ export function FrameShell({ frameRef, frame, theme, content, editMode, selected
         style={{
           background: ov.tickerBg || TICKER_CONTRACT.background.default,
           borderBottom: `1px solid ${accentColor}20`,
-          backdropFilter: 'blur(12px)',
+          backdropFilter: reduceMotion ? 'none' : 'blur(12px)',
           height: `${TICKER_CONTRACT.heightPx}px`,
         }}
         onClick={e => sel('ticker', e)}>
@@ -130,6 +131,7 @@ export function FrameShell({ frameRef, frame, theme, content, editMode, selected
           color: ov.tickerColor || accentColor,
           opacity: 0.7,
           animationDuration: `${normalizeTickerSpeed(content.tickerSpeed)}s`,
+          animationPlayState: reduceMotion ? 'paused' : 'running',
           fontFamily: TICKER_CONTRACT.typography.fontFamily,
           fontSize: `${TICKER_CONTRACT.typography.fontSizePx}px`,
           fontWeight: TICKER_CONTRACT.typography.fontWeight,
