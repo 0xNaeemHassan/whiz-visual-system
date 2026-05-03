@@ -8,7 +8,7 @@ const FRAME_TYPE_REQUIREMENTS = Object.freeze({
 const safe = (v) => String(v || '').trim();
 const normalizeConfidence = (value) => ['low', 'medium', 'high'].includes(String(value || '').toLowerCase()) ? String(value).toLowerCase() : 'medium';
 
-export function generateExportSummary({ frame, content = {}, complianceIssues = [], validationWarnings = [] }) {
+export function generateExportSummary({ frame, content = {}, complianceIssues = [], validationWarnings = [], exportProfileDecision = null }) {
   const title = safe(content.title);
   const thesis = safe(content.thesis || content.deck || content.body).slice(0, 280);
   const keyValues = [
@@ -40,6 +40,7 @@ export function generateExportSummary({ frame, content = {}, complianceIssues = 
     dataTimestamps: Array.from(timestamps),
     confidenceSummary,
     exportedAt: new Date().toISOString(),
+    exportProfileDecision: exportProfileDecision || content.exportProfileDecision || null,
   };
 
   return summary;
@@ -61,6 +62,8 @@ export function buildSummaryText(summary = {}) {
     `Frame: #${summary.frameId || 'N/A'} (${summary.frameType || 'default'})`,
     `Trust Level: ${summary.trustLevel || 'Draft'}`,
     `Exported At: ${summary.exportedAt || 'N/A'}`,
+    `Export Preset: ${summary.exportPresetId || 'standard'}`,
+    `Export Params: ${summary.exportParameters ? `${summary.exportParameters.width}x${summary.exportParameters.height}, q=${summary.exportParameters.quality}, citation=${summary.exportParameters.citationMode}, effects=${summary.exportParameters.effectsPolicy}` : 'N/A'}`,
     'Key Values:',
     ...((summary.keyValues || []).map((kv) => `- ${kv.label || 'Unlabeled'}: ${kv.value || 'N/A'}`)),
     'Risk Flags:',
