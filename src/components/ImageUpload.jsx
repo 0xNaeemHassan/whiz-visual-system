@@ -3,15 +3,33 @@ import { computeDecodeSafeDimensions, validateImageFileBeforeDecode } from '../u
 import { createManagedObjectURL, revokeManagedObjectURL } from '../utils/objectUrlManager';
 
 // A1-A14: Complete image upload with position, resize, opacity, rotation, fit controls
-export default function ImageUpload({ label, value, onChange, maxSize = 2, showToast }) {
+const IMAGE_UPLOAD_MAX_EVENTS = 5;
+const IMAGE_UPLOAD_WINDOW_MS = 10000;
+
+export default function ImageUpload({ label, value, onChange, maxSize = 2, showToast, onGuardrailEvent }) {
   const fileRef = useRef(null);
   const [dragging, setDragging] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const uploadAttemptTimestampsRef = useRef([]);
+
+  const canProcessUploadNow = () => {
+    const now = Date.now();
+    uploadAttemptTimestampsRef.current = uploadAttemptTimestampsRef.current.filter((stamp) => now - stamp < IMAGE_UPLOAD_WINDOW_MS);
+    if (uploadAttemptTimestampsRef.current.length >= IMAGE_UPLOAD_MAX_EVENTS) {
+      onGuardrailEvent?.({ inputType: 'image', reason: 'rate_limit', maxAllowed: IMAGE_UPLOAD_MAX_EVENTS });
+      showToast?.(`Too many image uploads in a short window. Wait ${Math.ceil(IMAGE_UPLOAD_WINDOW_MS / 1000)}s and retry.`, 'warning');
+      return false;
+    }
+    uploadAttemptTimestampsRef.current.push(now);
+    return true;
+  };
 
   const handleFile = (file) => {
     if (!file) return;
+    if (!canProcessUploadNow()) return;
     const fileValidation = validateImageFileBeforeDecode(file);
     if (!fileValidation.valid) {
+      onGuardrailEvent?.({ inputType: 'image', reason: 'payload_size', maxAllowed: maxSize * 1024 * 1024 });
       showToast?.(fileValidation.reason, 'error');
       return;
     }
