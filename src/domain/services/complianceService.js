@@ -1,6 +1,7 @@
 import {
   nearestTypeScale, getComplianceIssues, getBrandScore, getEditorValidationReport, SPACING_TOKENS, TABLE_STANDARD_TOKENS,
 } from '../../utils/editorCompliance.js';
+import { classifyProvenanceFreshness, FRESHNESS_STATUS, resolveMetricClassPolicy } from '../provenanceFreshnessPolicy.js';
 
 export function computeCompliance({ overrides, content }) {
   return getComplianceIssues({ overrides, content });
@@ -93,10 +94,22 @@ export function runTrustPreflightOrchestrator({ content = {}, strictMode = true,
   stats.forEach((stat, idx) => { if (!hasCompleteProvenance(stat?.provenance)) addIssue('provenance-completeness', 'blocking', `content.stats[${idx}].provenance`, 'Stat provenance is incomplete.'); });
   tableRows.forEach((row, idx) => { if (!hasCompleteProvenance(row?.provenance)) addIssue('provenance-completeness', 'blocking', `content.tableRows[${idx}].provenance`, 'Table row provenance is incomplete.'); });
 
-  const today = new Date().toISOString().slice(0, 10);
-  const isFuture = (dateValue) => /^\d{4}-\d{2}-\d{2}$/.test(dateValue) && dateValue > today;
-  [...stats.map((x, idx) => ({ date: normalize(x?.provenance?.date), fieldPath: `content.stats[${idx}].provenance.date` })), ...tableRows.map((x, idx) => ({ date: normalize(x?.provenance?.date), fieldPath: `content.tableRows[${idx}].provenance.date` }))].forEach(({ date, fieldPath }) => {
-    if (isFuture(date)) addIssue('freshness', 'warning', fieldPath, 'Provenance date is in the future.');
+  const freshnessRows = [
+    ...stats.map((x, idx) => ({ metricClass: 'market', provenance: x?.provenance, fieldPath: `content.stats[${idx}].provenance.date` })),
+    ...tableRows.map((x, idx) => ({ metricClass: 'quarterlyFundamentals', provenance: x?.provenance, fieldPath: `content.tableRows[${idx}].provenance.date` })),
+  ];
+  freshnessRows.forEach(({ metricClass, provenance, fieldPath }) => {
+    const freshness = classifyProvenanceFreshness({ provenance, metricClass });
+    const policy = resolveMetricClassPolicy(metricClass);
+    if (freshness.status === FRESHNESS_STATUS.STALE) {
+      addIssue('freshness', policy.level, fieldPath, `Stale provenance for ${metricClass} (age ${freshness.ageDays}d, threshold ${freshness.maxAgeDays}d). Remediation: ${policy.remediation}`);
+    }
+    if (freshness.status === FRESHNESS_STATUS.FUTURE_DATE) {
+      addIssue('freshness', 'warning', fieldPath, `Future-dated provenance for ${metricClass}. Remediation: ${policy.remediation}`);
+    }
+    if (freshness.status === FRESHNESS_STATUS.UNKNOWN) {
+      addIssue('freshness', 'warning', fieldPath, `Missing/invalid provenance date for ${metricClass}. Remediation: ${policy.remediation}`);
+    }
   });
 
   stats.forEach((stat, idx) => {
@@ -110,7 +123,7 @@ export function runTrustPreflightOrchestrator({ content = {}, strictMode = true,
     const value = normalize(stat?.value);
     if (value.includes('%')) units.add('percent');
     if (value.includes('$')) units.add('currency');
-    if (value.match(/(k|m|b|t)/i)) units.add('magnitude');
+    if (value.match(/\b(k|m|b|t)\b/i)) units.add('magnitude');
     if (units.size > 1) addIssue('unit-compatibility', 'warning', `content.stats[${idx}].value`, 'Mixed unit families detected across stats.');
   });
 

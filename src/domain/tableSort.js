@@ -40,3 +40,22 @@ export function applyDefaultSort(tableRows = [], tableHeaders = [], defaultSort)
     return String(left).localeCompare(String(right), undefined, { sensitivity: 'base' }) * direction;
   });
 }
+
+export function applyDefaultSortWithMetadata(tableRows = [], tableHeaders = [], defaultSort, tableUnitMetadata = []) {
+  if (!defaultSort || !Array.isArray(tableRows) || tableRows.length === 0) return tableRows;
+  const columnIndex = tableHeaders.findIndex((header) => header === defaultSort.column);
+  if (columnIndex < 0) return tableRows;
+  const key = `col${columnIndex + 1}`;
+  const direction = defaultSort.direction === 'asc' ? 1 : -1;
+  return [...tableRows].sort((a, b) => {
+    const left = a?.[key] ?? '';
+    const right = b?.[key] ?? '';
+    if (defaultSort.mode === 'numeric') {
+      const leftMeta = tableUnitMetadata?.[tableRows.indexOf(a)]?.[key];
+      const rightMeta = tableUnitMetadata?.[tableRows.indexOf(b)]?.[key];
+      const compatible = leftMeta?.kind && rightMeta?.kind && leftMeta.kind === rightMeta.kind && leftMeta.canonicalUnit === rightMeta.canonicalUnit;
+      if (compatible) return (leftMeta.canonicalValue - rightMeta.canonicalValue) * direction;
+    }
+    return String(left).localeCompare(String(right), undefined, { sensitivity: 'base' }) * direction;
+  });
+}
