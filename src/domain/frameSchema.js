@@ -1,4 +1,4 @@
-import { resolveFrameContract } from './frameContracts';
+import { resolveFrameContract } from './frameContracts.js';
 
 const VALID_TIERS = new Set(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']);
 const VALID_DIFFICULTIES = new Set(['easy', 'medium', 'hard']);
