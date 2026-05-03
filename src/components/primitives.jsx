@@ -2,13 +2,15 @@ import React from 'react';
 
 let labeledFieldIdCounter = 0;
 
-export function AccessibleIconButton({ label, title, children, type = 'button', ...props }) {
+export function IconButton({ label, title, children, type = 'button', ...props }) {
   return (
     <button type={type} aria-label={label} title={title || label} {...props}>
       {children}
     </button>
   );
 }
+
+export const AccessibleIconButton = IconButton;
 
 export function LabeledField({ label, id, className = 'form-group', labelClassName = 'form-label', children, style }) {
   const fallbackId = React.useMemo(() => {
