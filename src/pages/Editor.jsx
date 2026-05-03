@@ -260,6 +260,9 @@ function DesignPanel({selectedEl,setSelectedEl,overrides,setOverrides,theme,bgGr
  * @param {{ activeFontPairing?: {body?:string}|null, showToast: (message:string, kind?:string)=>void, activeTheme: Theme, setActiveTheme: (theme:Theme)=>void, editingFrame?: any, clearEditingFrame?: ()=>void, newFrameSignal:number, isActive:boolean }} props
  */
 export default function Editor({ activeFontPairing,showToast,activeTheme,setActiveTheme,editingFrame,clearEditingFrame,newFrameSignal,isActive}){
+  const editorRootRef = useRef(null);
+  const overflowTriggerRef = useRef(null);
+  const lastTriggerRef = useRef(null);
   const[saves,setSaves]=useLocalStorage('whiz-saves',[]);
   const[frameId,setFrameId]=useState(editingFrame||4);
   const[theme,setTheme]=useState(activeTheme);
@@ -305,6 +308,36 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const [showTableImportModal, setShowTableImportModal] = useState(false);
   const [tableImportText, setTableImportText] = useState('');
   const [tableImportReport, setTableImportReport] = useState(null);
+  const focusableSelector = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  const bindFocusTrap = useCallback((isOpen, selector) => {
+    if (!isOpen) return () => {};
+    const root = editorRootRef.current || document;
+    const container = root.querySelector(selector);
+    if (!container) return () => {};
+    if (document.activeElement instanceof HTMLElement) lastTriggerRef.current = document.activeElement;
+    const focusables = Array.from(container.querySelectorAll(focusableSelector));
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    first?.focus();
+    const onKeyDown = (event) => {
+      if (event.key !== 'Tab' || !first || !last) return;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    container.addEventListener('keydown', onKeyDown);
+    return () => container.removeEventListener('keydown', onKeyDown);
+  }, []);
+  const restoreFocus = useCallback((isOpen) => {
+    if (isOpen) return;
+    if (lastTriggerRef.current?.focus) {
+      window.requestAnimationFrame(() => lastTriggerRef.current?.focus());
+    }
+  }, []);
 
   // NOTE: editingFrame is now {frameId, serial, issue}; compare serial to detect re-opens
   useEffect(()=>{
@@ -795,6 +828,19 @@ Apply these auto-corrections?`);
     canRedoAny: () => canRedo,
   }), [exportPNG, exportWebP, content.title, showToast, runValidationCheck, runUndo, runRedo, saves.length, canUndo, canRedo]);
   useEffect(()=>{if(!isActive)return undefined;const h=e=>{const command=commandRegistry.find(c=>matchesShortcut(e,c.shortcut)||matchesShortcut(e,c.shortcut.replace('Cmd','Ctrl')));if(!command||!command.enabled())return;e.preventDefault();command.handler();};window.addEventListener('keydown',h);return()=>window.removeEventListener('keydown',h);},[isActive,commandRegistry]);
+  useEffect(() => bindFocusTrap(showSaveModal, '.modal-overlay.open .modal'), [showSaveModal, bindFocusTrap]);
+  useEffect(() => bindFocusTrap(showLoadModal, '.modal-overlay.open .modal'), [showLoadModal, bindFocusTrap]);
+  useEffect(() => bindFocusTrap(showTableImportModal, '.modal-overlay.open .modal'), [showTableImportModal, bindFocusTrap]);
+  useEffect(() => bindFocusTrap(showCommandPalette, '.modal-overlay.open .modal'), [showCommandPalette, bindFocusTrap]);
+  useEffect(() => bindFocusTrap(Boolean(pendingLoadSave && pendingSaveDiff), '.modal-overlay.open .modal'), [pendingLoadSave, pendingSaveDiff, bindFocusTrap]);
+  useEffect(() => bindFocusTrap(Boolean(showDeleteConfirm), '.confirm-overlay .confirm-box'), [showDeleteConfirm, bindFocusTrap]);
+  useEffect(() => bindFocusTrap(showAutosavePrompt, '.confirm-overlay .confirm-box'), [showAutosavePrompt, bindFocusTrap]);
+  useEffect(() => restoreFocus(showSaveModal), [showSaveModal, restoreFocus]);
+  useEffect(() => restoreFocus(showLoadModal), [showLoadModal, restoreFocus]);
+  useEffect(() => restoreFocus(showTableImportModal), [showTableImportModal, restoreFocus]);
+  useEffect(() => restoreFocus(showCommandPalette), [showCommandPalette, restoreFocus]);
+  useEffect(() => restoreFocus(Boolean(pendingLoadSave && pendingSaveDiff)), [pendingLoadSave, pendingSaveDiff, restoreFocus]);
+  useEffect(() => restoreFocus(Boolean(showDeleteConfirm)), [showDeleteConfirm, restoreFocus]);
   // NOTE: Scroll frame list to top when search changes
   useEffect(()=>{if(frameListRef.current)frameListRef.current.scrollTop=0;},[frameSearch,filteredFrames]);
 
@@ -808,7 +854,7 @@ Apply these auto-corrections?`);
   const virtualBottomPad = Math.max(0, (historyCap.length - (virtualStart + virtualCount)) * HISTORY_ROW_HEIGHT);
 
   return(
-    <div className="editor-wrap">
+    <div className="editor-wrap" ref={editorRootRef}>
       <div className="editor-action-bar">
         <div className="editor-action-group">
           <button className="btn btn-primary btn-sm" onClick={()=>{setShowSaveModal(true);trackActionBar('save','primary',mobileTab==='preview'?'mobile':'desktop');}}>Save</button>
@@ -820,7 +866,7 @@ Apply these auto-corrections?`);
           <button className="btn btn-secondary btn-sm" onClick={()=>{exportPNG();trackActionBar('export','primary',mobileTab==='preview'?'mobile':'desktop');}} disabled={exporting}>Export</button>
           <button className="btn btn-secondary btn-sm" onClick={()=>{triggerImport();trackActionBar('import','overflow',mobileTab==='preview'?'mobile':'desktop');}}>Import</button>
           <div className="editor-action-overflow">
-            <button className="btn btn-ghost btn-sm" onClick={()=>setShowActionOverflow(v=>!v)}>More ▾</button>
+            <button ref={overflowTriggerRef} className="btn btn-ghost btn-sm" onClick={()=>{lastTriggerRef.current=overflowTriggerRef.current;setShowActionOverflow(v=>!v);}}>More ▾</button>
             {showActionOverflow && <div className="editor-action-overflow-menu">
               <button className="btn btn-ghost btn-sm" onClick={()=>{handleDuplicate(mobileTab==='preview'?'mobile':'desktop');setShowActionOverflow(false);}}>Duplicate</button>
             </div>}
@@ -828,7 +874,7 @@ Apply these auto-corrections?`);
         </div>
         <input id="editor-action-import" type="file" accept=".json" onChange={importJSON} style={{display:'none'}} />
       </div>
-      <div className="editor-mob-tabs">{[{id:'frame',label:'Frame'},{id:'preview',label:'Preview'},{id:'content',label:'Content'}].map(t=>(<div key={t.id} className={`editor-mob-tab ${mobileTab===t.id?'active':''}`} onClick={()=>setMobileTab(t.id)}>{t.label}</div>))}</div>
+      <div className="editor-mob-tabs">{[{id:'frame',label:'Frame'},{id:'preview',label:'Preview'},{id:'content',label:'Content'}].map(t=>(<button key={t.id} type="button" className={`editor-mob-tab ${mobileTab===t.id?'active':''}`} onClick={()=>setMobileTab(t.id)}>{t.label}</button>))}</div>
       <div className="mobile-workflow-bar">
         <button className="btn btn-secondary btn-sm" onClick={()=>setMobileTab('content')}>Quick Edit</button>
         <button className="btn btn-secondary btn-sm" onClick={()=>setMobileTab('preview')}>Validate</button>
