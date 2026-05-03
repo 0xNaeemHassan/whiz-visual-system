@@ -520,6 +520,10 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     const collisionReport = detectEntityCollisions(tableImportReport.validRows || []);
     track(TELEMETRY_EVENTS.DUPLICATE_RESOLUTION,{source:'row_edit',duplicateGroups:collisionReport.duplicateGroups.length,fuzzyPairs:collisionReport.fuzzyPairs.length,unresolvedHighConfidence:collisionReport.fuzzyPairs.filter((pair)=>pair.confidence>=0.9).length});
   }, [tableImportText]);
+  const toggleOutlierAcknowledgement = (target) => {
+    setRowDeltaFlags((prev) => prev.map((flag) => (flag.rowIndex === target.rowIndex && flag.checkType === target.checkType && (flag.previousRowIndex ?? null) === (target.previousRowIndex ?? null)) ? { ...flag, acknowledged: !flag.acknowledged } : flag));
+  };
+
   const exportInvalidImportRows = () => {
     if (!tableImportReport?.invalidRows?.length) {
       showToast('No invalid rows to export.', 'info');
@@ -536,6 +540,22 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     URL.revokeObjectURL(url);
     showToast(`Exported ${tableImportReport.invalidRows.length} invalid rows report.`, 'info');
   };
+
+  const outlierReviewPanel = rowDeltaFlags.length ? (
+    <div className="editor-section">
+      <div className="editor-section-title">Outlier Review</div>
+      <div style={{fontSize:10,color:'var(--muted)',marginBottom:8}}>Strict publish requires acknowledgement for each flagged outlier.</div>
+      <div style={{display:'grid',gap:6,maxHeight:180,overflow:'auto'}}>
+        {rowDeltaFlags.map((flag, idx) => (
+          <label key={`${flag.rowIndex}-${flag.checkType}-${idx}`} style={{display:'grid',gap:2,padding:'6px 8px',border:'1px solid var(--border)',borderRadius:8}}>
+            <span style={{fontSize:11,color:'var(--text)'}}>{flag.checkType==='delta'?'Row delta':'Series value'} row {flag.rowIndex + 1} · {flag.method.toUpperCase()}</span>
+            <span style={{fontSize:10,color:'var(--muted)'}}>{flag.explanation}</span>
+            <label style={{fontSize:10,display:'flex',gap:6,alignItems:'center'}}><input type="checkbox" checked={Boolean(flag.acknowledged)} onChange={()=>toggleOutlierAcknowledgement(flag)} />Acknowledge</label>
+          </label>
+        ))}
+      </div>
+    </div>
+  ) : null;
 
   const selectedFrame=FRAMES.find(f=>f.id===frameId)||FRAMES[0];
   const activeFramePitfalls = useMemo(() => getFramePitfalls(frameId), [frameId]);
@@ -775,6 +795,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   }), [stateValidation.valid, editorValidation.errors.length, complianceIssues.length, content.sourceLinks]);
   const missingStatProvenance = (content.stats || []).some((stat) => !isPublishReadyProvenance(stat?.provenance));
   const missingTableProvenance = (content.tableRows || []).some((row) => !isPublishReadyProvenance(row?.provenance));
+  const unacknowledgedOutlierFlags = rowDeltaFlags.filter((flag) => !flag.acknowledged);
   const trustLevel = useMemo(() => computeTrustLevel({
     workflowPhase,
     stateValidation,
@@ -790,7 +811,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const buildExportSummary=(normalizedContent)=>generateExportSummary({frame:activeFrame,content:{...content,...normalizedContent},complianceIssues,validationWarnings:editorValidation.warnings});
   const exportSummarySidecars=(baseName,summary,imageFileName)=>{const payload={...summary,imageFileName};downloadFile(`${baseName}.summary.json`,new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));downloadFile(`${baseName}.summary.txt`,new Blob([buildSummaryText(payload)],{type:'text/plain'}));downloadFile(`${baseName}.manifest.signoff.json`,new Blob([JSON.stringify({reviewState,signoffRecord,savedAt:new Date().toISOString()},null,2)],{type:'application/json'}));};
 
-  const ensureActionAllowed=(action)=>{if(action==='publish'&&workflowPhase!=='publish-ready'){showToast('Publish actions require publish-ready phase.','error');return false;}if(action==='publish'){const requiresApproval=collaborationMode==='collaborative'||requireSignoffInSolo;if(requiresApproval&&reviewState!=='approved'){showToast('Publish blocked: approval sign-off is required first.','error');return false;}}if(action==='export'&&workflowPhase==='draft'){showToast('Export actions require review or publish-ready phase.','error');return false;}if(!stateValidation.valid){showToast(`Blocked by validation: ${stateValidation.codes.join(', ')}`,'error');return false;}if(action==='publish'&&complianceIssues.length){showToast(`Blocked by compliance: ${complianceIssues[0]}`,'error');return false;}return true;};
+  const ensureActionAllowed=(action)=>{if(action==='publish'&&workflowPhase!=='publish-ready'){showToast('Publish actions require publish-ready phase.','error');return false;}if(action==='publish'){const requiresApproval=collaborationMode==='collaborative'||requireSignoffInSolo;if(requiresApproval&&reviewState!=='approved'){showToast('Publish blocked: approval sign-off is required first.','error');return false;}}if(action==='export'&&workflowPhase==='draft'){showToast('Export actions require review or publish-ready phase.','error');return false;}if(!stateValidation.valid){showToast(`Blocked by validation: ${stateValidation.codes.join(', ')}`,'error');return false;}if(action==='publish'&&complianceIssues.length){showToast(`Blocked by compliance: ${complianceIssues[0]}`,'error');return false;}if(action==='publish'&&strictMode&&unacknowledgedOutlierFlags.length){showToast(`Strict publish blocked: acknowledge ${unacknowledgedOutlierFlags.length} outlier flag(s) first.`,'error');return false;}return true;};
 
 
   const validateExportTypography=()=>{const textValidation=validateEditorTextMinimum({overrides,content,minFontSizePx:12});if(!textValidation.valid){const msg=textValidation.violations.map(v=>`${v.region} ${v.fontSize}px`).join(', ');showToast(`Export blocked: minimum text size is 12px (${msg}).`,'error');return false;}return true;};
@@ -1276,6 +1297,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
               );
             })()}
           </div>
+          {outlierReviewPanel}
           <div className="editor-section">
             <div className="editor-section-title">Deep-Dive Scaffold</div>
             <div className="form-group"><label className="form-label">Thesis</label><textarea value={content.thesis||''} onChange={e=>updateContent('thesis',e.target.value)} rows={2} placeholder="What is the core investment/research claim?"/></div>
