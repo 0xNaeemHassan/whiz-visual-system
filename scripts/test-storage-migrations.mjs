@@ -26,7 +26,7 @@ const EXPECTED = {
   legacy_saves_migrated: {
     version: STORAGE_SCHEMA_VERSION,
     data: [
-      { id: 'a', tags: ['one', 'two'], folder: '', status: 'published' },
+      { id: 'a', tags: [], folder: '', status: 'published' },
       { id: 'b', tags: [], folder: 'ops' },
     ],
   },
