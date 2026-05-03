@@ -82,7 +82,7 @@ export function runExportPreflight({ content = {}, overrides = {}, theme = {}, w
 
 const TRUST_BLOCKING_SEVERITIES = new Set(['blocking']);
 
-export function runTrustPreflightOrchestrator({ content = {}, strictMode = true, exceptionReason = '' } = {}) {
+export function runTrustPreflightOrchestrator({ content = {}, strictMode = true, exceptionReason = '', requireSignoff = false, signoffRecord = {}, reviewState = 'draft' } = {}) {
   const normalize = (value) => String(value || '').trim();
   const stats = Array.isArray(content?.stats) ? content.stats : [];
   const tableRows = Array.isArray(content?.tableRows) ? content.tableRows : [];
@@ -120,6 +120,10 @@ export function runTrustPreflightOrchestrator({ content = {}, strictMode = true,
     if ((label.includes('apy') || label.includes('rate') || label.includes('%')) && !value.includes('%')) addIssue('impossible-combinations', 'blocking', `content.stats[${idx}].value`, 'Rate-like labels should include percentage values.');
   });
 
+
+  const signoffReady = !requireSignoff || (reviewState === 'approved' && String(signoffRecord?.reviewerName || '').trim() && String(signoffRecord?.reviewerId || '').trim() && Object.values(signoffRecord?.checklist || {}).every(Boolean));
+  if (!signoffReady) addIssue('signoff', 'blocking', 'signoffRecord', 'Approval sign-off is incomplete for publish actions.');
+
   const seen = new Map();
   stats.forEach((stat, idx) => {
     const key = `${normalize(stat?.label).toLowerCase()}::${normalize(stat?.value).toLowerCase()}`;
@@ -131,6 +135,7 @@ export function runTrustPreflightOrchestrator({ content = {}, strictMode = true,
   const blocking = issues.filter((issue) => TRUST_BLOCKING_SEVERITIES.has(issue.severity));
   const warnings = issues.filter((issue) => issue.severity === 'warning');
   const bypassed = !strictMode && blocking.length > 0;
+  const summary = { blocking: blocking.length, warnings: warnings.length, total: issues.length };
   return {
     strictMode,
     exceptionReason: bypassed ? normalize(exceptionReason) || 'non-strict mode override' : '',
@@ -145,6 +150,8 @@ export function runTrustPreflightOrchestrator({ content = {}, strictMode = true,
     blocking,
     warnings,
     canProceed: blocking.length === 0 || !strictMode,
+    bypassPrevented: strictMode && blocking.length > 0,
+    summary,
     generatedAt: new Date().toISOString(),
   };
 }
