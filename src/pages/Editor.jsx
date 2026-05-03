@@ -31,6 +31,7 @@ import { shouldBlockStrictExportForUnsnapshottedEdits } from '../domain/export/e
 import { useDialogFocus } from '../utils/focusTrap';
 import { validateCriticalNumericFields } from '../domain/criticalFieldValidator';
 import { createDefaultEvidenceLedger, normalizeEvidenceLedger, validateEvidenceLedger } from '../domain/evidenceLedger';
+import { scoreFrameComplexity, classifyComplexity } from '../domain/services/frameComplexityService.js';
 
 /** @typedef {import('../types/canonical').FrameContent} FrameContent */
 /** @typedef {import('../types/canonical').StyleOverrides} StyleOverrides */
@@ -1044,6 +1045,8 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const checklistGroups = useMemo(() => {
     const stateValidation = validateEditorState({ frameId, theme, content, overrides, uploadedImages }, { strictMode: strictWhizMode });
     const strictViolations = strictWhizMode ? stateValidation.errors.filter((error) => error.code === 'STRICT_STYLE_OVERRIDE_BLOCKED') : [];
+    const frameComplexity = scoreFrameComplexity({ content, overrides, uploadedImages, whizEffects, frameLayout: selectedFrame?.layout || frameId });
+    const frameComplexityClass = classifyComplexity(frameComplexity.score);
     return [
       {
         id: 'schema',
@@ -1076,6 +1079,21 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
         ],
       },
       {
+        id: 'complexity',
+        label: 'Frame Complexity',
+        checks: [
+          {
+            id: 'frame-complexity-budget',
+            label: `Complexity (${frameComplexityClass})`,
+            passed: frameComplexityClass !== 'critical',
+            blocking: strictWhizMode,
+            details: `score=${frameComplexity.score.toFixed(3)} · ${JSON.stringify(frameComplexity.breakdown)}`,
+            action: 'design',
+            actionLabel: 'Simplify Design',
+          },
+        ],
+      },
+      {
         id: 'strict-mode',
         label: 'Strict Mode Constraints',
         checks: [
@@ -1091,7 +1109,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
         ],
       },
     ];
-  }, [frameId, theme, content, overrides, uploadedImages, strictWhizMode, complianceIssues]);
+  }, [frameId, theme, content, overrides, uploadedImages, whizEffects, selectedFrame?.layout, strictWhizMode, complianceIssues]);
 
   const readinessSummary = useMemo(() => {
     const checks = checklistGroups.flatMap((group) => group.checks);
