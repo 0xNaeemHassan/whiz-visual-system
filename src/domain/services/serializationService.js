@@ -1,6 +1,6 @@
 import { normalizeContentTaxonomy } from '../../utils/contentNormalization';
 
-export function buildFrameSave({ frameId, theme, content, overrides, aspectRatio, bgGradient, patternOverlay }) {
+export function buildFrameSave({ frameId, theme, content, overrides, aspectRatio, bgGradient, patternOverlay, saveMetadata = {} }) {
   const normalization = normalizeContentTaxonomy(content || {});
   return {
     frameId,
@@ -11,6 +11,7 @@ export function buildFrameSave({ frameId, theme, content, overrides, aspectRatio
     bgGradient,
     patternOverlay,
     savedAt: Date.now(),
+    saveMetadata,
     telemetry: {
       taxonomyAutoCorrected: normalization.compliance.autoCorrected.length > 0,
       taxonomyInvalidCount: normalization.compliance.invalid.length,
@@ -26,6 +27,7 @@ export function parseImportedState(raw) {
   return {
     ...raw,
     content: normalization.content,
+    saveMetadata: raw.saveMetadata || {},
     telemetry: {
       ...(raw.telemetry || {}),
       taxonomyAutoCorrected: normalization.compliance.autoCorrected.length > 0,
