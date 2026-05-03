@@ -23,5 +23,20 @@ for (const file of targets) {
   }
 }
 
+
+const colorOnlyStatusChecks = [
+  { file: 'src/components/whizframe/FrameShell.jsx', pattern: /riskAcc, background: `\$\{riskAcc\}18`[\s\S]{0,120}>\{layer\.risk/, message: 'TrustStack risk badge must use SemanticMarker text+shape marker.' },
+  { file: 'src/components/whizframe/FrameShell.jsx', pattern: /SeverityDots/, message: 'Threat model must not rely on dots-only severity indicator.' },
+];
+
+for (const check of colorOnlyStatusChecks) {
+  const text = readFileSync(check.file, 'utf8');
+  if (check.pattern.test(text)) {
+    console.error(`[semantic-chip] ${check.file}: ${check.message}`);
+    failed = true;
+  }
+}
+
+
 if (failed) process.exit(1);
 console.log('[semantic-chip] compliance checks passed');

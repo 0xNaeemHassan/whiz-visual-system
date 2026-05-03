@@ -1,5 +1,33 @@
 import React from 'react';
 
+let labeledFieldIdCounter = 0;
+
+export function AccessibleIconButton({ label, title, children, type = 'button', ...props }) {
+  return (
+    <button type={type} aria-label={label} title={title || label} {...props}>
+      {children}
+    </button>
+  );
+}
+
+export function LabeledField({ label, id, className = 'form-group', labelClassName = 'form-label', children, style }) {
+  const fallbackId = React.useMemo(() => {
+    labeledFieldIdCounter += 1;
+    return `labeled-field-${labeledFieldIdCounter}`;
+  }, []);
+  const fieldId = id || fallbackId;
+  const control = React.cloneElement(children, {
+    id: children.props.id || fieldId,
+    'aria-labelledby': children.props['aria-labelledby'] || `${fieldId}-label`,
+  });
+  return (
+    <div className={className} style={style}>
+      <label id={`${fieldId}-label`} className={labelClassName} htmlFor={fieldId}>{label}</label>
+      {control}
+    </div>
+  );
+}
+
 const CHIP_TOKENS = {
   status: {
     published: { color: '#3CE6A6', background: 'rgba(60,230,166,0.12)' },
