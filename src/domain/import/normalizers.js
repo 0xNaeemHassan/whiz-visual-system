@@ -49,7 +49,8 @@ function normalizeBySchema(raw, schema) {
 }
 
 export function normalizeFrameContent(raw, defaults = {}) {
-  const merged = { ...defaults, ...normalizeBySchema(raw, FRAME_CONTENT_SCHEMA) };
+  const source = toObject(raw, {});
+  const merged = { ...defaults, ...source, ...normalizeBySchema(source, FRAME_CONTENT_SCHEMA) };
   const normalizedDate = normalizeDateInput(merged.date);
   if (normalizedDate.valid) merged.date = normalizedDate.displayDate;
   return normalizeContentTaxonomy(merged).content;
