@@ -2,6 +2,7 @@ import {
   nearestTypeScale, getComplianceIssues, getBrandScore, getEditorValidationReport, SPACING_TOKENS, TABLE_STANDARD_TOKENS,
 } from '../../utils/editorCompliance.js';
 import { classifyProvenanceFreshness, FRESHNESS_STATUS, resolveMetricClassPolicy } from '../provenanceFreshnessPolicy.js';
+import { scoreFrameComplexity, classifyComplexity } from './frameComplexityService.js';
 
 export function computeCompliance({ overrides, content }) {
   return getComplianceIssues({ overrides, content });
@@ -75,6 +76,9 @@ export function runExportPreflight({ content = {}, overrides = {}, theme = {}, w
   add('color-only-semantics', 'Color-only semantics', 'warning', Boolean(content?.topicTag || '').trim().length > 0, 'Add topic tag or semantic chips to avoid color-only cues.');
   const reducedMotion = whizEffects?.glow === false && whizEffects?.noise === false;
   add('reduced-motion-friendly', 'Reduced motion friendly', 'warning', reducedMotion, 'Disable glow/noise for lower motion surfaces.');
+  const complexity = scoreFrameComplexity({ content, overrides, whizEffects });
+  const complexityLevel = classifyComplexity(complexity.score);
+  add('frame-complexity', 'Frame complexity budget', complexityLevel === 'critical' ? 'critical' : 'warning', complexityLevel !== 'critical', `score=${complexity.score.toFixed(3)} level=${complexityLevel} breakdown=${JSON.stringify(complexity.breakdown)}`);
   const criticalFailures = checks.filter((c) => c.severity === 'critical' && !c.passed);
   const warnings = checks.filter((c) => c.severity === 'warning' && !c.passed);
   return { checks, passed: criticalFailures.length === 0, hasWarnings: warnings.length > 0, criticalFailures, warnings, generatedAt: new Date().toISOString() };
