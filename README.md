@@ -21,6 +21,6 @@ For each migration note, include:
 - required action,
 - safe fallback (if any).
 
-## Quality Governance
+## Coverage policy
 
-Test gate classification, promotion policy, and escalation workflow are documented in `docs/test-governance.md`.
+Coverage thresholds, CI enforcement, and exception handling are documented in `docs/coverage-policy.md`.

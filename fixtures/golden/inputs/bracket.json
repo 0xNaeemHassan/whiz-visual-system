@@ -1,0 +1,14 @@
+{
+  "bracketRound1":[
+    {"leftSeed":"1","leftName":"Alpha","leftScore":"90","rightSeed":"8","rightName":"Theta","rightScore":"70"},
+    {"leftSeed":"4","leftName":"Delta","leftScore":"66","rightSeed":"5","rightName":"Epsilon","rightScore":"72"},
+    {"leftSeed":"2","leftName":"Beta","leftScore":"88","rightSeed":"7","rightName":"Eta","rightScore":"77"},
+    {"leftSeed":"3","leftName":"Gamma","leftScore":"81","rightSeed":"6","rightName":"Zeta","rightScore":"79"}
+  ],
+  "bracketRound2":[
+    {"leftScore":"73","rightScore":"76"},
+    {"leftScore":"84","rightScore":"79"}
+  ],
+  "bracketRound3":[{"leftScore":"92","rightScore":"85"}],
+  "bracketWinner":{"name":"","seed":"","score":""}
+}

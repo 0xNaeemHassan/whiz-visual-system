@@ -1,0 +1,72 @@
+name: Incident report
+about: Report a production incident with taxonomy metadata
+labels: [incident]
+body:
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+    validations:
+      required: true
+  - type: dropdown
+    id: type
+    attributes:
+      label: Type
+      options:
+        - incident
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - sev0
+        - sev1
+        - sev2
+        - sev3
+        - sev4
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - ui
+        - editor
+        - analytics
+        - export
+        - performance
+        - accessibility
+        - infrastructure
+        - release
+    validations:
+      required: true
+  - type: dropdown
+    id: regression
+    attributes:
+      label: Regression
+      options:
+        - "true"
+        - "false"
+    validations:
+      required: true
+  - type: dropdown
+    id: customer-impact
+    attributes:
+      label: Customer impact
+      options:
+        - none
+        - low
+        - medium
+        - high
+        - critical
+    validations:
+      required: true
+  - type: textarea
+    id: timeline
+    attributes:
+      label: Timeline
+    validations:
+      required: true

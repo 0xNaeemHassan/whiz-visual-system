@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://whiz.local/schemas/taxonomy.schema.json",
+  "title": "Change and Incident Taxonomy",
+  "type": "object",
+  "required": ["type", "severity", "area", "regression", "customerImpact"],
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": ["feature", "fix", "refactor", "docs", "chore", "incident"]
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["sev0", "sev1", "sev2", "sev3", "sev4"]
+    },
+    "area": {
+      "type": "string",
+      "enum": ["ui", "editor", "analytics", "export", "performance", "accessibility", "infrastructure", "release"]
+    },
+    "regression": {
+      "type": "boolean"
+    },
+    "customerImpact": {
+      "type": "string",
+      "enum": ["none", "low", "medium", "high", "critical"]
+    }
+  },
+  "additionalProperties": false
+}
