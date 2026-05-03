@@ -14,7 +14,8 @@
     "check:touch-targets": "node scripts/check-touch-targets.mjs",
     "check:perf": "node scripts/perf-smoke-check.mjs",
     "test:watch": "vitest",
-    "coverage": "vitest run --coverage"
+    "coverage": "vitest run --coverage",
+    "check:governance": "node scripts/check-governance-artifacts.mjs"
   },
   "dependencies": {
     "html2canvas": "^1.4.1",

@@ -1,5 +1,9 @@
 # Rollback Runbook
 
+- **Owner:** Release Engineering
+- **Last Reviewed:** 2026-05-03
+- **Review Cadence:** Quarterly
+
 ## Purpose
 This runbook defines when and how to execute a rollback for application deployments, with explicit checks for data and storage compatibility.
 
@@ -134,3 +138,17 @@ Rollback is complete only when:
 - Required data/storage compatibility checks are complete.
 - Communications are sent and incident status is updated.
 - A post-incident action list is opened.
+
+## Governance Dependencies
+
+Rollback and recovery decisions depend on the following controls:
+
+- **Signed export manifests:** each export package includes manifest signature and checksum verification step before republish.
+- **Tamper-evident provenance chain:** artifact lineage is modeled as append-only hash-linked events (`prev_digest`, `event_digest`, `signature`).
+- **Hosted heartbeat checks:** `/healthz` and synthetic editor/export probes execute every 60 seconds from two regions.
+- **Alert routing:** SEV-1 pages primary on-call + incident channel; SEV-2 routes to service rotation with 15-minute acknowledgment SLA.
+- **SLO and error budget policy:** rollback is mandatory when monthly error budget burn exceeds 100% or short-window burn rate exceeds 4x.
+
+See also:
+- `docs/disaster-recovery.md`
+- `docs/data-retention.md`
