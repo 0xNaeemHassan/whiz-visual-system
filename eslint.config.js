@@ -100,6 +100,13 @@ export default [
       'naming/hook-api-naming': 'error',
       'naming/service-symbol-naming': 'error',
       'naming/comment-prefix-convention': 'error',
+
+      'no-restricted-syntax': [
+        'error',
+        { selector: 'JSXAttribute[name.name="dangerouslySetInnerHTML"]', message: 'Unsafe HTML injection is blocked. Use a sanitizer-reviewed renderer.' },
+        { selector: 'CallExpression[callee.property.name="insertAdjacentHTML"]', message: 'insertAdjacentHTML is blocked unless a sanitizer-reviewed utility is used.' },
+        { selector: 'AssignmentExpression[left.property.name="innerHTML"]', message: 'Direct innerHTML assignment is blocked.' },
+      ],
     },
   },
 ];
