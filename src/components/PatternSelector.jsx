@@ -1,5 +1,7 @@
 import { useState } from 'react';
 
+const ROVING_KEYS = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
+
 const PATTERNS = [
   { id: 'none', label: 'None', css: 'none' },
   { id: 'dots', label: 'Dots', css: 'radial-gradient(circle, rgba(255,255,255,0.03) 1px, transparent 1px)' },
@@ -30,16 +32,36 @@ export default function PatternSelector({ value, onChange }) {
     }
   };
 
+
+  const handlePatternKeyDown = (event, pattern) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      select(pattern);
+      return;
+    }
+    if (!ROVING_KEYS.includes(event.key)) return;
+    event.preventDefault();
+    const currentIndex = PATTERNS.findIndex((entry) => entry.id === pattern.id);
+    const offset = ['ArrowRight', 'ArrowDown'].includes(event.key) ? 1 : -1;
+    const nextIndex = (currentIndex + offset + PATTERNS.length) % PATTERNS.length;
+    const nextPattern = PATTERNS[nextIndex];
+    select(nextPattern);
+    requestAnimationFrame(() => {
+      document.querySelector(`.pattern-btn[data-pattern-id="${nextPattern.id}"]`)?.focus();
+    });
+  };
+
   return (
     <div className="pattern-selector">
       <div className="pattern-grid" role="radiogroup" aria-label="Pattern overlays">
         {PATTERNS.map(p => (
-          <button key={p.id}
+          <button key={p.id} data-pattern-id={p.id}
             className={`pattern-btn ${(currentId || 'none') === p.id ? 'active' : ''}`}
             onClick={() => select(p)} title={p.label}
             role="radio"
             aria-checked={(currentId || 'none') === p.id}
-            tabIndex={((currentId || 'none') === p.id) ? 0 : -1}>
+            tabIndex={((currentId || 'none') === p.id) ? 0 : -1}
+            onKeyDown={(event) => handlePatternKeyDown(event, p)}>
             <div className="pattern-preview" style={{
               background: p.id === 'none' ? 'var(--bg-2)' : p.css,
               backgroundSize: SIZES[p.id] || 'auto',

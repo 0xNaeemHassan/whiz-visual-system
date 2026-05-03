@@ -66,6 +66,25 @@ export default function ImageUpload({ label, value, onChange, maxSize = 2, showT
     if (value) onChange({ ...value, [key]: val });
   };
 
+
+  const handleRovingKeyDown = (event, values, activeValue, onSelect, dataAttr) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      onSelect(activeValue);
+      return;
+    }
+    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
+    event.preventDefault();
+    const currentIndex = values.indexOf(activeValue);
+    const offset = ['ArrowRight', 'ArrowDown'].includes(event.key) ? 1 : -1;
+    const nextIndex = (currentIndex + offset + values.length) % values.length;
+    const next = values[nextIndex];
+    onSelect(next);
+    requestAnimationFrame(() => {
+      document.querySelector(`[${dataAttr}="${next}"]`)?.focus();
+    });
+  };
+
   return (
     <div className="image-upload-wrap">
       <div
@@ -120,7 +139,7 @@ export default function ImageUpload({ label, value, onChange, maxSize = 2, showT
                 <span className="prop-label-text" style={{ width: 60 }}>Fit</span>
                 <div className="ww-grid" style={{ flex: 1 }} role="radiogroup" aria-label="Image fit mode">
                   {['contain', 'cover', 'fill'].map(f => (
-                    <button key={f} className={`ww-btn ${(value.fit || 'contain') === f ? 'on' : ''}`} onClick={() => update('fit', f)} role="radio" aria-checked={(value.fit || 'contain') === f} tabIndex={(value.fit || 'contain') === f ? 0 : -1} style={{ fontSize: 9, padding: '3px 6px' }}>{f}</button>
+                    <button key={f} data-fit-option={f} className={`ww-btn ${(value.fit || 'contain') === f ? 'on' : ''}`} onClick={() => update('fit', f)} onKeyDown={(event) => handleRovingKeyDown(event, ['contain', 'cover', 'fill'], value.fit || 'contain', (next) => update('fit', next), 'data-fit-option')} role="radio" aria-checked={(value.fit || 'contain') === f} tabIndex={(value.fit || 'contain') === f ? 0 : -1} style={{ fontSize: 9, padding: '3px 6px' }}>{f}</button>
                   ))}
                 </div>
               </div>
@@ -128,7 +147,7 @@ export default function ImageUpload({ label, value, onChange, maxSize = 2, showT
                 <span className="prop-label-text" style={{ width: 60 }}>Z-Index</span>
                 <div className="ww-grid" style={{ flex: 1 }} role="radiogroup" aria-label="Image layer depth">
                   {[{ l: 'Back', v: 2 }, { l: 'Mid', v: 5 }, { l: 'Front', v: 15 }].map(z => (
-                    <button key={z.v} className={`ww-btn ${(value.zIndex || 10) === z.v ? 'on' : ''}`} onClick={() => update('zIndex', z.v)} role="radio" aria-checked={(value.zIndex || 10) === z.v} tabIndex={(value.zIndex || 10) === z.v ? 0 : -1} style={{ fontSize: 9, padding: '3px 6px' }}>{z.l}</button>
+                    <button key={z.v} data-z-option={z.v} className={`ww-btn ${(value.zIndex || 10) === z.v ? 'on' : ''}`} onClick={() => update('zIndex', z.v)} onKeyDown={(event) => handleRovingKeyDown(event, [2, 5, 15], value.zIndex || 10, (next) => update('zIndex', next), 'data-z-option')} role="radio" aria-checked={(value.zIndex || 10) === z.v} tabIndex={(value.zIndex || 10) === z.v ? 0 : -1} style={{ fontSize: 9, padding: '3px 6px' }}>{z.l}</button>
                   ))}
                 </div>
               </div>
@@ -151,7 +170,7 @@ export default function ImageUpload({ label, value, onChange, maxSize = 2, showT
           role="button"
           tabIndex={0}
           aria-label={`Upload ${label}`}
-          onKeyDown={e => e.key === 'Enter' && fileRef.current?.click()}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileRef.current?.click(); } }}
         >
           <div className="image-upload-icon">↑</div>
           <div className="image-upload-text">Drop image here or click to browse</div>

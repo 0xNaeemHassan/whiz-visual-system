@@ -608,6 +608,15 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
         setEditMode(false);
         setShowSaveModal(false);
         setShowLoadModal(false);
+        setShowCommandPalette(false);
+        setShowTableImportModal(false);
+        setPendingLoadSave(null);
+        setPendingSaveDiff(null);
+        setShowDeleteConfirm(null);
+        setShowShortcutHelp(false);
+        setShowAutosavePrompt(false);
+        setShowMobileCommandSheet(false);
+        setShowActionOverflow(false);
       },
       onGlobalAction: (action, payload) => {
         if (action === 'lockSection') setSectionLocks(prev => ({ ...prev, [payload?.section]: true }));
