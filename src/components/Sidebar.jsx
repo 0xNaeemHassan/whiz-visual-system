@@ -34,31 +34,30 @@ export default function Sidebar({ page, onNav, open, theme, formSections = [], a
 
   return (
     <aside className={`sidebar ${open ? 'open' : ''}`} role="navigation" aria-label="Main navigation">
-      <div className="sidebar-brand"><div className="sidebar-logo"><span style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 18, fontWeight: 700, color: theme.accent, letterSpacing: '-0.02em' }}>WHIZ</span></div><div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: 'var(--dim)', letterSpacing: '0.12em', textTransform: 'uppercase', marginTop: 2 }}>DEFI DESK</div></div>
-      <nav className="sidebar-nav">{NAV_ITEMS.map(item => (<button key={item.id} className={`sidebar-item ${page === item.id ? 'active' : ''}`} onClick={() => onNav(item.id)} aria-label={`Go to ${item.label}`} aria-current={page === item.id ? 'page' : undefined}><span className="sidebar-icon" aria-hidden="true">{item.icon}</span><span className="sidebar-label">{item.label}</span></button>))}</nav>
-
-      {!!formSections.length && <div ref={panelRef} style={{ marginTop: 10, overflowY: 'auto', maxHeight: '42vh', paddingRight: 4 }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
-          {formSections.map(s => <button key={s.id} className="btn btn-ghost btn-sm" onClick={() => jumpTo(s.id)}>{s.title}</button>)}
+      <div className="sidebar-brand">
+        <div className="sidebar-logo">
+          <span className="sidebar-brand-mark" style={{ color: theme.accent }}>WHIZ</span>
         </div>
-        {formSections.map(section => {
-          const isOpen = sectionOpen[section.id] ?? true;
-          return <section key={section.id} id={section.id} className="editor-section">
-            <button className="btn btn-ghost btn-sm w-full" onClick={() => setSectionOpen(prev => ({ ...prev, [section.id]: !isOpen }))} style={{ justifyContent: 'space-between', display: 'flex' }}>
-              <strong>{section.title}</strong><span>{completion[section.id] ? '✓ Complete' : '• In progress'}</span>
-            </button>
-            {isOpen && (section.fields || []).map(field => <div className="form-group" key={field.id}><label className="form-label">{field.label}</label><input id={field.id} value={field.value || ''} onChange={e => onFieldChange?.(field.id, e.target.value)} />{validationErrors[field.id] && <div style={{ color: '#FFB3B3', fontSize: 10, marginTop: 4 }}>{validationErrors[field.id]}</div>}</div>)}
-          </section>;
-        })}
-        <button className="btn btn-ghost btn-sm w-full" onClick={() => panelRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}>↑ Back to top</button>
-      </div>}
-
-      {!!formSections.length && <div style={{ position: 'sticky', bottom: 0, background: 'var(--bg-2)', paddingTop: 8, display: 'grid', gap: 6 }}>
-        <button className="btn btn-secondary btn-sm" onClick={actions.onSave}>Save</button>
-        <button className="btn btn-ghost btn-sm" onClick={actions.onValidate}>Validate</button>
-        <button className="btn btn-primary btn-sm" onClick={actions.onExport}>Export</button>
-      </div>}
-      <div className="sidebar-footer"><div className="sidebar-version">v8.0 — Premium Edition</div></div>
+        <div className="sidebar-brand-sub">DEFI DESK</div>
+      </div>
+      <nav className="sidebar-nav">
+        {NAV_ITEMS.map(item => (
+          <button
+            key={item.id}
+            className={`sidebar-item touch-target ${page === item.id ? 'active' : ''}`}
+            onClick={() => onNav(item.id)}
+            aria-label={`Navigate to ${item.label}`}
+            title={`Navigate to ${item.label}`}
+            aria-current={page === item.id ? 'page' : undefined}
+          >
+            <span className="sidebar-icon" aria-hidden="true">{item.icon}</span>
+            <span className="sidebar-label" title={item.label}>{item.label}</span>
+          </button>
+        ))}
+      </nav>
+      <div className="sidebar-footer">
+        <div className="sidebar-version">v8.0 — Premium Edition</div>
+      </div>
     </aside>
   );
 }
