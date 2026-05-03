@@ -17,6 +17,16 @@
   --border-3:    #353F55;
   --text:        #F0F2F5;
   --text-2:      #D8DCE5;
+
+  --text-primary: #F4F6FA;
+  --text-secondary: #D3DAE6;
+  --text-muted: #A4AFBF;
+  --text-status: #B9C6D9;
+  --bg-surface: #0F1117;
+  --bg-elevated: #161922;
+  --bg-muted: #1C2030;
+  --font-min-body: 12px;
+  --font-min-panel: 14px;
   --r:           8px;
   --r-lg:        14px;
   --r-xl:        20px;
@@ -54,7 +64,7 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { font-size: 14px; -webkit-text-size-adjust: 100%; overflow-x: clip; }
 body {
-  background: var(--bg); color: var(--text);
+  background: var(--bg); color: var(--text-primary);
   font-family: var(--font-b); line-height: 1.55; overflow-x: hidden;
   -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
 }
@@ -2458,3 +2468,8 @@ input[type="range"]::-moz-range-thumb {
   .mobile-action-cluster{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0 12px}
   .mobile-qa-checklist label{display:flex;gap:8px;align-items:center;padding:8px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;font-size:12px}
 }
+
+
+/* Accessibility floors */
+p, li, small, label, input, textarea, select, .card-desc, .form-hint { font-size: max(var(--font-min-body), 0.857rem); }
+.sidebar, .editor-sidebar, .editor-section, .panel, .dense-sidebar { font-size: max(var(--font-min-panel), 1rem); }
