@@ -24,6 +24,7 @@ import { SemanticChip } from '../components/primitives';
 import { getFramePitfalls } from '../data/framePitfalls';
 import { createEditorCommandRegistry, filterCommands, matchesShortcut } from '../domain/editorCommands';
 import { buildSaveDiff } from '../utils/saveDiff';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 /** @typedef {import('../types/canonical').FrameContent} FrameContent */
 /** @typedef {import('../types/canonical').StyleOverrides} StyleOverrides */
@@ -243,8 +244,8 @@ function DesignPanel({selectedEl,setSelectedEl,overrides,setOverrides,theme,bgGr
       <button className="btn btn-secondary btn-sm" style={{flex:1}} onClick={()=>{try{localStorage.setItem('whiz-copied-style',JSON.stringify(overrides));showToast('Style copied');}catch(e){showToast('Copy failed','error');}}}>Copy Style</button>
       <button className="btn btn-secondary btn-sm" style={{flex:1}} onClick={()=>{try{const s=localStorage.getItem('whiz-copied-style');if(s){const parsed=JSON.parse(s);const next=strictMode?sanitizeStrictStyleOverrides(parsed):parsed;setOverrides(next);if(strictMode&&JSON.stringify(next)!==JSON.stringify(parsed)){showToast('Strict mode removed blocked style overrides.','warning');}else{showToast('Style pasted');}}else showToast('Nothing copied yet','info');}catch(e){showToast('Paste failed','error');}}}>Paste</button>
     </div>
-    <button className="btn btn-danger w-full btn-sm" onClick={()=>{
-      if(window.confirm('Reset all design overrides? This cannot be undone.')){
+    <button className="btn btn-danger w-full btn-sm" onClick={async()=>{
+      if(await requestConfirmation({ title:'Reset design overrides?', message:'This clears all design overrides for the current frame.', danger:true, confirmLabel:'Reset overrides' })){
         resetDesignState({
           resetOverrides,
           defaultOverrides: DEFAULT_OVERRIDES,
@@ -305,6 +306,24 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const [showTableImportModal, setShowTableImportModal] = useState(false);
   const [tableImportText, setTableImportText] = useState('');
   const [tableImportReport, setTableImportReport] = useState(null);
+  const [confirmState, setConfirmState] = useState(null);
+  const [sessionConfirmSkips, setSessionConfirmSkips] = useState({});
+  const [activityLog, setActivityLog] = useState([]);
+
+  const logConfirmationEvent = useCallback((label, outcome) => {
+    setActivityLog((prev) => [{ id: `${Date.now()}-${Math.random()}`, ts: Date.now(), label, outcome }, ...prev].slice(0, 40));
+  }, []);
+
+  const requestConfirmation = useCallback((config) => {
+    const key = config?.skipKey;
+    if (key && sessionConfirmSkips[key]) {
+      logConfirmationEvent(config.title || key, 'auto-confirmed');
+      return Promise.resolve(true);
+    }
+    return new Promise((resolve) => {
+      setConfirmState({ ...config, resolve, skipChecked: false });
+    });
+  }, [sessionConfirmSkips, logConfirmationEvent]);
 
   // NOTE: editingFrame is now {frameId, serial, issue}; compare serial to detect re-opens
   useEffect(()=>{
@@ -402,7 +421,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     blocking: activeFramePitfalls.filter(p => p.severity === 'high'),
     nonBlocking: activeFramePitfalls.filter(p => p.severity !== 'high'),
   }), [activeFramePitfalls]);
-  const runPitfallPreflight = () => {
+  const runPitfallPreflight = async () => {
     if (!rolePermissions.canRunReadiness) {
       showToast(roleReasons.readiness, 'warning');
       return false;
@@ -415,7 +434,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
       alert(`High-risk frame pitfalls detected:\n\n${highRiskLines.join('\n')}\n\nHints:\n${preExportChecklist.blocking.map((p) => `- ${p.triggerHint}`).join('\n')}`);
       return false;
     }
-    if (mediumRiskLines.length && !window.confirm(`Non-blocking frame pitfalls:\n\n${mediumRiskLines.join('\n')}\n\nContinue export?`)) return false;
+    if (mediumRiskLines.length && !(await requestConfirmation({ title:'Export with non-blocking pitfalls?', message:'This export has non-blocking frame pitfalls.', details: mediumRiskLines, confirmLabel:'Continue export', skipKey:'export-pitfalls' }))) return false;
     return true;
   };
 
@@ -581,16 +600,16 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     setPendingLoadSave(save);
     setPendingSaveDiff(diff);
   };
-  const confirmLoadAfterDiff = () => {
+  const confirmLoadAfterDiff = async () => {
     if (!pendingLoadSave) return;
     if (pendingSaveDiff?.destructiveFlags?.length) {
-      const ok = window.confirm(`Destructive changes detected:\n- ${pendingSaveDiff.destructiveFlags.join('\n- ')}\n\nConfirm overwrite/load?`);
+      const ok = await requestConfirmation({ title:'Confirm destructive overwrite/load', message:'Destructive changes were detected.', details: pendingSaveDiff.destructiveFlags, danger:true, confirmLabel:'Overwrite / Load' });
       if (!ok) return;
     }
     loadSave(pendingLoadSave);
   };
   const confirmDel=()=>{if(showDeleteConfirm){setSaves(p=>p.filter(s=>s.id!==showDeleteConfirm));showToast('Deleted','info');setShowDeleteConfirm(null);}};
-  const runNormalizationPreflight=()=>{
+  const runNormalizationPreflight=async()=>{
     const result=normalizeContentTaxonomy(content);
     const numeric=normalizeNumericFields(result.content);
     const taxonomyAutoCorrected=result.compliance.autoCorrected.length>0;
@@ -600,11 +619,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     let numericAudit=[];
     if(numeric.hasCorrections){
       const reviewLines=numeric.corrections.map(c=>`• ${c.path}: ${c.before} → ${c.after}`).join('\n');
-      const accepted=window.confirm(`Numeric normalization review:
-
-${reviewLines}
-
-Apply these auto-corrections?`);
+      const accepted=await requestConfirmation({ title:'Numeric normalization review', message:`${reviewLines}`, confirmLabel:'Apply auto-corrections', cancelLabel:'Keep original values', skipKey:'numeric-normalization' });
       numericAudit=numeric.corrections.map(c=>({...c,accepted,timestamp:new Date().toISOString()}));
       if(!accepted){normalizedContent=result.content;}
       setNormalizationAudit(prev=>[...prev,...numericAudit]);
@@ -624,16 +639,16 @@ Apply these auto-corrections?`);
   const attemptPhaseTransition=(phase)=>{if(!canTransitionTo(phase)){showToast(`Cannot move to ${phase} until checklist criteria are met.`,'warning');return;}setWorkflowPhase(phase);setPhaseChecklist(prev=>({...prev,lastTransitionAt:Date.now(),reviewAt:phase==='review'||phase==='publish-ready'?(prev.reviewAt||Date.now()):prev.reviewAt,publishReadyAt:phase==='publish-ready'?(prev.publishReadyAt||Date.now()):prev.publishReadyAt}));showToast(`Workflow phase set to ${phase}`);};
   const ensureActionAllowed=(action)=>{if(action==='publish'&&workflowPhase!=='publish-ready'){showToast('Publish actions require publish-ready phase.','error');return false;}if(action==='export'&&workflowPhase==='draft'){showToast('Export actions require review or publish-ready phase.','error');return false;}if(!stateValidation.valid){showToast(`Blocked by validation: ${stateValidation.codes.join(', ')}`,'error');return false;}if(action==='publish'&&complianceIssues.length){showToast(`Blocked by compliance: ${complianceIssues[0]}`,'error');return false;}return true;};
 
-  const exportJSON=()=>{if(!ensureActionAllowed('export'))return;const normalized=runNormalizationPreflight();if(!normalized)return;const d=JSON.stringify({...buildSave(),content:{...content,...normalized}},null,2);const b=new Blob([d],{type:'application/json'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=`${normalized.slug||'whiz_export'}.json`;a.click();URL.revokeObjectURL(u);showToast('JSON exported');};
-  const exportManifest=()=>{if(!ensureActionAllowed('publish'))return;if(hasBlockingSpineContrastIssue){showToast('Publish blocked: rotated spine contrast is below threshold.','error');return;}if(editorValidation.errors.length){showToast(`Export blocked: ${editorValidation.errors.join(' | ')}`,'error');return;}if(editorValidation.warnings.length&&!window.confirm(`Editor validation warnings:\n- ${editorValidation.warnings.join('\n- ')}\n\nExport anyway?`))return;const normalized=runNormalizationPreflight();if(!normalized)return;const payload={issueNum:content.issueNum,topic:normalized.topicTag,slug:normalized.slug,title:content.title,date:content.date,frameId,themeId:theme.id,strictMode,brandScore,complianceIssues,sources:(content.sourceLinks||'').split(',').map(s=>s.trim()).filter(Boolean),targetMetric:content.targetMetric||'',metricConfidence:content.metricConfidence||'',metricProvenance:Array.isArray(content.metricProvenance)?content.metricProvenance:(content.metricProvenance?[content.metricProvenance]:[]),rowProvenance:{stats:normalizeStatsWithProvenance(content.stats).map((s,idx)=>({index:idx,label:s.label,provenance:s.provenance})),tableRows:normalizeTableRowsWithProvenance(content.tableRows).map((row,idx)=>({index:idx,cells:Object.fromEntries(Object.entries(row).filter(([k])=>k!=='provenance')),provenance:row.provenance}))},exportedAt:new Date().toISOString()};const d=JSON.stringify(payload,null,2);const b=new Blob([d],{type:'application/json'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=`whiz_issue${content.issueNum||'000'}_manifest.json`;a.click();URL.revokeObjectURL(u);showToast('Manifest exported');};
+  const exportJSON=async()=>{if(!ensureActionAllowed('export'))return;const normalized=await runNormalizationPreflight();if(!normalized)return;const d=JSON.stringify({...buildSave(),content:{...content,...normalized}},null,2);const b=new Blob([d],{type:'application/json'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=`${normalized.slug||'whiz_export'}.json`;a.click();URL.revokeObjectURL(u);showToast('JSON exported');};
+  const exportManifest=async()=>{if(!ensureActionAllowed('publish'))return;if(hasBlockingSpineContrastIssue){showToast('Publish blocked: rotated spine contrast is below threshold.','error');return;}if(editorValidation.errors.length){showToast(`Export blocked: ${editorValidation.errors.join(' | ')}`,'error');return;}if(editorValidation.warnings.length&&!window.confirm(`Editor validation warnings:\n- ${editorValidation.warnings.join('\n- ')}\n\nExport anyway?`))return;const normalized=await runNormalizationPreflight();if(!normalized)return;const payload={issueNum:content.issueNum,topic:normalized.topicTag,slug:normalized.slug,title:content.title,date:content.date,frameId,themeId:theme.id,strictMode,brandScore,complianceIssues,sources:(content.sourceLinks||'').split(',').map(s=>s.trim()).filter(Boolean),targetMetric:content.targetMetric||'',metricConfidence:content.metricConfidence||'',metricProvenance:Array.isArray(content.metricProvenance)?content.metricProvenance:(content.metricProvenance?[content.metricProvenance]:[]),rowProvenance:{stats:normalizeStatsWithProvenance(content.stats).map((s,idx)=>({index:idx,label:s.label,provenance:s.provenance})),tableRows:normalizeTableRowsWithProvenance(content.tableRows).map((row,idx)=>({index:idx,cells:Object.fromEntries(Object.entries(row).filter(([k])=>k!=='provenance')),provenance:row.provenance}))},exportedAt:new Date().toISOString()};const d=JSON.stringify(payload,null,2);const b=new Blob([d],{type:'application/json'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=`whiz_issue${content.issueNum||'000'}_manifest.json`;a.click();URL.revokeObjectURL(u);showToast('Manifest exported');};
   const importJSON=e=>{const f=e.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=ev=>{try{const d=parseImportedState(JSON.parse(ev.target.result));d.frameId&&setFrameId(d.frameId);d.theme&&(setTheme(d.theme),setActiveTheme(d.theme));d.content&&resetContent(normalizeContentWithProvenance(d.content));d.overrides&&setOverrides(d.overrides);d.aspectRatio&&setAspectRatio(d.aspectRatio);d.bgGradient&&setBgGradient(d.bgGradient);d.patternOverlay&&setPatternOverlay(d.patternOverlay);setWorkflowPhase(WORKFLOW_PHASES.includes(d.workflowPhase)?d.workflowPhase:'draft');setPhaseChecklist(d.phaseChecklist||{draftAt:d.savedAt||Date.now(),reviewAt:null,publishReadyAt:null,lastTransitionAt:d.savedAt||Date.now()});showToast('Imported');}catch(err){showToast('Invalid JSON','error');}};r.readAsText(f);e.target.value='';};
   const exportHTML=()=>{const el=frameRef.current;if(!el)return;const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&family=Inter:wght@300..700&family=JetBrains+Mono:wght@400..700&display=swap" rel="stylesheet"><style>*{margin:0;padding:0;box-sizing:border-box}body{background:#0F1318;display:flex;justify-content:center;align-items:center;min-height:100vh}.whiz-frame{position:relative;overflow:hidden;flex-shrink:0}.wf-spine{position:absolute;left:0;top:0;bottom:0;width:3px;z-index:5}.wf-corner{position:absolute;width:16px;height:16px;z-index:6;opacity:.5}.wf-corner.tl{top:12px;left:12px;border-top:1.5px solid currentColor;border-left:1.5px solid currentColor}.wf-corner.tr{top:12px;right:12px;border-top:1.5px solid currentColor;border-right:1.5px solid currentColor}.wf-corner.bl{bottom:12px;left:12px;border-bottom:1.5px solid currentColor;border-left:1.5px solid currentColor}.wf-corner.br{bottom:12px;right:12px;border-bottom:1.5px solid currentColor;border-right:1.5px solid currentColor}.wf-content{position:relative;z-index:4;padding:40px 36px 32px 44px;display:flex;flex-direction:column;height:100%;box-sizing:border-box}.wf-title{font-family:'Space Grotesk',sans-serif;font-weight:700;letter-spacing:-.02em;line-height:1.05}.wf-deck{font-family:'Inter',sans-serif;line-height:1.6}.wf-body{font-family:'Inter',sans-serif;line-height:1.75}.wf-stat{display:flex;flex-direction:column;gap:4;padding:12px 14px;border-radius:6px}.wf-stat-val{font-family:'Space Grotesk',sans-serif;font-weight:700;line-height:1}.wf-stat-label{font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.1em}.wf-ticker{overflow:hidden;white-space:nowrap;height:${TICKER_CONTRACT.heightPx}px;display:flex;align-items:center;width:100%;position:relative;z-index:4}.wf-ticker-scroll{display:inline-block;animation:whiz-ticker-scroll ${TICKER_CONTRACT.speed.default}s linear infinite;font-family:${TICKER_CONTRACT.typography.fontFamily};font-size:${TICKER_CONTRACT.typography.fontSizePx}px;letter-spacing:${TICKER_CONTRACT.typography.letterSpacingEm}em;font-weight:${TICKER_CONTRACT.typography.fontWeight};text-transform:${TICKER_CONTRACT.typography.textTransform};padding-left:${TICKER_CONTRACT.padding.textInlineStartPct}%}.wf-section-head{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.15em;text-transform:uppercase;display:flex;align-items:center;gap:8px;margin-bottom:12px}.wf-section-head::before{content:'';width:12px;height:1.5px;background:currentColor;opacity:.5}.wf-handle{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.08em}.wf-table{width:100%;border-collapse:collapse}.wf-table th{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;text-align:left;padding:7px 10px;border-bottom:1px solid rgba(255,255,255,.06)}.wf-table td{font-family:'Inter',sans-serif;font-size:12px;padding:7px 10px;border-bottom:1px solid rgba(255,255,255,.04)}@keyframes whiz-ticker-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}</style></head><body>${el.outerHTML}</body></html>`;const b=new Blob([html],{type:'text/html'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=`whiz_export.html`;a.click();URL.revokeObjectURL(u);showToast('HTML exported');};
-  const exportPNG=async()=>{if(!frameRef.current||exporting)return;if(!ensureActionAllowed('publish'))return;if(hasBlockingSpineContrastIssue){showToast('Publish blocked: rotated spine contrast is below threshold.','error');return;}const normalized=runNormalizationPreflight();if(!normalized)return;if(editorValidation.errors.length){showToast(`Export blocked: ${editorValidation.errors.join(' | ')}`,'error');return;}if(strictMode&&complianceIssues.length){showToast(`Strict mode blocked export (${complianceIssues.length} issues)`,'error');return;}if(!strictMode&&complianceIssues.length&&!window.confirm(`Whiz compliance warnings:\\n- ${complianceIssues.join('\\n- ')}\\n\\nExport anyway?`))return;if(editorValidation.warnings.length&&!window.confirm(`Editor validation warnings:\\n- ${editorValidation.warnings.join('\\n- ')}\\n\\nExport anyway?`))return;setExporting(true);showToast('Generating PNG...','info');try{const sceneModel=createSceneModel({frameId,theme,content:{...content,...normalized},overrides,aspectRatio,bgGradient});const{canvas,usedFallback}=await exportFrame({contractInput:{format:'png',dimensions:{width:aspectRatio.w,height:aspectRatio.h},quality:1,background:overrides.frameBg||theme.base,version:'1.0.0'},sceneModel,sceneRenderer:renderSceneToCanvas,domFallbackRenderer:(contract)=>renderDomSnapshotToCanvas(frameRef.current,{width:contract.dimensions.width,height:contract.dimensions.height,backgroundColor:contract.background})});try{canvas.toBlob(bl=>{bl&&navigator.clipboard?.write&&navigator.clipboard.write([new ClipboardItem({'image/png':bl})]).catch(()=>{});});}catch(e){}const u=canvas.toDataURL('image/png');const a=document.createElement('a');a.href=u;a.download=`${normalized.slug||'whiz_export'}.png`;a.click();showToast(`PNG exported at 2x${usedFallback?' (DOM fallback)':''}`);}catch(e){console.error(e);showToast(`Export failed: ${e.message||'unknown error'}`,'error');}setExporting(false);}
+  const exportPNG=async()=>{if(!frameRef.current||exporting)return;if(!ensureActionAllowed('publish'))return;if(hasBlockingSpineContrastIssue){showToast('Publish blocked: rotated spine contrast is below threshold.','error');return;}const normalized=await runNormalizationPreflight();if(!normalized)return;if(editorValidation.errors.length){showToast(`Export blocked: ${editorValidation.errors.join(' | ')}`,'error');return;}if(strictMode&&complianceIssues.length){showToast(`Strict mode blocked export (${complianceIssues.length} issues)`,'error');return;}if(!strictMode&&complianceIssues.length&&!(await requestConfirmation({ title:'Export with compliance warnings?', message:'Whiz compliance warnings were detected.', details: complianceIssues, confirmLabel:'Export anyway' })))return;if(editorValidation.warnings.length&&!(await requestConfirmation({ title:'Export with editor warnings?', message:'Editor validation reported warnings.', details: editorValidation.warnings, confirmLabel:'Export anyway', skipKey:'editor-warnings' })))return;setExporting(true);showToast('Generating PNG...','info');try{const sceneModel=createSceneModel({frameId,theme,content:{...content,...normalized},overrides,aspectRatio,bgGradient});const{canvas,usedFallback}=await exportFrame({contractInput:{format:'png',dimensions:{width:aspectRatio.w,height:aspectRatio.h},quality:1,background:overrides.frameBg||theme.base,version:'1.0.0'},sceneModel,sceneRenderer:renderSceneToCanvas,domFallbackRenderer:(contract)=>renderDomSnapshotToCanvas(frameRef.current,{width:contract.dimensions.width,height:contract.dimensions.height,backgroundColor:contract.background})});try{canvas.toBlob(bl=>{bl&&navigator.clipboard?.write&&navigator.clipboard.write([new ClipboardItem({'image/png':bl})]).catch(()=>{});});}catch(e){}const u=canvas.toDataURL('image/png');const a=document.createElement('a');a.href=u;a.download=`${normalized.slug||'whiz_export'}.png`;a.click();showToast(`PNG exported at 2x${usedFallback?' (DOM fallback)':''}`);}catch(e){console.error(e);showToast(`Export failed: ${e.message||'unknown error'}`,'error');}setExporting(false);}
   const exportWebP=async()=>{
     if(!rolePermissions.canExportAssets){showToast(roleReasons.exportAssets,'warning');return;}
     if(!frameRef.current||exporting)return;
     if(!ensureActionAllowed('export'))return;
-    if(!runPitfallPreflight())return;
+    if(!(await runPitfallPreflight()))return;
     if(hasBlockingSpineContrastIssue){showToast('Publish blocked: rotated spine contrast is below threshold.','error');return;}
     const preflight=runNormalizationPreflight();if(!preflight)return;const { normalizedContent, taxonomyAutoCorrected }=preflight;
     const v=validateEditorState({frameId,theme,content,overrides,uploadedImages});
@@ -677,12 +692,12 @@ Apply these auto-corrections?`);
     trackActionBar('duplicate', 'overflow', surface);
   };
   const triggerImport = () => document.getElementById('editor-action-import')?.click();
-  const toggleEffectWithCompliance = (effectKey, nextValue) => {
+  const toggleEffectWithCompliance = async (effectKey, nextValue) => {
     if (strictWhizMode && nextValue) {
       showToast('Strict Whiz Mode blocks non-essential effects.', 'warning');
       return;
     }
-    if (!strictWhizMode && nextValue && !window.confirm(`Enable ${effectKey}? This can trigger Whiz compliance warnings.`)) return;
+    if (!strictWhizMode && nextValue && !(await requestConfirmation({ title:`Enable ${effectKey}?`, message:'This can trigger Whiz compliance warnings.', confirmLabel:'Enable effect', skipKey:'enable-effect' }))) return;
     setWhizEffects(prev => ({ ...prev, [effectKey]: nextValue }));
   };
   useEffect(()=>{if(!isActive)return;const t=setTimeout(()=>{try{localStorage.setItem('whiz-autosave',JSON.stringify({frameId,theme,content,overrides,aspectRatio,bgGradient,patternOverlay,savedAt:Date.now()}));}catch(e){}},3000);return()=>clearTimeout(t);},[isActive,content,overrides,frameId,theme,aspectRatio,bgGradient,patternOverlay]);
@@ -1099,6 +1114,8 @@ Apply these auto-corrections?`);
       {pendingLoadSave&&pendingSaveDiff&&<div className="modal-overlay open" onClick={()=>{setPendingLoadSave(null);setPendingSaveDiff(null);}}><div className="modal" onClick={e=>e.stopPropagation()}><div className="modal-header"><span className="modal-title">Compare before load</span><button className="modal-close" onClick={()=>{setPendingLoadSave(null);setPendingSaveDiff(null);}}>✕</button></div>{!pendingSaveDiff.hasChanges?<div className="empty-state">No changes detected.</div>:<div style={{display:'flex',flexDirection:'column',gap:10,maxHeight:360,overflowY:'auto'}}>{pendingSaveDiff.groups.map(group=><div key={group.key} className="editor-section"><div className="editor-section-title">{group.label}</div><div style={{display:'flex',flexDirection:'column',gap:6}}>{group.changes.map((change,idx)=><div key={`${group.key}-${idx}`} style={{padding:'7px 8px',borderRadius:6,border:`1px solid ${change.destructive?'rgba(235,87,87,0.55)':'var(--border)'}`,background:change.destructive?'rgba(235,87,87,0.08)':'var(--bg-3)'}}><strong>{change.type==='added'?'Added':change.type==='removed'?'Removed':'Changed'}</strong> · {change.label}<div style={{fontSize:11,opacity:0.85}}>{change.details}</div></div>)}</div></div>)}</div>}{pendingSaveDiff.destructiveFlags.length>0&&<div style={{marginTop:8,padding:8,borderRadius:6,border:'1px solid rgba(235,87,87,0.55)',background:'rgba(235,87,87,0.08)',fontSize:11}}>Destructive changes require confirmation before load.</div>}<div className="modal-footer"><button className="btn btn-secondary" onClick={()=>{setPendingLoadSave(null);setPendingSaveDiff(null);}}>Cancel</button><button className="btn btn-primary" onClick={confirmLoadAfterDiff}>Load save</button></div></div></div>}
             {showDeleteConfirm&&<div className="confirm-overlay" onClick={()=>setShowDeleteConfirm(null)}><div className="confirm-box" onClick={e=>e.stopPropagation()}><div className="confirm-title">Delete?</div><div className="confirm-actions"><button className="btn btn-secondary btn-sm" onClick={()=>setShowDeleteConfirm(null)}>Cancel</button><button className="btn btn-danger btn-sm" onClick={confirmDel}>Delete</button></div></div></div>}
       {showAutosavePrompt&&<div className="confirm-overlay" onClick={()=>setShowAutosavePrompt(false)}><div className="confirm-box" onClick={e=>e.stopPropagation()}><div className="confirm-title">Restore Session?</div><div className="confirm-msg">Found autosave from last session.</div><div className="confirm-actions"><button className="btn btn-secondary btn-sm" onClick={()=>setShowAutosavePrompt(false)}>Discard</button><button className="btn btn-primary btn-sm" onClick={restoreAutosave}>Restore</button></div></div></div>}
+      <ConfirmDialog open={Boolean(confirmState)} title={confirmState?.title} message={confirmState?.message} details={confirmState?.details||[]} confirmLabel={confirmState?.confirmLabel} cancelLabel={confirmState?.cancelLabel} danger={Boolean(confirmState?.danger)} allowSkip={Boolean(confirmState?.skipKey)} skipChecked={Boolean(confirmState?.skipChecked)} onSkipChange={(checked)=>setConfirmState(prev=>prev?{...prev,skipChecked:checked}:prev)} onCancel={()=>{ if(!confirmState) return; logConfirmationEvent(confirmState.title,'cancelled'); confirmState.resolve(false); setConfirmState(null); }} onConfirm={()=>{ if(!confirmState) return; if(confirmState.skipKey && confirmState.skipChecked){setSessionConfirmSkips(prev=>({...prev,[confirmState.skipKey]:true}));} logConfirmationEvent(confirmState.title,'confirmed'); confirmState.resolve(true); setConfirmState(null); }} />
+      <div className="editor-section"><div className="editor-section-title">Confirmation Activity</div><div style={{display:'grid',gap:4,maxHeight:120,overflowY:'auto',fontSize:10}}>{activityLog.length===0?<div style={{color:'var(--dim)'}}>No confirmation events yet.</div>:activityLog.map((entry)=><div key={entry.id}><strong>{entry.outcome}</strong> · {entry.label} · {new Date(entry.ts).toLocaleTimeString()}</div>)}</div></div>
       {showMobileCommandSheet && <div className="mobile-command-sheet-overlay" onClick={()=>setShowMobileCommandSheet(false)}><div className="mobile-command-sheet" onClick={e=>e.stopPropagation()}><div className="mobile-command-sheet-handle"/><div className="editor-section-title">Command Sheet</div><div className="mobile-action-cluster"><button className="btn btn-secondary btn-sm" onClick={()=>{setRightTab('content');setMobileTab('content');setShowMobileCommandSheet(false);}}>Quick Edit</button><button className="btn btn-secondary btn-sm" onClick={exportJSON}>Export JSON</button><button className="btn btn-secondary btn-sm" onClick={exportHTML}>Export HTML</button><button className="btn btn-primary btn-sm" onClick={exportPNG}>Publish PNG</button></div><div className="mobile-qa-checklist"><div className="editor-section-title">Mobile QA (Pro workflows)</div>{Object.entries({quickEdit:'Quick edits save correctly',validate:'Validation summary visible',publish:'One-tap publish works',proRows:'Row drag/menu targets are touchable'}).map(([key,label])=><label key={key}><input type="checkbox" checked={mobileQaChecks[key]} onChange={()=>setMobileQaChecks(prev=>({...prev,[key]:!prev[key]}))}/><span>{label}</span></label>)}</div></div></div>}
     </div>
   );
