@@ -75,22 +75,23 @@ export const LAYOUT_DATASET_SHAPES = {
   },
 };
 
-export const LAYOUT_DATASET_CONSTRAINTS = {
-  table: [
-    { id: 'sum-consistency', severity: 'blocking', type: 'sum', totalField: 'col4', partFields: ['col2', 'col3'], tolerance: 0.01 },
-    { id: 'pct-denominator', severity: 'warning', type: 'percentage', field: 'col5', denominatorField: 'col4' },
-  ],
-  scorecard: [
-    { id: 'rank-order', severity: 'blocking', type: 'rank', field: 'col3', order: ['A', 'B', 'C', 'D', 'F'] },
-  ],
-  timeline: [
-    { id: 'timeline-monotonic', severity: 'blocking', type: 'monotonicDate', field: 'date' },
-  ],
-  stats: [
-    { id: 'stats-monotonic', severity: 'warning', type: 'monotonicNumeric', field: 'value', direction: 'desc' },
-  ],
+
+const DEFAULT_CRITICAL_FIELD_RULES = Object.freeze({
+  bigNumber: { enabled: true },
+  stats: { enabled: true },
+  table: { enabled: true },
+  timeline: { enabled: true },
+});
+
+export const LAYOUT_CRITICAL_FIELD_REGISTRY = {
+  default: DEFAULT_CRITICAL_FIELD_RULES,
+  table: { ...DEFAULT_CRITICAL_FIELD_RULES, timeline: { enabled: false } },
+  timeline: { ...DEFAULT_CRITICAL_FIELD_RULES, table: { enabled: false } },
 };
 
+export function getCriticalFieldRegistry(layout) {
+  return LAYOUT_CRITICAL_FIELD_REGISTRY[layout] || LAYOUT_CRITICAL_FIELD_REGISTRY.default;
+}
 export function getLayoutDatasetShape(layout) {
   return LAYOUT_DATASET_SHAPES[layout] || EMPTY_SCHEMA;
 }
