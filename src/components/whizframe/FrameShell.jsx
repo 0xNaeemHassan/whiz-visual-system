@@ -6,12 +6,14 @@ import { TICKER_CONTRACT, normalizeTickerSpeed } from '../../domain/tickerContra
 import { SPINE_DESIGN_TOKENS } from '../../domain/spineDesignTokens';
 import { FrameFooter } from './FrameFooter';
 import SemanticChip from '../SemanticChip';
+import { resolveRiskAccent } from '../../domain/riskAccentPolicy';
 
 export function FrameShell({ frameRef, frame, theme, content, editMode, selectedEl, onSelectEl, styleOverrides, showGrid, aspectRatio, uploadedImages, bgGradient, patternOverlay, strictWhizMode = false, whizEffects = { glow: true, noise: true, intenseAccent: false } }) {
   const ov = styleOverrides || {};
   const sel = (key, e) => { if (editMode) { e?.stopPropagation(); onSelectEl?.(selectedEl === key ? null : key); } };
   const ec = (key) => editMode ? `wf-editable${selectedEl === key ? ' wf-sel' : ''}` : '';
-  const accentColor = ov.accent?.color || theme.accent;
+  const accentResolution = resolveRiskAccent({ frameId: frame?.id, theme, overrides: ov });
+  const accentColor = accentResolution.accent;
   const noiseEnabled = !strictWhizMode && whizEffects?.noise !== false;
   const glowEnabled = !strictWhizMode && whizEffects?.glow !== false;
   const intenseAccentEnabled = !strictWhizMode && whizEffects?.intenseAccent === true;
@@ -715,9 +717,22 @@ function PitchDeckLayout(props) {
         </div>
       )}
       <div style={{ flex: 1, overflow: 'hidden' }}>
+        {content.thesis && (
+          <div style={{ marginBottom: 10, padding: '10px 12px', border: `1px solid ${accentColor}20`, background: `${accentColor}08`, borderRadius: 8 }}>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, letterSpacing: '0.14em', color: accentColor, marginBottom: 4 }}>THESIS</div>
+            <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 13, color: '#C8D0D8', lineHeight: 1.5 }}>{content.thesis}</div>
+          </div>
+        )}
         {(resolvedContent.body || '').split('\n\n').slice(0, 2).map((para, i) => (
           <div key={i} style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', lineHeight: 1.65, marginBottom: 14 }}>{para}</div>
         ))}
+        {(content.mechanismSteps?.length > 0 || content.evidencePoints?.length > 0 || content.riskNotes?.length > 0) && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <MiniList title="MECHANISM" items={content.mechanismSteps} color={accentColor} />
+            <MiniList title="EVIDENCE" items={content.evidencePoints} color="#3CE6A6" />
+            <MiniList title="RISKS" items={content.riskNotes} color="#FF8A3D" />
+          </div>
+        )}
         {content.pullQuote && (
           <div style={{ padding: '12px 16px', borderLeft: `3px solid ${accentColor}`, background: `${accentColor}08`, borderRadius: '0 6px 6px 0', margin: '14px 0' }}>
             <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 14, fontWeight: 600, color: '#F4F5F7', fontStyle: 'italic' }}>"{content.pullQuote}"</div>
@@ -725,6 +740,18 @@ function PitchDeckLayout(props) {
         )}
       </div>
     </>
+  );
+}
+
+function MiniList({ title, items = [], color }) {
+  if (!items?.length) return null;
+  return (
+    <div style={{ padding: '8px 10px', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6, background: 'rgba(255,255,255,0.02)' }}>
+      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, letterSpacing: '0.12em', color, marginBottom: 4 }}>{title}</div>
+      {items.slice(0, 3).map((item, i) => (
+        <div key={i} style={{ fontFamily: "'Inter', sans-serif", fontSize: 11, color: '#8B95A3', lineHeight: 1.45, marginBottom: 3 }}>• {item}</div>
+      ))}
+    </div>
   );
 }
 

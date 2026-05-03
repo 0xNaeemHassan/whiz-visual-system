@@ -1,7 +1,7 @@
 /** @typedef {import('../types/editor.js').FrameDefinition} FrameDefinition */
 // All 50 frames data
 /** @type {FrameDefinition[]} */
-export const FRAMES = [
+const BASE_FRAMES = [
   // TIER A — Weekly Recaps (1-7)
   { id: 1, tier: 'A', tierName: 'Weekly Recaps', name: 'The Ticker Tape', desc: 'Full-width scrolling-style header listing every event of the week as ticker symbols. Below, 6-9 mini cards in a 3×3 grid expanding each tag.', tags: ['weekly', 'recap', 'events'], layout: 'grid' },
   { id: 2, tier: 'A', tierName: 'Weekly Recaps', name: 'The Order Book', desc: 'Two columns BIDS (bullish) and ASKS (bearish) side-by-side. Center spread shows the week\'s headline story.', tags: ['weekly', 'analysis', 'comparison'], layout: 'bull-bear' },
@@ -31,13 +31,13 @@ export const FRAMES = [
   { id: 22, tier: 'C', tierName: 'Comparative Tables', name: 'The Head-to-Head', desc: 'Just 2 protocols, deeply compared across 10 dimensions, with a final VERDICT callout at the bottom.', tags: ['comparison', 'head-to-head', 'versus'], layout: 'bull-bear' },
 
   // TIER D — Risk & Mechanism Explainers (23-29)
-  { id: 23, tier: 'D', tierName: 'Risk & Explainers', name: 'The Threat Model', desc: '4 quadrants of risk types (Smart Contract / Economic / Governance / Operational) with severity dots.', tags: ['risk', 'security', 'explainer'], layout: 'threat-model' },
-  { id: 24, tier: 'D', tierName: 'Risk & Explainers', name: 'The Failure Tree', desc: 'Top: headline outcome (Depeg). Branches downward into cascading causes. Fault-tree analysis from engineering.', tags: ['risk', 'stablecoin', 'tree'], layout: 'failure-tree' },
-  { id: 25, tier: 'D', tierName: 'Risk & Explainers', name: 'The Postmortem', desc: 'Editorial deep-dive: WHAT HAPPENED / ROOT CAUSE / TIMELINE / RECOVERY / LESSONS. For hacks and exploits.', tags: ['risk', 'hack', 'postmortem'], layout: 'postmortem' },
-  { id: 26, tier: 'D', tierName: 'Risk & Explainers', name: 'The Mental Model', desc: 'A single concept explained with a labeled illustration center-stage and 3 numbered "reads" beneath.', tags: ['explainer', 'education', 'concept'], layout: 'mental-model' },
-  { id: 27, tier: 'D', tierName: 'Risk & Explainers', name: 'The Trust Stack', desc: 'Vertical stack of layers (User → Frontend → Contract → Custodian → Chain), each labeled with trust assumption.', tags: ['risk', 'decentralization', 'layers'], layout: 'trust-stack' },
-  { id: 28, tier: 'D', tierName: 'Risk & Explainers', name: 'The Black Box Opened', desc: 'Left: what users see (marketing claim). Right: what\'s actually happening underneath. Side-by-side reveal.', tags: ['risk', 'transparency', 'reveal'], layout: 'bull-bear' },
-  { id: 29, tier: 'D', tierName: 'Risk & Explainers', name: 'The Risk Heatmap', desc: 'Grid of 20-30 protocols, color-graded cells from green to red across 5 risk dimensions.', tags: ['risk', 'heatmap', 'comparison'], layout: 'heatmap' },
+  { id: 23, tier: 'D', tierName: 'Risk & Explainers', name: 'The Threat Model', desc: '4 quadrants of risk types (Smart Contract / Economic / Governance / Operational) with severity dots.', tags: ['risk', 'security', 'explainer'], layout: 'threat-model', defaultAccentPolicy: { themeId: 'liquidation-red' } },
+  { id: 24, tier: 'D', tierName: 'Risk & Explainers', name: 'The Failure Tree', desc: 'Top: headline outcome (Depeg). Branches downward into cascading causes. Fault-tree analysis from engineering.', tags: ['risk', 'stablecoin', 'tree'], layout: 'failure-tree', defaultAccentPolicy: { themeId: 'liquidation-red' } },
+  { id: 25, tier: 'D', tierName: 'Risk & Explainers', name: 'The Postmortem', desc: 'Editorial deep-dive: WHAT HAPPENED / ROOT CAUSE / TIMELINE / RECOVERY / LESSONS. For hacks and exploits.', tags: ['risk', 'hack', 'postmortem'], layout: 'postmortem', defaultAccentPolicy: { themeId: 'liquidation-red' } },
+  { id: 26, tier: 'D', tierName: 'Risk & Explainers', name: 'The Mental Model', desc: 'A single concept explained with a labeled illustration center-stage and 3 numbered "reads" beneath.', tags: ['explainer', 'education', 'concept'], layout: 'mental-model', defaultAccentPolicy: { themeId: 'liquidation-red' } },
+  { id: 27, tier: 'D', tierName: 'Risk & Explainers', name: 'The Trust Stack', desc: 'Vertical stack of layers (User → Frontend → Contract → Custodian → Chain), each labeled with trust assumption.', tags: ['risk', 'decentralization', 'layers'], layout: 'trust-stack', defaultAccentPolicy: { themeId: 'liquidation-red' } },
+  { id: 28, tier: 'D', tierName: 'Risk & Explainers', name: 'The Black Box Opened', desc: 'Left: what users see (marketing claim). Right: what\'s actually happening underneath. Side-by-side reveal.', tags: ['risk', 'transparency', 'reveal'], layout: 'bull-bear', defaultAccentPolicy: { themeId: 'liquidation-red' } },
+  { id: 29, tier: 'D', tierName: 'Risk & Explainers', name: 'The Risk Heatmap', desc: 'Grid of 20-30 protocols, color-graded cells from green to red across 5 risk dimensions.', tags: ['risk', 'heatmap', 'comparison'], layout: 'heatmap', defaultAccentPolicy: { themeId: 'liquidation-red' } },
 
   // TIER E — Ecosystem Maps (30-35)
   { id: 30, tier: 'E', tierName: 'Ecosystem Maps', name: 'The Constellation', desc: 'Logos plotted on a dark "starfield" background, grouped by category with thin connecting lines.', tags: ['ecosystem', 'map', 'network'], layout: 'constellation' },
@@ -68,6 +68,21 @@ export const FRAMES = [
   { id: 49, tier: 'H', tierName: 'Specialty', name: 'The Receipt', desc: 'Looks like a printed paper receipt. Lists "what you paid" (gas, fees, slippage) for a specific user journey. Mono throughout.', tags: ['specialty', 'creative', 'shareable'], layout: 'receipt' },
   { id: 50, tier: 'H', tierName: 'Specialty', name: 'The Cover Story', desc: 'Once a quarter. Magazine-cover treatment: full-bleed hero illustration, single massive headline, VOL.III ISSUE badge.', tags: ['specialty', 'quarterly', 'flagship'], layout: 'cover-story' },
 ];
+
+const FRAME_RELATION_META = Object.freeze({
+  36: { structureClass: 'variant', variantOf: 20, archetypeId: 20 },
+});
+
+export const FRAMES = BASE_FRAMES.map((frame) => {
+  const relationMeta = FRAME_RELATION_META[frame.id] || {};
+  const variantOf = relationMeta.variantOf ?? null;
+  return {
+    ...frame,
+    archetypeId: relationMeta.archetypeId ?? (variantOf ?? frame.id),
+    variantOf,
+    structureClass: relationMeta.structureClass ?? 'structural',
+  };
+});
 
 export const TIER_NAMES = {
   A: 'Weekly Recaps', B: 'Project Deep-Dives', C: 'Comparative Tables',
