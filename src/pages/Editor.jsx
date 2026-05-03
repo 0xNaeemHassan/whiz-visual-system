@@ -30,6 +30,7 @@ import { createEditorCommandRegistry, filterCommands, matchesShortcut } from '..
 import { optimizeCanvasForExport } from '../domain/services/imageOptimizationService';
 import { buildSaveDiff } from '../utils/saveDiff';
 import { extractProtocolTagSuggestions, normalizeProtocolTags } from '../utils/protocolTagging';
+import { sanitizeExportHtmlFragment } from '../utils/securityPolicy';
 import { generateExportSummary, buildSummaryText } from '../domain/export/summaryGenerator';
 import { resolveExportContractPreset, BACKUP_SCHEMA_MIN_SUPPORTED, BACKUP_SCHEMA_MAX_SUPPORTED, BACKUP_SCHEMA_VERSION, BACKUP_FEATURE_FLAGS, BACKUP_MIGRATION_PATHS } from '../domain/export/contracts';
 import { shouldBlockStrictExportForUnsnapshottedEdits } from '../domain/export/exportGuards';
