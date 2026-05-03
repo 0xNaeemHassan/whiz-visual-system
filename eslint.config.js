@@ -11,7 +11,7 @@ const namingRules = {
         const base = path.basename(filename);
         const rel = filename.replace(/\\/g, '/');
         const checks = [
-          { test: /\/src\/components\//, regex: /^(?:[A-Z][A-Za-z0-9]*\.jsx|[a-z][A-Za-z0-9]*\.js|primitives\.jsx)$/, msg: 'Component view files must be PascalCase .jsx; component utility modules must be lowerCamelCase .js.' },
+          { test: /\/src\/components\//, regex: /^(?:[A-Z][A-Za-z0-9]*(?:\.test)?\.jsx|[a-z][A-Za-z0-9]*\.js|primitives\.jsx)$/, msg: 'Component view files must be PascalCase .jsx; component utility modules must be lowerCamelCase .js.' },
           { test: /\/src\/pages\//, regex: /^[A-Z][A-Za-z0-9]*\.jsx$/, msg: 'Page files in src/pages must be PascalCase .jsx files.' },
           { test: /\/src\/hooks\//, regex: /^use[A-Z][A-Za-z0-9]*\.js$/, msg: 'Hook files in src/hooks must be named useXxx.js.' },
           { test: /\/src\/data\//, regex: /^[a-z][A-Za-z0-9]*\.js$/, msg: 'Data module files in src/data must be lowerCamelCase .js files.' },
