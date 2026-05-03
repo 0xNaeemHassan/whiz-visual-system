@@ -14,13 +14,22 @@ export const SPINE_DESIGN_TOKENS = Object.freeze({
   }),
   label: Object.freeze({
     rotationDeg: -90,
-    fontSizePx: 10,
+    fontSizePx: 12,
     letterSpacingEm: 0.16,
     fontWeight: 600,
-    opacity: 0.35,
+    opacity: 0.55,
     textTransform: 'uppercase',
   }),
   contrast: Object.freeze({
     minRatio: 4.5,
+  }),
+  semantic: Object.freeze({
+    textPrimary: '#F4F6FA',
+    textSecondary: '#D3DAE6',
+    textMuted: '#A4AFBF',
+    textStatus: '#B9C6D9',
+    bgSurface: '#0F1117',
+    bgElevated: '#161922',
+    bgMuted: '#1C2030',
   }),
 });

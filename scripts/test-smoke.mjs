@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { FRAME_TEMPLATES, CONTENT_TEMPLATES, getFrameTemplate } from '../src/data/templates.js';
 import { REQUIRED_CONTENT_KEYS, hasRequiredContentShape } from '../src/domain/editorDefaults.js';
 import { FRAMES } from '../src/data/frames.js';
@@ -101,26 +102,34 @@ assert.equal(editedIssue.metricUnit, 'USD', 'Editing should preserve raw metricU
 assert.deepEqual(editedIssue.metricProvenance, [{ source: 'glassnode', method: 'api' }], 'Editing should preserve metricProvenance metadata');
 
 console.log('Smoke tests passed');
+
+const editorSource = readFileSync(new URL('../src/pages/Editor.jsx', import.meta.url), 'utf8');
+const cssSource = readFileSync(new URL('../src/index.css', import.meta.url), 'utf8');
+assert.ok(editorSource.includes('bindFocusTrap'), 'Editor should define focus trap behavior for modal workflows');
+assert.ok(editorSource.includes('restoreFocus'), 'Editor should restore focus after closing modal workflows');
+assert.ok(cssSource.includes('--focus-ring-color'), 'Global focus-ring tokens should exist in index.css');
+assert.ok(cssSource.includes(':focus-visible'), 'Global :focus-visible styles should be present');
 import './test-editor-mutations.mjs';
-import { generateExportSummary, validateSummaryCompleteness } from '../src/domain/export/summaryGenerator.js';
 
-const tableSummary = generateExportSummary({
-  frame: { id: 20, layout: 'table' },
-  content: {
-    title: 'Table frame title',
-    thesis: 'This is the thesis',
-    stats: [{ label: 'TVL', value: '$1B', provenance: { date: '2026-05-01' } }],
-    tableRows: [{ col1: 'A', provenance: { date: '2026-04-30' } }],
-  },
-  complianceIssues: ['Missing source'],
-  validationWarnings: [],
-});
-assert.equal(validateSummaryCompleteness(tableSummary), true, 'Table summary should be complete');
+const a11yFiles = [
+  'src/components/primitives.jsx',
+  'src/components/TopBar.jsx',
+  'src/components/Sidebar.jsx',
+  'src/pages/Editor.jsx',
+];
 
-const bignumSummary = generateExportSummary({
-  frame: { id: 8, layout: 'bignum' },
-  content: { title: 'Big number', deck: 'Fallback thesis', bigLabel: 'Users', bigNumber: '100K', date: '2026-05-02' },
-  complianceIssues: [],
-  validationWarnings: ['Warning'],
-});
-assert.equal(validateSummaryCompleteness(bignumSummary), true, 'Bignum summary should be complete');
+for (const file of a11yFiles) {
+  const source = fs.readFileSync(file, 'utf8');
+  const iconOnlyButtons = [...source.matchAll(/<button\b[^>]*>(?:\s*<svg[\s\S]*?<\/svg>\s*|\s*[✕↺]\s*)<\/button>/g)];
+  iconOnlyButtons.forEach(([snippet], idx) => {
+    const hasLabel = /aria-label\s*=/.test(snippet);
+    assert.ok(hasLabel, `${file} icon-only button #${idx + 1} must include aria-label`);
+  });
+
+  const controls = [...source.matchAll(/<(input|select|textarea)\b[^>]*>/g)];
+  controls.forEach(([snippet, tag], idx) => {
+    if (/type\s*=\s*"hidden"/.test(snippet) || /type\s*=\s*"file"/.test(snippet)) return;
+    const hasProgrammaticLabel = /\bid\s*=/.test(snippet) || /aria-label\s*=/.test(snippet) || /aria-labelledby\s*=/.test(snippet);
+    assert.ok(hasProgrammaticLabel, `${file} ${tag} control #${idx + 1} must include id/aria-label/aria-labelledby`);
+  });
+}

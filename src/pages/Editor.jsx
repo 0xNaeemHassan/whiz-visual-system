@@ -20,7 +20,7 @@ import { normalizeContentTaxonomy } from '../utils/contentNormalization';
 import { validateEditorState } from '../utils/editorStateValidation';
 import { buildMutationDispatcher } from './EditorMutations.js';
 import { normalizeDateInput, normalizeTimelineEvents } from '../domain/services/dateNormalizationService';
-import { SemanticChip } from '../components/primitives';
+import { SemanticChip, AccessibleIconButton, LabeledField } from '../components/primitives';
 import { getFramePitfalls } from '../data/framePitfalls';
 import { createEditorCommandRegistry, filterCommands, matchesShortcut } from '../domain/editorCommands';
 import { buildSaveDiff } from '../utils/saveDiff';
@@ -115,11 +115,11 @@ function ProvenanceEditor({ value, onChange, collapsed, onToggle, disabled }) {
   return (<div style={{margin:'4px 0 8px 20px'}}>
     <button className="btn btn-ghost btn-sm" type="button" onClick={onToggle} style={{marginBottom:6,padding:'2px 8px'}}>{collapsed ? '▸ Provenance' : '▾ Provenance'}</button>
     {!collapsed && <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6}}>
-      <input disabled={disabled} value={provenance.source} placeholder="Source" style={{fontSize:10}} onChange={e=>update('source',e.target.value)} />
-      <input disabled={disabled} type="date" value={provenance.date} style={{fontSize:10}} onChange={e=>update('date',e.target.value)} />
-      <select disabled={disabled} value={provenance.confidence} style={{fontSize:10}} onChange={e=>update('confidence',e.target.value)}>{PROVENANCE_CONFIDENCE_OPTIONS.map((option)=><option key={option} value={option}>{option}</option>)}</select>
-      <input disabled={disabled} value={provenance.links} placeholder="Links (comma-separated)" style={{fontSize:10}} onChange={e=>update('links',e.target.value)} />
-      <textarea disabled={disabled} value={provenance.notes} placeholder="Notes" rows={2} style={{fontSize:10,gridColumn:'1 / -1'}} onChange={e=>update('notes',e.target.value)} />
+      <LabeledField label="Source" id="provenance-source" className="form-group" labelClassName="form-label" style={{marginBottom:0}}><input disabled={disabled} value={provenance.source} style={{fontSize:10}} onChange={e=>update('source',e.target.value)} /></LabeledField>
+      <LabeledField label="Date" id="provenance-date" className="form-group" labelClassName="form-label" style={{marginBottom:0}}><input disabled={disabled} type="date" value={provenance.date} style={{fontSize:10}} onChange={e=>update('date',e.target.value)} /></LabeledField>
+      <LabeledField label="Confidence" id="provenance-confidence" className="form-group" labelClassName="form-label" style={{marginBottom:0}}><select disabled={disabled} value={provenance.confidence} style={{fontSize:10}} onChange={e=>update('confidence',e.target.value)}>{PROVENANCE_CONFIDENCE_OPTIONS.map((option)=><option key={option} value={option}>{option}</option>)}</select></LabeledField>
+      <LabeledField label="Links" id="provenance-links" className="form-group" labelClassName="form-label" style={{marginBottom:0}}><input disabled={disabled} value={provenance.links} style={{fontSize:10}} onChange={e=>update('links',e.target.value)} /></LabeledField>
+      <LabeledField label="Notes" id="provenance-notes" className="form-group" labelClassName="form-label" style={{gridColumn:'1 / -1',marginBottom:0}}><textarea disabled={disabled} value={provenance.notes} rows={2} style={{fontSize:10}} onChange={e=>update('notes',e.target.value)} /></LabeledField>
     </div>}
   </div>);
 }
@@ -261,6 +261,9 @@ function DesignPanel({selectedEl,setSelectedEl,overrides,setOverrides,theme,bgGr
  * @param {{ activeFontPairing?: {body?:string}|null, showToast: (message:string, kind?:string)=>void, activeTheme: Theme, setActiveTheme: (theme:Theme)=>void, editingFrame?: any, clearEditingFrame?: ()=>void, newFrameSignal:number, isActive:boolean }} props
  */
 export default function Editor({ activeFontPairing,showToast,activeTheme,setActiveTheme,editingFrame,clearEditingFrame,newFrameSignal,isActive}){
+  const editorRootRef = useRef(null);
+  const overflowTriggerRef = useRef(null);
+  const lastTriggerRef = useRef(null);
   const[saves,setSaves]=useLocalStorage('whiz-saves',[]);
   const[frameId,setFrameId]=useState(editingFrame||4);
   const[theme,setTheme]=useState(activeTheme);
@@ -294,6 +297,8 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const[loadTagFilter,setLoadTagFilter]=useState('');const[loadFolderFilter,setLoadFolderFilter]=useState('');const[loadFrameFilter,setLoadFrameFilter]=useState('');
   const[loadDateFrom,setLoadDateFrom]=useState('');const[loadDateTo,setLoadDateTo]=useState('');
   const[strictMode,setStrictMode]=useLocalStorage('whiz-strict-mode',true);
+  const [largeTextMode, setLargeTextMode] = useLocalStorage('whiz-large-text-mode', false);
+  const [dyslexiaFriendlyMode, setDyslexiaFriendlyMode] = useLocalStorage('whiz-dyslexia-friendly-mode', false);
   const[showCommandPalette,setShowCommandPalette]=useState(false);
   const[paletteQuery,setPaletteQuery]=useState('');
   const[whizEffects,setWhizEffects]=useLocalStorage('whiz-effects',DEFAULT_EFFECTS);
@@ -302,10 +307,48 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const [sectionLocks, setSectionLocks] = useLocalStorage('whiz-section-locks', {});
   const frameRef=useRef(null);const centerRef=useRef(null);
   const { registerHandlers } = useUIEventContext();
-  const[showAutosavePrompt,setShowAutosavePrompt]=useState(false);const autosaveDataRef=useRef(null);
+  const[showAutosavePrompt,setShowAutosavePrompt]=useState(false);const autosaveDataRef=useRef(null);const[showShortcutHelp,setShowShortcutHelp]=useState(false);
   const [showTableImportModal, setShowTableImportModal] = useState(false);
   const [tableImportText, setTableImportText] = useState('');
   const [tableImportReport, setTableImportReport] = useState(null);
+  const focusableSelector = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  const bindFocusTrap = useCallback((isOpen, selector) => {
+    if (!isOpen) return () => {};
+    const root = editorRootRef.current || document;
+    const container = root.querySelector(selector);
+    if (!container) return () => {};
+    if (document.activeElement instanceof HTMLElement) lastTriggerRef.current = document.activeElement;
+    const focusables = Array.from(container.querySelectorAll(focusableSelector));
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    first?.focus();
+    const onKeyDown = (event) => {
+      if (event.key !== 'Tab' || !first || !last) return;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    container.addEventListener('keydown', onKeyDown);
+    return () => container.removeEventListener('keydown', onKeyDown);
+  }, []);
+  const restoreFocus = useCallback((isOpen) => {
+    if (isOpen) return;
+    if (lastTriggerRef.current?.focus) {
+      window.requestAnimationFrame(() => lastTriggerRef.current?.focus());
+    }
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.largeTextMode = largeTextMode ? 'true' : 'false';
+  }, [largeTextMode]);
+
+  useEffect(() => {
+    document.documentElement.dataset.dyslexiaFriendlyMode = dyslexiaFriendlyMode ? 'true' : 'false';
+  }, [dyslexiaFriendlyMode]);
 
   // NOTE: editingFrame is now {frameId, serial, issue}; compare serial to detect re-opens
   useEffect(()=>{
@@ -802,6 +845,19 @@ Apply these auto-corrections?`);
     canRedoAny: () => canRedo,
   }), [exportPNG, exportWebP, content.title, showToast, runValidationCheck, runUndo, runRedo, saves.length, canUndo, canRedo]);
   useEffect(()=>{if(!isActive)return undefined;const h=e=>{const command=commandRegistry.find(c=>matchesShortcut(e,c.shortcut)||matchesShortcut(e,c.shortcut.replace('Cmd','Ctrl')));if(!command||!command.enabled())return;e.preventDefault();command.handler();};window.addEventListener('keydown',h);return()=>window.removeEventListener('keydown',h);},[isActive,commandRegistry]);
+  useEffect(() => bindFocusTrap(showSaveModal, '.modal-overlay.open .modal'), [showSaveModal, bindFocusTrap]);
+  useEffect(() => bindFocusTrap(showLoadModal, '.modal-overlay.open .modal'), [showLoadModal, bindFocusTrap]);
+  useEffect(() => bindFocusTrap(showTableImportModal, '.modal-overlay.open .modal'), [showTableImportModal, bindFocusTrap]);
+  useEffect(() => bindFocusTrap(showCommandPalette, '.modal-overlay.open .modal'), [showCommandPalette, bindFocusTrap]);
+  useEffect(() => bindFocusTrap(Boolean(pendingLoadSave && pendingSaveDiff), '.modal-overlay.open .modal'), [pendingLoadSave, pendingSaveDiff, bindFocusTrap]);
+  useEffect(() => bindFocusTrap(Boolean(showDeleteConfirm), '.confirm-overlay .confirm-box'), [showDeleteConfirm, bindFocusTrap]);
+  useEffect(() => bindFocusTrap(showAutosavePrompt, '.confirm-overlay .confirm-box'), [showAutosavePrompt, bindFocusTrap]);
+  useEffect(() => restoreFocus(showSaveModal), [showSaveModal, restoreFocus]);
+  useEffect(() => restoreFocus(showLoadModal), [showLoadModal, restoreFocus]);
+  useEffect(() => restoreFocus(showTableImportModal), [showTableImportModal, restoreFocus]);
+  useEffect(() => restoreFocus(showCommandPalette), [showCommandPalette, restoreFocus]);
+  useEffect(() => restoreFocus(Boolean(pendingLoadSave && pendingSaveDiff)), [pendingLoadSave, pendingSaveDiff, restoreFocus]);
+  useEffect(() => restoreFocus(Boolean(showDeleteConfirm)), [showDeleteConfirm, restoreFocus]);
   // NOTE: Scroll frame list to top when search changes
   useEffect(()=>{if(frameListRef.current)frameListRef.current.scrollTop=0;},[frameSearch,filteredFrames]);
 
@@ -815,7 +871,7 @@ Apply these auto-corrections?`);
   const virtualBottomPad = Math.max(0, (historyCap.length - (virtualStart + virtualCount)) * HISTORY_ROW_HEIGHT);
 
   return(
-    <div className="editor-wrap">
+    <div className="editor-wrap" ref={editorRootRef}>
       <div className="editor-action-bar">
         <div className="editor-action-group">
           <button className="btn btn-primary btn-sm" onClick={()=>{setShowSaveModal(true);trackActionBar('save','primary',mobileTab==='preview'?'mobile':'desktop');}}>Save</button>
@@ -827,7 +883,7 @@ Apply these auto-corrections?`);
           <button className="btn btn-secondary btn-sm" onClick={()=>{exportPNG();trackActionBar('export','primary',mobileTab==='preview'?'mobile':'desktop');}} disabled={exporting}>Export</button>
           <button className="btn btn-secondary btn-sm" onClick={()=>{triggerImport();trackActionBar('import','overflow',mobileTab==='preview'?'mobile':'desktop');}}>Import</button>
           <div className="editor-action-overflow">
-            <button className="btn btn-ghost btn-sm" onClick={()=>setShowActionOverflow(v=>!v)}>More ▾</button>
+            <button ref={overflowTriggerRef} className="btn btn-ghost btn-sm" onClick={()=>{lastTriggerRef.current=overflowTriggerRef.current;setShowActionOverflow(v=>!v);}}>More ▾</button>
             {showActionOverflow && <div className="editor-action-overflow-menu">
               <button className="btn btn-ghost btn-sm" onClick={()=>{handleDuplicate(mobileTab==='preview'?'mobile':'desktop');setShowActionOverflow(false);}}>Duplicate</button>
             </div>}
@@ -835,7 +891,7 @@ Apply these auto-corrections?`);
         </div>
         <input id="editor-action-import" type="file" accept=".json" onChange={importJSON} style={{display:'none'}} />
       </div>
-      <div className="editor-mob-tabs">{[{id:'frame',label:'Frame'},{id:'preview',label:'Preview'},{id:'content',label:'Content'}].map(t=>(<div key={t.id} className={`editor-mob-tab ${mobileTab===t.id?'active':''}`} onClick={()=>setMobileTab(t.id)}>{t.label}</div>))}</div>
+      <div className="editor-mob-tabs" role="tablist" aria-label="Editor mobile sections">{[{id:'frame',label:'Frame'},{id:'preview',label:'Preview'},{id:'content',label:'Content'}].map(t=>(<button type="button" key={t.id} role="tab" aria-selected={mobileTab===t.id} tabIndex={mobileTab===t.id?0:-1} className={`editor-mob-tab ${mobileTab===t.id?'active':''}`} onClick={()=>setMobileTab(t.id)}>{t.label}</button>))}</div>
       <div className="mobile-workflow-bar">
         <button className="btn btn-secondary btn-sm" onClick={()=>setMobileTab('content')}>Quick Edit</button>
         <button className="btn btn-secondary btn-sm" onClick={()=>setMobileTab('preview')}>Validate</button>
@@ -851,6 +907,18 @@ Apply these auto-corrections?`);
         <div className="editor-panel-header"><span>Frame &amp; Theme</span><span style={{color:'var(--theme-accent)',fontWeight:700}}>#{String(frameId).padStart(2,'0')}</span></div>
         <div className="editor-section"><div className="editor-section-title">Template</div><input className="frame-search-mini" placeholder="Search frames..." onChange={e=>setFrameSearch(e.target.value)} value={frameSearch}/><div style={{display:'flex',flexDirection:'column',gap:4,maxHeight:260,overflowY:'auto'}}>{filteredFrames.map(f=>(<div key={f.id} onClick={()=>setFrameId(f.id)} style={{padding:'7px 10px',borderRadius:'var(--r)',cursor:'pointer',background:frameId===f.id?`color-mix(in srgb,${theme.accent} 12%,transparent)`:'transparent',border:`1px solid ${frameId===f.id?theme.accent:'transparent'}`,transition:'all 0.15s'}}><div style={{display:'flex',alignItems:'center',gap:6}}><span style={{fontFamily:'var(--font-m)',fontSize:9,color:'var(--dim)',width:22}}>{String(f.id).padStart(2,'0')}</span><SemanticChip kind="category" value={`tier-${f.tier}`} style={{fontSize:8,padding:'1px 5px'}}>T{f.tier}</SemanticChip><span style={{fontSize:12,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{f.name}</span><SemanticChip kind="category" value={f.layout} style={{fontSize:8,padding:'1px 5px'}}>{f.layout}</SemanticChip></div></div>))}</div></div>
         <div className="editor-section"><div className="editor-section-title">Color Theme</div><div className="theme-grid">{THEMES.map(t=>(<div key={t.id} className={`theme-btn ${theme.id===t.id?'active':''}`} style={{borderColor:theme.id===t.id?t.accent:'var(--border)'}} onClick={()=>applyTheme(t)}><span className="theme-dot" style={{background:t.accent}}/><span className="theme-name" style={{color:theme.id===t.id?t.accent:'var(--muted)'}}>{t.name}</span></div>))}</div></div>
+        <div className="editor-section accessibility-settings">
+          <div className="editor-section-title">Accessibility</div>
+          <label className="editor-toggle-row">
+            <span>Large text mode</span>
+            <input type="checkbox" checked={!!largeTextMode} onChange={e=>setLargeTextMode(e.target.checked)} />
+          </label>
+          <label className="editor-toggle-row">
+            <span>Dyslexia-friendly mode</span>
+            <input type="checkbox" checked={!!dyslexiaFriendlyMode} onChange={e=>setDyslexiaFriendlyMode(e.target.checked)} />
+          </label>
+          <div className="editor-overflow-note">Check long lists/paragraphs for clipping after enabling text scaling.</div>
+        </div>
         <div className="editor-section" style={{flex:1}}><div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}><span className="editor-section-title" style={{marginBottom:0}}>Saves ({saves.length})</span><button className="btn btn-primary btn-sm" onClick={()=>setShowSaveModal(true)}>Save</button></div>{saves.length===0?<div style={{fontSize:11,color:'var(--dim)',textAlign:'center',padding:'16px 0'}}>No saves yet</div>:<div className="saves-list">{saves.slice().reverse().map(s=>(<div key={s.id} className="save-item" onClick={()=>loadSave(s)}><div style={{width:24,height:24,borderRadius:4,background:s.theme?.base||'var(--bg-3)',border:`2px solid ${s.theme?.accent||'var(--border)'}`,flexShrink:0}}/><div className="save-item-info"><div className="save-item-name">{s.title}</div><div className="save-item-meta">#{s.frameId} · {new Date(s.savedAt).toLocaleDateString()}</div></div><button className="btn btn-ghost btn-sm" onClick={e=>{e.stopPropagation();setShowDeleteConfirm(s.id);}}>✕</button></div>))}</div>}</div>
       </div>
       {/* CENTER */}
@@ -865,7 +933,7 @@ Apply these auto-corrections?`);
       </div>
       {/* RIGHT */}
       <div className={`editor-right ${mobileTab==='content'?'mob-active':''}`}>
-        <div className="editor-right-tabs"><button className={`editor-right-tab ${rightTab==='design'?'active':''}`} onClick={()=>setRightTab('design')}>Design</button><button className={`editor-right-tab ${rightTab==='content'?'active':''}`} onClick={()=>setRightTab('content')}>Content</button></div>
+        <div className="editor-right-tabs" role="tablist" aria-label="Editor side panel"><button role="tab" aria-selected={rightTab==='design'} tabIndex={rightTab==='design'?0:-1} className={`editor-right-tab ${rightTab==='design'?'active':''}`} onClick={()=>setRightTab('design')}>Design</button><button role="tab" aria-selected={rightTab==='content'} tabIndex={rightTab==='content'?0:-1} className={`editor-right-tab ${rightTab==='content'?'active':''}`} onClick={()=>setRightTab('content')}>Content</button></div>
         {rightTab==='design'?(<><div className={`edit-toggle-row ${editMode?'on':''}`} onClick={()=>{setEditMode(m=>!m);editMode&&setSelectedEl(null);}}><div className={`toggle-pill ${editMode?'on':''}`}><div className="toggle-dot"/></div><span className="toggle-label">{editMode?'Edit ON':'Edit OFF'}</span><span className="toggle-hint">{editMode?'Click elements':'Toggle to edit'}</span></div><DesignPanel selectedEl={selectedEl} setSelectedEl={setSelectedEl} overrides={overrides} setOverrides={setOverrides} theme={theme} bgGradient={bgGradient} setBgGradient={setBgGradient} showToast={showToast} resetOverrides={resetOverrides} setPatternOverlay={setPatternOverlay} strictMode={strictMode}/>
           <div className="editor-section"><div className="editor-section-title">Readiness Checklist</div>
             <div style={{fontFamily:'var(--font-m)',fontSize:10,color:normalizationAudit.some(a=>a.accepted===false)?'#FFB3B3':'var(--dim)'}}>{normalizationAudit.some(a=>a.accepted===false)?'⚠ Numeric normalization corrections were rejected. Review numeric formatting before export.':'✓ Numeric normalization review clear.'}</div>
@@ -1090,7 +1158,7 @@ Apply these auto-corrections?`);
           </div>
           <div className="editor-section"><div className="editor-section-title">Big Number</div><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}><div className="form-group" style={{marginBottom:0}}><label className="form-label">Label</label><input value={content.bigLabel||''} onChange={e=>updateContent('bigLabel',e.target.value)}/></div><div className="form-group" style={{marginBottom:0}}><label className="form-label">Value</label><input value={content.bigNumber||''} onChange={e=>updateContent('bigNumber',e.target.value)}/></div></div></div>
           <div className="editor-section"><div className="editor-section-title">Images</div><ImageUpload label="Logo" value={uploadedImages.logo} onChange={v=>updateMedia(p=>({...p,uploadedImages:{...p.uploadedImages,logo:v}}))} maxSize={2} showToast={showToast}/><ImageUpload label="Hero" value={uploadedImages.hero} onChange={v=>updateMedia(p=>({...p,uploadedImages:{...p.uploadedImages,hero:v}}))} maxSize={4} showToast={showToast}/><ImageUpload label="Badge" value={uploadedImages.badge} onChange={v=>updateMedia(p=>({...p,uploadedImages:{...p.uploadedImages,badge:v}}))} maxSize={1} showToast={showToast}/></div>
-          <div className="editor-section"><div className="editor-section-title">Frame Warnings</div>{activeFramePitfalls.length===0?<div style={{fontSize:11,color:'var(--dim)'}}>No known pitfalls for this frame.</div>:<div style={{display:'flex',flexDirection:'column',gap:6}}>{activeFramePitfalls.map(p=>(<div key={p.id} style={{fontSize:11,padding:'7px 8px',borderRadius:6,border:`1px solid ${p.severity==='high'?'rgba(235,87,87,0.45)':'rgba(229,178,58,0.45)'}`,background:p.severity==='high'?'rgba(235,87,87,0.08)':'rgba(229,178,58,0.1)'}}><div style={{fontFamily:'var(--font-m)',fontSize:9,letterSpacing:'0.08em',textTransform:'uppercase',marginBottom:4}}>{p.severity==='high'?'Blocking':'Non-blocking'}</div><div>{p.warning}</div><div style={{opacity:0.75,marginTop:4}}>Hint: {p.triggerHint}</div></div>))}</div>}</div><div className="editor-section"><div className="editor-section-title">Export</div><div style={{fontFamily:'var(--font-m)',fontSize:9,color:'var(--dim)',marginBottom:8,lineHeight:1.7}}>⌘S Save · ⌘Z Undo · ⌘⇧Z Redo</div><div role="status" aria-live="polite" style={{fontSize:10,border:'1px solid var(--border)',borderRadius:6,padding:8,marginBottom:8,background:'var(--bg-3)'}}><div style={{fontFamily:'var(--font-m)',fontSize:9,color:'var(--dim)',marginBottom:4}}>Summary Preview</div><div><strong>{content.title||'Untitled'}</strong></div><div style={{opacity:0.9}}>{(content.thesis||content.deck||content.body||'No thesis yet').slice(0,140)}</div></div><div style={{display:'flex',flexDirection:'column',gap:8}}><div style={{display:'flex',gap:6}}><button className="btn btn-primary btn-sm" style={{flex:1}} onClick={exportPNG} disabled={exporting}>{exporting?'…':`PNG`}</button><button className="btn btn-secondary btn-sm editor-action-btn" onClick={exportWebP} disabled={exporting}>WebP</button></div><div style={{display:'flex',gap:6}}><button className="btn btn-ghost btn-sm" style={{flex:1}} onClick={exportHTML}>HTML</button><button className="btn btn-ghost btn-sm" style={{flex:1}} onClick={exportJSON}>JSON</button></div><label className="import-label">↑ Import <input type="file" accept=".json" onChange={importJSON}/></label><button className="btn btn-secondary w-full" onClick={()=>setShowSaveModal(true)}>Save</button><button className="btn btn-ghost w-full" onClick={()=>commandRegistry.find(c=>c.id==='duplicate')?.handler()}>Duplicate</button>{saves.length>0&&<button className="btn btn-ghost w-full" onClick={()=>commandRegistry.find(c=>c.id==='load')?.handler()}>Load ({saves.length})</button>}</div></div>
+          <div className="editor-section"><div className="editor-section-title">Frame Warnings</div>{activeFramePitfalls.length===0?<div style={{fontSize:11,color:'var(--dim)'}}>No known pitfalls for this frame.</div>:<div style={{display:'flex',flexDirection:'column',gap:6}}>{activeFramePitfalls.map(p=>(<div key={p.id} style={{fontSize:11,padding:'7px 8px',borderRadius:6,border:`1px solid ${p.severity==='high'?'rgba(235,87,87,0.45)':'rgba(229,178,58,0.45)'}`,background:p.severity==='high'?'rgba(235,87,87,0.08)':'rgba(229,178,58,0.1)'}}><div style={{fontFamily:'var(--font-m)',fontSize:9,letterSpacing:'0.08em',textTransform:'uppercase',marginBottom:4}}>{p.severity==='high'?'Blocking':'Non-blocking'}</div><div>{p.warning}</div><div style={{opacity:0.75,marginTop:4}}>Hint: {p.triggerHint}</div></div>))}</div>}</div><div className="editor-section"><div className="editor-section-title" style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>Export<button className="btn btn-ghost btn-sm" onClick={()=>setShowShortcutHelp(true)} aria-label="Open keyboard shortcuts help">⌨ Shortcuts</button></div><div style={{fontFamily:'var(--font-m)',fontSize:9,color:'var(--dim)',marginBottom:8,lineHeight:1.7}}>⌘S Save · ⌘Z Undo · ⌘⇧Z Redo</div><div style={{display:'flex',flexDirection:'column',gap:8}}><div style={{display:'flex',gap:6}}><button className="btn btn-primary btn-sm" style={{flex:1}} onClick={exportPNG} disabled={exporting}>{exporting?'…':`PNG`}</button><button className="btn btn-secondary btn-sm editor-action-btn" onClick={exportWebP} disabled={exporting}>WebP</button></div><div style={{display:'flex',gap:6}}><button className="btn btn-ghost btn-sm" style={{flex:1}} onClick={exportHTML}>HTML</button><button className="btn btn-ghost btn-sm" style={{flex:1}} onClick={exportJSON}>JSON</button></div><label className="import-label">↑ Import <input type="file" accept=".json" onChange={importJSON}/></label><button className="btn btn-secondary w-full" onClick={()=>setShowSaveModal(true)}>Save</button><button className="btn btn-ghost w-full" onClick={()=>commandRegistry.find(c=>c.id==='duplicate')?.handler()}>Duplicate</button>{saves.length>0&&<button className="btn btn-ghost w-full" onClick={()=>commandRegistry.find(c=>c.id==='load')?.handler()}>Load ({saves.length})</button>}</div></div>
         </>)}
       </div>
       {showCommandPalette&&<div className="modal-overlay open" onClick={e=>e.target===e.currentTarget&&setShowCommandPalette(false)}><div className="modal" style={{maxWidth:640}}><div className="modal-header"><span className="modal-title">Command Palette</span><button className="modal-close" onClick={()=>setShowCommandPalette(false)}>✕</button></div><input className="form-control" autoFocus placeholder="Type a command..." value={paletteQuery} onChange={e=>setPaletteQuery(e.target.value)} style={{marginBottom:12}}/>{Object.entries(filterCommands(commandRegistry.filter(c=>c.id!=='palette.open'),paletteQuery).reduce((groups,cmd)=>{(groups[cmd.category] ||= []).push(cmd);return groups;},{})).map(([group,items])=>(<div key={group} style={{marginBottom:10}}><div style={{fontSize:11,color:'var(--dim)',marginBottom:6,textTransform:'uppercase'}}>{group}</div><div style={{display:'flex',flexDirection:'column',gap:4}}>{items.map(cmd=>(<button key={cmd.id} className="btn btn-ghost" style={{justifyContent:'space-between',display:'flex',width:'100%'}} disabled={!cmd.enabled()} onClick={()=>{cmd.handler();setShowCommandPalette(false);}}><span>{cmd.label}</span><span style={{fontFamily:'var(--font-m)',fontSize:10,color:'var(--dim)'}}>{cmd.shortcut}</span></button>))}</div></div>))}</div></div>}
@@ -1105,6 +1173,7 @@ Apply these auto-corrections?`);
       {showLoadModal&&<div className="modal-overlay open" onClick={e=>e.target===e.currentTarget&&setShowLoadModal(false)}><div className="modal"><div className="modal-header"><span className="modal-title">Load</span><button className="modal-close" onClick={()=>setShowLoadModal(false)}>✕</button></div><div className="form-group"><label className="form-label">Name</label><input value={saveSearch} onChange={e=>setSaveSearch(e.target.value)} placeholder="Search name"/></div><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}><div className="form-group"><label className="form-label">Tag</label><input value={loadTagFilter} onChange={e=>setLoadTagFilter(e.target.value)} placeholder="defi"/></div><div className="form-group"><label className="form-label">Folder</label><input value={loadFolderFilter} onChange={e=>setLoadFolderFilter(e.target.value)} placeholder="Research"/></div><div className="form-group"><label className="form-label">Frame</label><input value={loadFrameFilter} onChange={e=>setLoadFrameFilter(e.target.value.replace(/[^0-9]/g,''))} placeholder="4"/></div><div className="form-group"><label className="form-label">From</label><input type="date" value={loadDateFrom} onChange={e=>setLoadDateFrom(e.target.value)}/></div><div className="form-group"><label className="form-label">To</label><input type="date" value={loadDateTo} onChange={e=>setLoadDateTo(e.target.value)}/></div></div>{filteredSaves.length===0?<div className="empty-state">No matching saves.</div>:<div className="saves-list" style={{maxHeight:400,overflowY:'auto'}}>{filteredSaves.map(s=>(<div key={s.id} className="save-item"><div style={{width:32,height:32,borderRadius:6,background:s.theme?.base||'var(--bg-3)',border:`2px solid ${s.theme?.accent||'var(--border)'}`,flexShrink:0}}/><div className="save-item-info" onClick={()=>openSaveDiffModal(s)} style={{cursor:'pointer'}}><div className="save-item-name">{s.title}</div><div className="save-item-meta">#{s.frameId} · {(s.folder||'Root')} · {Array.isArray(s.tags)&&s.tags.length?s.tags.join(', '):'No tags'} · {new Date(s.savedAt).toLocaleDateString()}</div></div><button className="btn btn-secondary btn-sm" onClick={()=>openSaveDiffModal(s)}>Compare</button><button className="btn btn-danger btn-sm" onClick={e=>{e.stopPropagation();setShowDeleteConfirm(s.id);}}>✕</button></div>))}</div>}</div></div>}
       {pendingLoadSave&&pendingSaveDiff&&<div className="modal-overlay open" onClick={()=>{setPendingLoadSave(null);setPendingSaveDiff(null);}}><div className="modal" onClick={e=>e.stopPropagation()}><div className="modal-header"><span className="modal-title">Compare before load</span><button className="modal-close" onClick={()=>{setPendingLoadSave(null);setPendingSaveDiff(null);}}>✕</button></div>{!pendingSaveDiff.hasChanges?<div className="empty-state">No changes detected.</div>:<div style={{display:'flex',flexDirection:'column',gap:10,maxHeight:360,overflowY:'auto'}}>{pendingSaveDiff.groups.map(group=><div key={group.key} className="editor-section"><div className="editor-section-title">{group.label}</div><div style={{display:'flex',flexDirection:'column',gap:6}}>{group.changes.map((change,idx)=><div key={`${group.key}-${idx}`} style={{padding:'7px 8px',borderRadius:6,border:`1px solid ${change.destructive?'rgba(235,87,87,0.55)':'var(--border)'}`,background:change.destructive?'rgba(235,87,87,0.08)':'var(--bg-3)'}}><strong>{change.type==='added'?'Added':change.type==='removed'?'Removed':'Changed'}</strong> · {change.label}<div style={{fontSize:11,opacity:0.85}}>{change.details}</div></div>)}</div></div>)}</div>}{pendingSaveDiff.destructiveFlags.length>0&&<div style={{marginTop:8,padding:8,borderRadius:6,border:'1px solid rgba(235,87,87,0.55)',background:'rgba(235,87,87,0.08)',fontSize:11}}>Destructive changes require confirmation before load.</div>}<div className="modal-footer"><button className="btn btn-secondary" onClick={()=>{setPendingLoadSave(null);setPendingSaveDiff(null);}}>Cancel</button><button className="btn btn-primary" onClick={confirmLoadAfterDiff}>Load save</button></div></div></div>}
             {showDeleteConfirm&&<div className="confirm-overlay" onClick={()=>setShowDeleteConfirm(null)}><div className="confirm-box" onClick={e=>e.stopPropagation()}><div className="confirm-title">Delete?</div><div className="confirm-actions"><button className="btn btn-secondary btn-sm" onClick={()=>setShowDeleteConfirm(null)}>Cancel</button><button className="btn btn-danger btn-sm" onClick={confirmDel}>Delete</button></div></div></div>}
+      {showShortcutHelp&&<div className="modal-overlay open" onClick={()=>setShowShortcutHelp(false)}><div className="modal" onClick={e=>e.stopPropagation()}><div className="modal-header"><span className="modal-title">Keyboard + Shortcuts</span><button className="modal-close" onClick={()=>setShowShortcutHelp(false)}>✕</button></div><div style={{fontSize:12,lineHeight:1.7}}><div><strong>Top bar:</strong> Save, load, undo/redo, export/import buttons are tab-focusable and support Enter/Space.</div><div><strong>Left nav:</strong> main route buttons are keyboard reachable in DOM order.</div><div><strong>Editor canvas:</strong> editable frame regions are selectable in Edit mode and escape clears selection.</div><div><strong>Right panel:</strong> sections, tabs, grouped selectors use roving tabindex patterns.</div><div><strong>Dialogs:</strong> close, confirm, and primary actions are keyboard-activatable.</div><div><strong>Toasts:</strong> dismiss button is focusable and operable from keyboard.</div><hr style={{margin:'10px 0',borderColor:'var(--border)'}}/><div><strong>Key map:</strong> ⌘/Ctrl+S save, ⌘/Ctrl+Z undo, ⌘/Ctrl+Shift+Z redo, ⌘/Ctrl+K command palette, Esc close overlays.</div></div></div></div>}
       {showAutosavePrompt&&<div className="confirm-overlay" onClick={()=>setShowAutosavePrompt(false)}><div className="confirm-box" onClick={e=>e.stopPropagation()}><div className="confirm-title">Restore Session?</div><div className="confirm-msg">Found autosave from last session.</div><div className="confirm-actions"><button className="btn btn-secondary btn-sm" onClick={()=>setShowAutosavePrompt(false)}>Discard</button><button className="btn btn-primary btn-sm" onClick={restoreAutosave}>Restore</button></div></div></div>}
       {showMobileCommandSheet && <div className="mobile-command-sheet-overlay" onClick={()=>setShowMobileCommandSheet(false)}><div className="mobile-command-sheet" onClick={e=>e.stopPropagation()}><div className="mobile-command-sheet-handle"/><div className="editor-section-title">Command Sheet</div><div className="mobile-action-cluster"><button className="btn btn-secondary btn-sm" onClick={()=>{setRightTab('content');setMobileTab('content');setShowMobileCommandSheet(false);}}>Quick Edit</button><button className="btn btn-secondary btn-sm" onClick={exportJSON}>Export JSON</button><button className="btn btn-secondary btn-sm" onClick={exportHTML}>Export HTML</button><button className="btn btn-primary btn-sm" onClick={exportPNG}>Publish PNG</button></div><div className="mobile-qa-checklist"><div className="editor-section-title">Mobile QA (Pro workflows)</div>{Object.entries({quickEdit:'Quick edits save correctly',validate:'Validation summary visible',publish:'One-tap publish works',proRows:'Row drag/menu targets are touchable'}).map(([key,label])=><label key={key}><input type="checkbox" checked={mobileQaChecks[key]} onChange={()=>setMobileQaChecks(prev=>({...prev,[key]:!prev[key]}))}/><span>{label}</span></label>)}</div></div></div>}
     </div>
