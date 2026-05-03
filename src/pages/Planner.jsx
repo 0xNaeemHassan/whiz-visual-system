@@ -5,6 +5,7 @@ import { THEMES } from '../data/themes';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { useIntl } from '../i18n/IntlProvider';
 import { normalizePlannerIssue } from '../utils/schemaContracts';
+import { buildNarrativeArcModel, suggestNextArcStep } from '../domain/services/narrativeArcService';
 
 const STATUSES = ['draft', 'planned', 'wip', 'done', 'published'];
 const CONFIDENCE = ['low', 'medium', 'high'];
@@ -95,7 +96,7 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
   const [editingIssue, setEditingIssue] = useState(null);
   const [form, setForm] = useState({
     issueNum: '', topic: '', frameId: '', themeId: '', status: 'draft', priority: 'medium',
-    publishDate: '', notes: '', caption: '', sourceLinks: '', confidence: 'medium', series: '',
+    publishDate: '', notes: '', caption: '', sourceLinks: '', confidence: 'medium', series: '', thesisTheme: '', arc: '', arcPhase: '',
   });
   const normalizeIssueNum = (v) => String(v || '').replace(/\D/g, '').slice(-3).padStart(3, '0');
   const normalizeIssue = (issue) => ({
@@ -111,6 +112,9 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
     metricValue: issue.metricValue || '',
     metricUnit: issue.metricUnit || '',
     metricProvenance: Array.isArray(issue.metricProvenance) ? issue.metricProvenance : [],
+    thesisTheme: issue.thesisTheme || '',
+    arc: issue.arc || '',
+    arcPhase: issue.arcPhase || '',
   });
   const existingIssueNums = new Set(issues.map(i => String(i.issueNum || '').padStart(3, '0')));
 
@@ -167,7 +171,7 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
 
   const openIssueForm = (presetStatus) => {
     setEditingIssue(null);
-    setForm({ issueNum: String(nextNum).padStart(3,'0'), topic: '', frameId: '', themeId: '', status: presetStatus || 'draft', publishDate: '', notes: '', caption: '', sourceLinks: '', priority: 'medium', confidence: 'medium', series: '' });
+    setForm({ issueNum: String(nextNum).padStart(3,'0'), topic: '', frameId: '', themeId: '', status: presetStatus || 'draft', publishDate: '', notes: '', caption: '', sourceLinks: '', priority: 'medium', confidence: 'medium', series: '', thesisTheme: '', arc: '', arcPhase: '' });
     setShowModal(true);
   };
 
@@ -416,6 +420,9 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
 
   const stats = STATUSES.reduce((acc, s) => { acc[s] = issues.filter(i => i.status === s).length; return acc; }, {});
 
+  const arcModel = useMemo(() => buildNarrativeArcModel(issues), [issues]);
+  const nextArcSuggestion = useMemo(() => suggestNextArcStep(issues), [issues]);
+
   // F10: Open in Editor with frame/theme pre-loaded
   const openInEditor = (issue) => {
     // Fix #21: pass full issue context so Editor can pre-fill content
@@ -453,6 +460,7 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
           <div>
             <div style={{ fontFamily: 'var(--font-m)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)' }}>Intelligence</div>
             <div style={{ fontSize: 13, color: 'var(--text)' }}>Top cadence alerts by posting drift.</div>
+            <div style={{ fontSize: 11, color: 'var(--muted)' }}>Next arc step: <strong>{nextArcSuggestion.suggestedPhase}</strong> — {nextArcSuggestion.reason}</div>
           </div>
           {seriesFocusFilter && (
             <button className="btn btn-ghost btn-sm" onClick={() => setSeriesFocusFilter(null)}>
@@ -511,11 +519,37 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
           <button className={`view-btn ${view==='kanban'?'active':''}`} onClick={() => setViewSafe('kanban')}>Kanban</button>
           <button className={`view-btn ${view==='calendar'?'active':''}`} onClick={() => setViewSafe('calendar')}>Calendar</button>
           <button className={`view-btn ${view==='analytics'?'active':''}`} onClick={() => setViewSafe('analytics')}>Analytics</button>
+          <button className={`view-btn ${view==='arc'?'active':''}`} onClick={() => setViewSafe('arc')}>Arc Planner</button>
         </div>
         <button className="btn btn-secondary btn-sm" onClick={exportCSV}>↓ CSV</button>
         <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer' }}>↑ CSV<input type="file" accept=".csv" onChange={importCSV} style={{ display: 'none' }} /></label>
         <button className="btn btn-primary" onClick={() => openIssueForm()}>+ New Issue</button>
       </div>
+
+
+
+      {view === 'arc' && (
+        <div className="card" style={{ display: 'grid', gap: 12 }}>
+          <div style={{ fontSize: 13, color: 'var(--text)' }}>Upcoming posts grouped by narrative arc.</div>
+          {arcModel.arcs.length === 0 ? <div style={{ fontSize: 12, color: 'var(--muted)' }}>No arcs defined yet.</div> : arcModel.arcs.map((arc) => (
+            <div key={arc.arcId} style={{ border: '1px solid var(--border)', borderRadius: 'var(--r)', padding: 10 }}>
+              <div style={{ fontWeight: 600 }}>{arc.arcName} <span style={{ color: 'var(--muted)', fontWeight: 400 }}>· {arc.thesisTheme}</span></div>
+              <div style={{ display: 'grid', gap: 6, marginTop: 8 }}>
+                {arc.posts.filter((post) => (post.status || '').trim() !== 'published').map((post) => (
+                  <div key={post.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                    <span>#{post.issueNum} {post.topic}</span>
+                    <span style={{ color: 'var(--muted)' }}>{post.arcPhase || '—'} · {post.publishDate || 'unscheduled'}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 12 }}>Orphan posts (no arc linkage): {arcModel.orphanPosts.length}</div>
+            <div style={{ fontSize: 11, color: 'var(--muted)' }}>{arcModel.orphanPosts.slice(0,5).map((post) => `#${post.issueNum}`).join(', ') || 'None'}</div>
+          </div>
+        </div>
+      )}
 
       {/* Table View */}
       {view === 'table' && (
@@ -630,6 +664,11 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div className="form-group"><label className="form-label">Confidence</label><select value={form.confidence || 'medium'} onChange={e => setForm(f => ({...f, confidence: e.target.value}))}>{CONFIDENCE.map(s => <option key={s} value={s}>{s.toUpperCase()}</option>)}</select></div>
             <div className="form-group"><label className="form-label">Series</label><input value={form.series || ''} onChange={e => setForm(f => ({...f, series: e.target.value}))} placeholder="Stablecoin Risk Pt. 1" /></div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+            <div className="form-group"><label className="form-label">Thesis Theme</label><input value={form.thesisTheme || ''} onChange={e => setForm(f => ({...f, thesisTheme: e.target.value}))} placeholder="Liquidity Fragmentation" /></div>
+            <div className="form-group"><label className="form-label">Arc</label><input value={form.arc || ''} onChange={e => setForm(f => ({...f, arc: e.target.value}))} placeholder="Stablecoin Stress Arc" /></div>
+            <div className="form-group"><label className="form-label">Arc Phase</label><select value={form.arcPhase || ''} onChange={e => setForm(f => ({...f, arcPhase: e.target.value}))}><option value="">— Select —</option><option value="setup">setup</option><option value="evidence">evidence</option><option value="tension">tension</option><option value="resolution">resolution</option></select></div>
           </div>
           <div className="form-group"><label className="form-label">Topic / Headline *</label><input value={form.topic} onChange={e => setForm(f => ({...f, topic: e.target.value}))} placeholder="The End of Mercenary Yield" autoFocus /></div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
