@@ -7,6 +7,7 @@ import { useIntl } from '../i18n/IntlProvider';
 import { normalizePlannerIssue } from '../utils/schemaContracts';
 import { computeCadencePolicy, CADENCE_SLOT_STATE } from '../domain/services/cadencePolicyEngine';
 import { DEFAULT_CADENCE_CONFIG } from '../state/editorStore';
+import { secureStorage } from '../storage/secureStorage';
 
 const STATUSES = ['draft', 'planned', 'wip', 'done', 'published'];
 const CONFIDENCE = ['low', 'medium', 'high'];
@@ -173,10 +174,10 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
 
   useEffect(() => {
     try {
-      const rawDraft = localStorage.getItem('whiz-planner-issue-draft');
+      const rawDraft = secureStorage.raw.getItem('whiz-planner-issue-draft');
       if (!rawDraft) return;
       const draft = normalizeIssue(JSON.parse(rawDraft));
-      localStorage.removeItem('whiz-planner-issue-draft');
+      secureStorage.raw.removeItem('whiz-planner-issue-draft');
       setEditingIssue(null);
       setForm({
         issueNum: draft.issueNum || nextIssueNum,
@@ -211,7 +212,7 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
       setShowModal(true);
       showToast('Loaded draft from Editor duplicate');
     } catch (error) {
-      localStorage.removeItem('whiz-planner-issue-draft');
+      secureStorage.raw.removeItem('whiz-planner-issue-draft');
     }
   }, [nextIssueNum, showToast]);
 

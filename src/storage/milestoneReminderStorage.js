@@ -1,3 +1,4 @@
+import { secureStorage } from './secureStorage.js';
 const STORAGE_KEY = 'whiz-milestone-reminders';
 
 function safeParse(value) {
@@ -8,15 +9,15 @@ function safeParse(value) {
   }
 }
 
-export function loadReminderState(storage = window.localStorage) {
+export function loadReminderState(storage = secureStorage.raw) {
   return safeParse(storage.getItem(STORAGE_KEY));
 }
 
-export function saveReminderState(state, storage = window.localStorage) {
+export function saveReminderState(state, storage = secureStorage.raw) {
   storage.setItem(STORAGE_KEY, JSON.stringify(state || {}));
 }
 
-export function acknowledgeReminder({ id, quarterKey, storage = window.localStorage }) {
+export function acknowledgeReminder({ id, quarterKey, storage = secureStorage.raw }) {
   const state = loadReminderState(storage);
   const prev = state[quarterKey] || {};
   state[quarterKey] = { ...prev, [id]: { ...(prev[id] || {}), acknowledged: true, snoozedUntil: null } };
@@ -24,7 +25,7 @@ export function acknowledgeReminder({ id, quarterKey, storage = window.localStor
   return state;
 }
 
-export function snoozeReminder({ id, quarterKey, snoozedUntil, storage = window.localStorage }) {
+export function snoozeReminder({ id, quarterKey, snoozedUntil, storage = secureStorage.raw }) {
   const state = loadReminderState(storage);
   const prev = state[quarterKey] || {};
   state[quarterKey] = { ...prev, [id]: { ...(prev[id] || {}), acknowledged: false, snoozedUntil } };
