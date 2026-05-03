@@ -122,7 +122,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const[saves,setSaves]=useLocalStorage('whiz-saves',[]);
   const[frameId,setFrameId]=useState(editingFrame||4);
   const[theme,setTheme]=useState(activeTheme);
-  const{state:content,set:setContent,undo,redo,canUndo,canRedo,reset:resetContent,commit:commitContent}=useUndoRedo(DEFAULT_CONTENT);
+  const{state:content,set:setContent,undo,redo,canUndo,canRedo,reset:resetContent,commit:commitContent,history:contentHistory,cursor:contentCursor,jumpTo:jumpToContentSnapshot}=useUndoRedo(DEFAULT_CONTENT,120);
   const[_savedOverrides,_persistOverrides]=useLocalStorage('whiz-overrides',DEFAULT_OVERRIDES);
   const{state:overrides,set:setOverrides,undo:undoOverride,redo:redoOverride,reset:resetOverrides,commit:commitOverrides}=useUndoRedo(_savedOverrides);
   // Persist overrides to localStorage whenever they change
@@ -132,6 +132,8 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const[frameSearch,setFrameSearch]=useState('');const frameListRef=useRef(null);const[exporting,setExporting]=useState(false);
   const[showGrid,setShowGrid]=useState(false);const[editMode,setEditMode]=useState(false);
   const[selectedEl,setSelectedEl]=useState(null);const[rightTab,setRightTab]=useState('content');
+  const [showHistoryDrawer, setShowHistoryDrawer] = useState(false);
+  const [historyScrollTop, setHistoryScrollTop] = useState(0);
   const[mobileTab,setMobileTab]=useState('preview');const[aspectRatio,setAspectRatio]=useState(RATIOS[0]);
   const[showActionOverflow,setShowActionOverflow]=useState(false);
   const [_savedMedia, persistMedia] = useLocalStorage('whiz-media',{uploadedImages:{logo:null,hero:null,badge:null},bgGradient:null,patternOverlay:null});
@@ -531,6 +533,15 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   // NOTE: Scroll frame list to top when search changes
   useEffect(()=>{if(frameListRef.current)frameListRef.current.scrollTop=0;},[frameSearch,filteredFrames]);
 
+  const HISTORY_WINDOW = 60;
+  const HISTORY_ROW_HEIGHT = 62;
+  const historyCap = useMemo(() => contentHistory.slice(-HISTORY_WINDOW), [contentHistory]);
+  const virtualStart = Math.max(0, Math.floor(historyScrollTop / HISTORY_ROW_HEIGHT) - 6);
+  const virtualCount = Math.min(historyCap.length - virtualStart, 18);
+  const virtualRows = historyCap.slice(virtualStart, virtualStart + virtualCount);
+  const virtualTopPad = virtualStart * HISTORY_ROW_HEIGHT;
+  const virtualBottomPad = Math.max(0, (historyCap.length - (virtualStart + virtualCount)) * HISTORY_ROW_HEIGHT);
+
   return(
     <div className="editor-wrap">
       <div className="editor-action-bar">
@@ -588,7 +599,8 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
             {brandScore.checks.map((c,i)=><div key={i} style={{fontFamily:'var(--font-m)',fontSize:10,color:c.pass?'var(--dim)':'#FFB3B3',marginBottom:3}}>{c.pass?'✓':'✗'} {c.label}</div>)}
           </div>
           </>):(<>
-          <div className="editor-panel-header"><span>Content</span><button className="btn btn-ghost btn-sm" onClick={()=>resetContent(DEFAULT_CONTENT)}>Reset</button></div>
+          <div className="editor-panel-header"><span>Content</span><div style={{display:'flex',gap:6}}><button className="btn btn-ghost btn-sm" onClick={()=>setShowHistoryDrawer(v=>!v)}>{showHistoryDrawer?'Hide':'History'}</button><button className="btn btn-ghost btn-sm" onClick={()=>resetContent(DEFAULT_CONTENT)}>Reset</button></div></div>
+          {showHistoryDrawer&&<div className="editor-section"><div className="editor-section-title">History ({contentHistory.length})</div><div style={{fontSize:10,color:'var(--dim)',marginBottom:8}}>Newest last · cursor #{contentCursor+1}</div><div style={{maxHeight:360,overflowY:'auto',border:'1px solid var(--border)',borderRadius:8}} onScroll={e=>setHistoryScrollTop(e.currentTarget.scrollTop)}><div style={{paddingTop:virtualTopPad,paddingBottom:virtualBottomPad}}>{virtualRows.map((entry,idx)=>{const absoluteIndex=contentHistory.length-historyCap.length+virtualStart+idx;const isActive=absoluteIndex===contentCursor;return <button key={entry.id} onClick={()=>jumpToContentSnapshot(absoluteIndex)} style={{display:'block',width:'100%',textAlign:'left',padding:'8px 10px',border:'none',borderBottom:'1px solid var(--border)',background:isActive?'color-mix(in srgb,var(--theme-accent) 14%,transparent)':'transparent',cursor:'pointer'}}><div style={{display:'flex',justifyContent:'space-between',gap:8,fontSize:11}}><strong style={{color:isActive?'var(--theme-accent)':'var(--text)'}}>{entry.label||'Snapshot'}</strong><span style={{color:'var(--dim)',fontFamily:'var(--font-m)'}}>{new Date(entry.timestamp).toLocaleTimeString()}</span></div><div style={{fontSize:10,color:'var(--dim)',marginTop:4}}>Δ {entry.changedKeys?.length||0} keys{entry.changedKeys?.length?`: ${entry.changedKeys.slice(0,5).join(', ')}`:''}</div></button>;})}</div></div></div>}
           <div className="editor-section"><div className="editor-section-title">Quick Start</div><div className="template-list">{CONTENT_TEMPLATES.map(t=>(<div key={t.id} className="template-item" onClick={()=>applyTemplate(t)}><div className="template-item-name">{t.name}</div><div className="template-item-desc">{t.desc}</div></div>))}</div></div>
           <div className="editor-section"><div className="editor-section-title">Aspect Ratio</div><AspectRatioSelector value={aspectRatio.id} onChange={r=>{setAspectRatio(r);showToast(`${r.w}×${r.h}`);}}/></div>
           <div className="editor-section">
