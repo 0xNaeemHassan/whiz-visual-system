@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { optimizeImageForImport } from '../domain/services/imageOptimizationService';
 
 // A1-A14: Complete image upload with position, resize, opacity, rotation, fit controls
 export default function ImageUpload({ label, value, onChange, maxSize = 2, showToast }) {
@@ -17,43 +18,29 @@ export default function ImageUpload({ label, value, onChange, maxSize = 2, showT
       showToast?.('Only image files are supported.', 'error');
       return;
     }
-    // H-09: Compress to max 1200px using canvas before storing as base64
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        const MAX = 1200;
-        const scale = Math.min(1, MAX / Math.max(img.width, img.height));
-        const w = Math.round(img.width * scale);
-        const h = Math.round(img.height * scale);
-        const canvas = document.createElement('canvas');
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, w, h);
-        // Use WebP if supported, fall back to JPEG
-        const webpTest = canvas.toDataURL('image/webp');
-        const format = webpTest.startsWith('data:image/webp') ? 'image/webp' : 'image/jpeg';
-        const dataUrl = canvas.toDataURL(format, 0.85);
-        const kb = Math.round(dataUrl.length * 0.75 / 1024);
-        if (kb > 400) {
-          showToast?.(`Image compressed to ~${kb}KB`, 'info');
-        }
-        onChange({
-          dataUrl,
-          name: file.name,
-          x: 50, y: 50,
-          width: 100,
-          opacity: 1,
-          rotation: 0,
-          fit: 'contain',
-          zIndex: 10,
-          visible: true,
-        });
-      };
-      img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
+    optimizeImageForImport(file, {
+      bounds: { maxWidth: 1200, maxHeight: 1200 },
+      reencode: { preferredType: 'image/webp', fallbackType: 'image/jpeg', qualityTargets: [0.9, 0.85, 0.8] },
+    }).then(({ dataUrl, metadata }) => {
+      const kb = Math.round(dataUrl.length * 0.75 / 1024);
+      if (kb > 400) {
+        showToast?.(`Image compressed to ~${kb}KB`, 'info');
+      }
+      onChange({
+        dataUrl,
+        name: file.name,
+        x: 50, y: 50,
+        width: 100,
+        opacity: 1,
+        rotation: 0,
+        fit: 'contain',
+        zIndex: 10,
+        visible: true,
+        optimizedMetadata: metadata,
+      });
+    }).catch((error) => {
+      showToast?.(error?.message || 'Unable to process image.', 'error');
+    });
   };
 
   const handleDrop = (e) => {
