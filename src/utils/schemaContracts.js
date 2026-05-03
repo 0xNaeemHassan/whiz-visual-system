@@ -30,12 +30,19 @@ export function normalizeEditorImport(raw = {}) {
 
 export function normalizePlannerIssue(raw = {}) {
   const issue = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  const outcomes = issue.outcomes && typeof issue.outcomes === 'object' && !Array.isArray(issue.outcomes) ? issue.outcomes : {};
   return {
     ...issue,
     metricSource: String(issue.metricSource || '').trim(),
     metricValue: String(issue.metricValue || '').trim(),
     metricUnit: String(issue.metricUnit || '').trim(),
     metricProvenance: Array.isArray(issue.metricProvenance) ? issue.metricProvenance : [],
+    outcomes: {
+      engagementRate: Number.isFinite(Number(outcomes.engagementRate)) ? Number(outcomes.engagementRate) : null,
+      conversionProxy: Number.isFinite(Number(outcomes.conversionProxy)) ? Number(outcomes.conversionProxy) : null,
+      qualitativeNotes: String(outcomes.qualitativeNotes || '').trim(),
+      recordedAt: outcomes.recordedAt ? String(outcomes.recordedAt) : null,
+    },
   };
 }
 

@@ -5,6 +5,7 @@ import { THEMES } from '../data/themes';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { useIntl } from '../i18n/IntlProvider';
 import { normalizePlannerIssue } from '../utils/schemaContracts';
+import { aggregateOutcomeWindows, computeRecommendationDeltas } from '../utils/analyticsQuality';
 
 const STATUSES = ['draft', 'planned', 'wip', 'done', 'published'];
 const CONFIDENCE = ['low', 'medium', 'high'];
@@ -111,6 +112,7 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
     metricValue: issue.metricValue || '',
     metricUnit: issue.metricUnit || '',
     metricProvenance: Array.isArray(issue.metricProvenance) ? issue.metricProvenance : [],
+    outcomes: issue.outcomes || { engagementRate: null, conversionProxy: null, qualitativeNotes: '', recordedAt: null },
   });
   const existingIssueNums = new Set(issues.map(i => String(i.issueNum || '').padStart(3, '0')));
 
@@ -167,7 +169,7 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
 
   const openIssueForm = (presetStatus) => {
     setEditingIssue(null);
-    setForm({ issueNum: String(nextNum).padStart(3,'0'), topic: '', frameId: '', themeId: '', status: presetStatus || 'draft', publishDate: '', notes: '', caption: '', sourceLinks: '', priority: 'medium', confidence: 'medium', series: '' });
+    setForm({ issueNum: String(nextNum).padStart(3,'0'), topic: '', frameId: '', themeId: '', status: presetStatus || 'draft', publishDate: '', notes: '', caption: '', sourceLinks: '', priority: 'medium', confidence: 'medium', series: '', outcomes: { engagementRate: '', conversionProxy: '', qualitativeNotes: '', recordedAt: '' } });
     setShowModal(true);
   };
 
@@ -416,6 +418,9 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
 
   const stats = STATUSES.reduce((acc, s) => { acc[s] = issues.filter(i => i.status === s).length; return acc; }, {});
 
+  const outcomeWindows = useMemo(() => aggregateOutcomeWindows(issues), [issues]);
+  const recommendationDeltas = useMemo(() => computeRecommendationDeltas(issues), [issues]);
+
   // F10: Open in Editor with frame/theme pre-loaded
   const openInEditor = (issue) => {
     // Fix #21: pass full issue context so Editor can pre-fill content
@@ -493,6 +498,19 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
             })}
           </div>
         )}
+      </div>
+
+
+      <div className="card" style={{ marginBottom: 16 }} aria-label="Cycle deltas">
+        <div style={{ fontFamily: 'var(--font-m)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)' }}>What changed from last cycle</div>
+        <div style={{ marginTop: 8, fontSize: 12, color: 'var(--muted)' }}>
+          Outcomes captured: 7d {outcomeWindows.d7.length} · 30d {outcomeWindows.d30.length} · 90d {outcomeWindows.d90.length}
+        </div>
+        <ul style={{ margin: '8px 0 0', paddingLeft: 18, fontSize: 12 }}>
+          <li>Topic prior: {recommendationDeltas.heuristicPriors.topic ? `${recommendationDeltas.heuristicPriors.topic.key} (${recommendationDeltas.heuristicPriors.topic.score.toFixed(2)})` : 'Not enough outcome data yet'}</li>
+          <li>Frame prior: {recommendationDeltas.heuristicPriors.frame ? `Frame ${recommendationDeltas.heuristicPriors.frame.key} (${recommendationDeltas.heuristicPriors.frame.score.toFixed(2)})` : 'Not enough outcome data yet'}</li>
+          <li>Cadence suggestion: {recommendationDeltas.cadenceSuggestion[0] ? `${recommendationDeltas.cadenceSuggestion[0].series}: every ~${recommendationDeltas.cadenceSuggestion[0].cadenceDays}d` : 'Need at least 2 published outcomes in a series'}</li>
+        </ul>
       </div>
 
       {/* Toolbar */}
@@ -655,6 +673,13 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
           {/* F7: Source links with URL hints */}
           <div className="form-group"><label className="form-label">Source Links (one per line)</label><textarea value={form.sourceLinks} onChange={e => setForm(f => ({...f, sourceLinks: e.target.value}))} rows={2} placeholder="https://defillama.com/protocol/...&#10;https://dune.com/..." />{form.sourceLinks && <div style={{ marginTop: 4 }}>{form.sourceLinks.split('\n').filter(Boolean).map((link, i) => {const isUrl = /^https?:\/\//.test(link.trim()); return (<div key={i} style={{ fontSize: 10, fontFamily: 'var(--font-m)', color: isUrl ? 'var(--muted)' : '#FF5A5A', display: 'flex', alignItems: 'center', gap: 4 }}><span>{isUrl ? '✓' : '⚠'}</span><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{link.trim()}</span></div>);})}</div>}</div>
           <div className="form-group"><label className="form-label">Notes</label><textarea value={form.notes} onChange={e => setForm(f => ({...f, notes: e.target.value}))} rows={2} placeholder="Research notes, key stats, angle ideas..." /></div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="form-group"><label className="form-label">Engagement metric</label><input type="number" value={form.outcomes?.engagementRate ?? ''} onChange={e => setForm(f => ({...f, outcomes: { ...(f.outcomes || {}), engagementRate: e.target.value }}))} placeholder="e.g. 3.4" /></div>
+            <div className="form-group"><label className="form-label">Conversion proxy</label><input type="number" value={form.outcomes?.conversionProxy ?? ''} onChange={e => setForm(f => ({...f, outcomes: { ...(f.outcomes || {}), conversionProxy: e.target.value }}))} placeholder="e.g. 1.2" /></div>
+          </div>
+          <div className="form-group"><label className="form-label">Qualitative outcome notes</label><textarea value={form.outcomes?.qualitativeNotes || ''} onChange={e => setForm(f => ({...f, outcomes: { ...(f.outcomes || {}), qualitativeNotes: e.target.value }}))} rows={2} placeholder="What changed since last cycle?" /></div>
+
           <div className="modal-footer">
             {editingIssue && <button className="btn btn-danger" onClick={() => { deleteIssue(editingIssue); setShowModal(false); }}>Delete</button>}
             {editingIssue && <button className="btn btn-secondary" onClick={() => { duplicateIssue(issues.find(i=>i.id===editingIssue)); setShowModal(false); }}>Duplicate</button>}
