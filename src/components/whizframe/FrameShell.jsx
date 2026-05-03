@@ -5,6 +5,7 @@ import { applyOverflowPolicy } from './layouts/OverflowPolicy';
 import { ensureMinEdgeSpacing, getLayoutTuning, placeNodes } from './layouts/layoutUtils';
 import { TICKER_CONTRACT, normalizeTickerSpeed } from '../../domain/tickerContract';
 import { SPINE_DESIGN_TOKENS } from '../../domain/spineDesignTokens';
+import { calculateReceiptSummary } from '../../domain/services/receiptCalcService';
 import { FrameFooter } from './FrameFooter';
 import SemanticChip from '../SemanticChip';
 import { resolveRiskAccent } from '../../domain/riskAccentPolicy';
@@ -908,11 +909,9 @@ function CoverStoryLayout(props) {
 function ReceiptLayout(props) {
   const { content, ov, accentColor, SectionHead } = props;
   const rows = content.tableRows || [];
-  const total = rows.reduce((sum, r) => {
-    const val = parseFloat((r.col3 || '0').replace(/[$,]/g, ''));
-    return sum + (isNaN(val) ? 0 : val);
-  }, 0);
+  const summary = calculateReceiptSummary(rows);
   const dashes = '─'.repeat(32);
+  const fmtUsd = (value) => `${value >= 0 ? '+' : '-'}$${Math.abs(value).toFixed(2)}`;
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', fontFamily: "'JetBrains Mono', monospace" }}>
       <div style={{ textAlign: 'center', marginBottom: 16, flexShrink: 0 }}>
@@ -938,7 +937,8 @@ function ReceiptLayout(props) {
               {row.col2 && <div style={{ fontSize: 10, color: '#5A6478', marginTop: 2 }}>{row.col2}</div>}
             </div>
             <div style={{ textAlign: 'right', flexShrink: 0 }}>
-              <div style={{ fontSize: 12, color: row.col4 === 'benefit' ? accentColor : row.col4 === 'risk' ? '#FF5A5A' : '#F4F5F7', fontWeight: 600 }}>{row.col3}</div>
+              <div style={{ fontSize: 12, color: row.col4 === 'benefit' ? accentColor : row.col4 === 'risk' ? '#FF5A5A' : '#F4F5F7', fontWeight: 600 }}>{row.col3 || fmtUsd(summary.rows[i]?.amount || 0)}</div>
+              {summary.rows[i]?.isManualMismatch && <div style={{ fontSize: 9, color: '#FFB020', marginTop: 2 }}>⚠ manual fee mismatch</div>}
             </div>
           </div>
         ))}
@@ -946,9 +946,22 @@ function ReceiptLayout(props) {
       <div>
         <div style={{ fontSize: 10, color: '#3A4560', margin: '8px 0' }}>{dashes}</div>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-          <span style={{ fontSize: 12, color: '#8B95A3' }}>SUBTOTAL</span>
-          <span style={{ fontSize: 12, color: '#F4F5F7', fontWeight: 700 }}>{total > 0 ? `$${total.toFixed(2)}` : rows[rows.length-1]?.col3 || '—'}</span>
+          <span style={{ fontSize: 12, color: '#8B95A3' }}>SUBTOTAL FEES</span>
+          <span style={{ fontSize: 12, color: '#FF5A5A', fontWeight: 700 }}>-${summary.subtotalFees.toFixed(2)}</span>
         </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+          <span style={{ fontSize: 12, color: '#8B95A3' }}>TOTAL BENEFITS</span>
+          <span style={{ fontSize: 12, color: accentColor, fontWeight: 700 }}>+${summary.totalBenefits.toFixed(2)}</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+          <span style={{ fontSize: 12, color: '#8B95A3' }}>NET RESULT</span>
+          <span style={{ fontSize: 12, color: summary.netResult >= 0 ? accentColor : '#FF5A5A', fontWeight: 700 }}>{fmtUsd(summary.netResult)}</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+          <span style={{ fontSize: 12, color: '#8B95A3' }}>IMPLIED SLIPPAGE</span>
+          <span style={{ fontSize: 12, color: '#F4F5F7', fontWeight: 700 }}>{summary.impliedSlippageBps === null ? '—' : `${summary.impliedSlippageBps.toFixed(1)} bps`}</span>
+        </div>
+        {summary.hasManualMismatch && <div style={{ fontSize: 10, color: '#FFB020', marginBottom: 6 }}>⚠ One or more feeUsd values are inconsistent with amount×bps.</div>}
         <div style={{ fontSize: 10, color: '#3A4560', marginBottom: 8 }}>{dashes}</div>
         <div style={{ textAlign: 'center', fontSize: 10, color: '#5A6478' }}>
           THANK YOU FOR BEING DEFI-PILLED
