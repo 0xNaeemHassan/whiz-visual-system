@@ -738,6 +738,30 @@ function MiniList({ title, items = [], color }) {
   );
 }
 
+function DataEmptyState({ title, instructions, actionLabel, actionHint, accentColor, state = 'no-data' }) {
+  const borderTone = state === 'failed' ? 'rgba(255,90,90,0.45)' : `${accentColor}30`;
+  const bgTone = state === 'failed' ? 'rgba(255,90,90,0.08)' : `${accentColor}08`;
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      tabIndex={0}
+      style={{
+        border: `1px dashed ${borderTone}`,
+        background: bgTone,
+        borderRadius: 8,
+        padding: '14px 16px',
+      }}
+    >
+      <h3 style={{ margin: 0, marginBottom: 6, fontSize: 14, color: '#F4F5F7' }}>{title}</h3>
+      <p style={{ margin: 0, fontSize: 12, color: '#B0BAC8', lineHeight: 1.5 }}>{instructions}</p>
+      <p style={{ margin: '8px 0 0', fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: accentColor }}>
+        {actionLabel}: {actionHint}
+      </p>
+    </div>
+  );
+}
+
 // ─── MechanismLayout (Frame 12) ─────────────────────────────────────────────
 // 6-step horizontal flow with numbered hexagonal nodes
 function MechanismLayout(props) {
@@ -1989,6 +2013,12 @@ function TableLayout(props) {
   const { content, ov, accentColor, SectionHead } = props;
   const headers = content.tableHeaders || [];
   const rows = content.tableRows || [];
+  if (content.loadError) {
+    return <DataEmptyState title="Table failed to load" instructions="We couldn't render rows for this frame." actionLabel="Next step" actionHint="Re-import data or paste table rows again." accentColor={accentColor} state="failed" />;
+  }
+  if (!rows.length) {
+    return <DataEmptyState title="No table data yet" instructions="This table layout needs at least one row to render insights." actionLabel="Next step" actionHint="Paste table rows or import CSV data." accentColor={accentColor} />;
+  }
   return (
     <>
       <StatRibbon stats={content.stats?.slice(0, 4)} ov={ov} accentColor={accentColor} />
@@ -2078,6 +2108,12 @@ function GridLayout(props) {
   const { content, ov, accentColor, SectionHead } = props;
   const items = content.gridItems || content.stats || [];
   const cols = items.length <= 4 ? 2 : items.length <= 9 ? 3 : 4;
+  if (content.loadError) {
+    return <DataEmptyState title="Grid failed to load" instructions="Grid items could not be parsed for display." actionLabel="Next step" actionHint="Generate scaffold items, then re-run import." accentColor={accentColor} state="failed" />;
+  }
+  if (!items.length) {
+    return <DataEmptyState title="No grid items yet" instructions="Grid view is empty because no stat or grid item data exists." actionLabel="Next step" actionHint="Generate scaffold cards or import metrics." accentColor={accentColor} />;
+  }
   return (
     <>
       <SectionHead>GRID VIEW</SectionHead>
@@ -2107,6 +2143,12 @@ function GridLayout(props) {
 function TimelineLayout(props) {
   const { content, ov, accentColor, SectionHead } = props;
   const events = content.timelineEvents || content.stats || [];
+  if (content.loadError) {
+    return <DataEmptyState title="Timeline failed to load" instructions="Event rows are unavailable or malformed." actionLabel="Next step" actionHint="Re-import events and verify date/value columns." accentColor={accentColor} state="failed" />;
+  }
+  if (!events.length) {
+    return <DataEmptyState title="No timeline events yet" instructions="Timeline templates require at least one event to render." actionLabel="Next step" actionHint="Import data or add events manually." accentColor={accentColor} />;
+  }
   return (
     <>
       <SectionHead>TIMELINE</SectionHead>
@@ -2139,6 +2181,9 @@ function NetworkLayout(props) {
   const { density, spacing } = getLayoutTuning(content);
   // B7: Real network visualization using stats as nodes
   const nodes = content.stats || [];
+  if (content.loadError) {
+    return <DataEmptyState title="Network failed to load" instructions="Node data could not be read for this network map." actionLabel="Next step" actionHint="Re-run import mapping and pick a network template." accentColor={accentColor} state="failed" />;
+  }
   return (
     <>
       <StatRibbon stats={content.stats?.slice(0, 3)} ov={ov} accentColor={accentColor} />
