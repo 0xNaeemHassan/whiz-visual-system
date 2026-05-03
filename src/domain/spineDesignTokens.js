@@ -12,11 +12,17 @@ export const SPINE_DESIGN_TOKENS = Object.freeze({
     cornerOffsetPx: 12,
     cornerStrokePx: 1.5,
   }),
+  fontStacks: Object.freeze({
+    display: "'Space Grotesk', 'Avenir Next', 'Segoe UI Variable', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif",
+    body: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+    mono: "'JetBrains Mono', 'SFMono-Regular', 'Cascadia Mono', 'Roboto Mono', 'Consolas', 'Liberation Mono', monospace",
+  }),
   label: Object.freeze({
     rotationDeg: -90,
     fontSizePx: 12,
     letterSpacingEm: 0.16,
     fontWeight: 600,
+    fontFamily: "'JetBrains Mono', 'SFMono-Regular', 'Cascadia Mono', 'Roboto Mono', 'Consolas', 'Liberation Mono', monospace",
     opacity: 0.55,
     textTransform: 'uppercase',
   }),
