@@ -107,6 +107,10 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
     tierNames: TIER_NAMES,
     minTemplateCoverage: 0.5,
   }), []);
+  const sourceFrames = Array.isArray(FRAMES) ? FRAMES : [];
+  const hasLoadFailure = !Array.isArray(FRAMES);
+  const hasActiveFilters = Boolean(search || tierFilter !== 'ALL' || layoutFilter || tagFilter || structureFilter !== 'all' || showFavOnly);
+  const emptyStateKind = hasLoadFailure ? 'failed' : sourceFrames.length === 0 ? 'no-data' : filtered.length === 0 ? 'filtered-zero' : null;
 
   return (
     <>
@@ -265,7 +269,28 @@ export default function Library({ navigateTo, showToast, activeTheme }) {
           )}
       </div>
 
-      {view === 'grid' ? (
+      {emptyStateKind ? (
+        <div className="card" role="status" aria-live="polite" tabIndex={0} style={{ padding: 16 }}>
+          <h2 style={{ margin: 0, marginBottom: 8, fontSize: 18 }}>
+            {emptyStateKind === 'failed' ? 'Failed to load frames' : emptyStateKind === 'filtered-zero' ? 'No frames match current filters' : 'No frame data yet'}
+          </h2>
+          <p style={{ margin: 0, marginBottom: 10, color: 'var(--muted)', lineHeight: 1.5 }}>
+            {emptyStateKind === 'failed'
+              ? 'The library dataset is unavailable right now.'
+              : emptyStateKind === 'filtered-zero'
+                ? 'Try broadening your search or clearing one or more filters.'
+                : 'Add templates to get started with a frame scaffold.'}
+          </p>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button className="btn btn-secondary btn-sm" onClick={() => { setSearch(''); setTierFilter('ALL'); setTagFilter(''); setLayoutFilter(''); setStructureFilter('all'); setShowFavOnly(false); }}>
+              Clear filters
+            </button>
+            <button className="btn btn-ghost btn-sm" onClick={() => setView('list')}>Paste table in list workflow</button>
+            <button className="btn btn-primary btn-sm" onClick={() => navigateTo('editor', 1)}>Generate scaffold</button>
+          </div>
+          {hasActiveFilters && <p style={{ marginTop: 10, marginBottom: 0, fontSize: 11, color: 'var(--dim)' }}>Tip: keyboard users can Tab to filter chips and press Enter/Space to quickly adjust scope.</p>}
+        </div>
+      ) : view === 'grid' ? (
         <div className="frames-grid">
           {filtered.map(frame => (
             <LazyCard key={frame.id}>
