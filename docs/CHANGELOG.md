@@ -4,6 +4,9 @@ All notable project changes should be documented here.
 
 ## [Unreleased]
 
+### Security
+- Added a staged CSP rollout: report-only policy in deployment headers, documented enforcement plan, and explicit exception tracking for Google Fonts and dynamic export flows.
+
 ### Added
 - Added a rollback runbook with trigger criteria, owner roles, deployment rollback commands, verification checks, and communication templates.
 - Added release process and incident process docs that both link to the rollback runbook.
