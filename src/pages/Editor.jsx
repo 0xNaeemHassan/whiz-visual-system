@@ -441,11 +441,26 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const confirmDel=()=>{if(showDeleteConfirm){setSaves(p=>p.filter(s=>s.id!==showDeleteConfirm));showToast('Deleted','info');setShowDeleteConfirm(null);}};
   const runNormalizationPreflight=()=>{
     const result=normalizeContentTaxonomy(content);
+    const numeric=normalizeNumericFields(result.content);
     const taxonomyAutoCorrected=result.compliance.autoCorrected.length>0;
     if(taxonomyAutoCorrected){showToast(`Auto-corrected: ${result.compliance.autoCorrected.join(' ')}`,'info');}
     if(result.compliance.hasInvalid){track(TELEMETRY_EVENTS.VALIDATION_ERROR,{context:'export',count:result.compliance.invalid.length,issues:result.compliance.invalid,taxonomyAutoCorrected});showToast(`Invalid taxonomy: ${result.compliance.invalid.join(' ')}`,'error');return null;}
-    if(result.content.topicTag!==content.topicTag||result.content.slug!==content.slug){setContent(result.content,{immediate:true});}
-    return { normalizedContent: result.content, taxonomyAutoCorrected };
+    let normalizedContent = numeric.content;
+    let numericAudit=[];
+    if(numeric.hasCorrections){
+      const reviewLines=numeric.corrections.map(c=>`• ${c.path}: ${c.before} → ${c.after}`).join('\n');
+      const accepted=window.confirm(`Numeric normalization review:
+
+${reviewLines}
+
+Apply these auto-corrections?`);
+      numericAudit=numeric.corrections.map(c=>({...c,accepted,timestamp:new Date().toISOString()}));
+      if(!accepted){normalizedContent=result.content;}
+      setNormalizationAudit(prev=>[...prev,...numericAudit]);
+      showToast(accepted?'Numeric corrections accepted.':'Numeric corrections rejected.','info');
+    }
+    if(JSON.stringify(normalizedContent)!==JSON.stringify(content)){setContent(normalizedContent,{immediate:true});}
+    return { normalizedContent, taxonomyAutoCorrected, numericCorrections: numericAudit };
   };
 
   const stateValidation = useMemo(() => validateEditorState({frameId,theme,content,overrides,uploadedImages},{strictMode:Boolean(strictMode)}), [frameId, theme, content, overrides, uploadedImages, strictMode]);
@@ -680,6 +695,9 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
       <div className={`editor-right ${mobileTab==='content'?'mob-active':''}`}>
         <div className="editor-right-tabs"><button className={`editor-right-tab ${rightTab==='design'?'active':''}`} onClick={()=>setRightTab('design')}>Design</button><button className={`editor-right-tab ${rightTab==='content'?'active':''}`} onClick={()=>setRightTab('content')}>Content</button></div>
         {rightTab==='design'?(<><div className={`edit-toggle-row ${editMode?'on':''}`} onClick={()=>{setEditMode(m=>!m);editMode&&setSelectedEl(null);}}><div className={`toggle-pill ${editMode?'on':''}`}><div className="toggle-dot"/></div><span className="toggle-label">{editMode?'Edit ON':'Edit OFF'}</span><span className="toggle-hint">{editMode?'Click elements':'Toggle to edit'}</span></div><DesignPanel selectedEl={selectedEl} setSelectedEl={setSelectedEl} overrides={overrides} setOverrides={setOverrides} theme={theme} bgGradient={bgGradient} setBgGradient={setBgGradient} showToast={showToast} resetOverrides={resetOverrides} setPatternOverlay={setPatternOverlay} strictMode={strictMode}/>
+          <div className="editor-section"><div className="editor-section-title">Readiness Checklist</div>
+            <div style={{fontFamily:'var(--font-m)',fontSize:10,color:normalizationAudit.some(a=>a.accepted===false)?'#FFB3B3':'var(--dim)'}}>{normalizationAudit.some(a=>a.accepted===false)?'⚠ Numeric normalization corrections were rejected. Review numeric formatting before export.':'✓ Numeric normalization review clear.'}</div>
+          </div>
           <div className="editor-section">
             <div className="editor-section-title">Brand Score
               <span style={{float:'right',fontFamily:'var(--font-m)',fontSize:10,fontWeight:700,color:brandScore.score>=80?'var(--accent)':brandScore.score>=50?'#E5B23A':'#FF5A5A'}}>{brandScore.score}%</span>

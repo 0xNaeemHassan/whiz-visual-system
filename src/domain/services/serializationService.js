@@ -13,6 +13,7 @@ export function buildFrameSave({ frameId, theme, content, overrides, aspectRatio
     workflowPhase,
     phaseChecklist: phaseChecklist || { draftAt: Date.now(), reviewAt: null, publishReadyAt: null, lastTransitionAt: Date.now() },
     savedAt: Date.now(),
+    saveMetadata,
     telemetry: {
       taxonomyAutoCorrected: normalization.compliance.autoCorrected.length > 0,
       taxonomyInvalidCount: normalization.compliance.invalid.length,
