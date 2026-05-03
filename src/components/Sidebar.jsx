@@ -24,7 +24,8 @@ export default function Sidebar({ page, onNav, open, theme }) {
             key={item.id}
             className={`sidebar-item ${page === item.id ? 'active' : ''}`}
             onClick={() => onNav(item.id)}
-            aria-label={`Go to ${item.label}`}
+            aria-label={`Navigate to ${item.label}`}
+            title={`Navigate to ${item.label}`}
             aria-current={page === item.id ? 'page' : undefined}
           >
             <span className="sidebar-icon" aria-hidden="true">{item.icon}</span>
