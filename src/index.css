@@ -2373,3 +2373,24 @@ input[type="range"]::-moz-range-thumb {
 .chip-risk-low { color: #3CE6A6; background: rgba(60,230,166,0.12); }
 .chip-risk-medium { color: #E5B23A; background: rgba(229,178,58,0.12); }
 .chip-risk-high { color: #FF5A5A; background: rgba(255,90,90,0.12); }
+
+/* Editor reusable utility tokens */
+.editor-panel-row { margin-bottom: 10px; }
+.editor-panel-row-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; }
+.editor-panel-label { margin-bottom: 6px; }
+.editor-stack-gap { margin-top: 12px; }
+.editor-mt-sm { margin-top: 6px; }
+.editor-muted-note { font-size: 11px; color: var(--muted); margin-bottom: 12px; line-height: 1.6; }
+.editor-btn-reset { padding: 4px 7px; font-size: 11px; color: var(--dim); }
+.editor-compact-action-bar { padding: 12px 14px; }
+.editor-action-row { display: flex; gap: 6px; margin-bottom: 8px; }
+.editor-action-btn { flex: 1; }
+
+/* Whizframe wrapper utility classes */
+.wf-footer-shell { --wf-footer-label-color: #4A5568; }
+.wf-footer-brand { display: flex; align-items: center; gap: 10px; }
+.wf-footer-avatar { flex-shrink: 0; }
+.wf-footer-handle { font-size: 10px; font-weight: 600; }
+.wf-footer-issue-path { color: var(--wf-footer-label-color); font-size: 10px; margin-top: 1px; }
+.wf-footer-field-strip { flex: 1; text-align: center; font-family: var(--font-m); font-size: 10px; color: rgba(255,255,255,0.22); letter-spacing: 0.07em; overflow: hidden; white-space: nowrap; }
+.wf-footer-social { color: var(--wf-footer-label-color); text-align: right; font-size: 8.5px; line-height: 1.6; }
