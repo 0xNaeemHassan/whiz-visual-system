@@ -129,6 +129,16 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
   const existingIssueNums = new Set(issues.map(i => normalizeIssueNum(i.issueNum)));
   const issueAllocator = useMemo(() => createIssueNumberAllocator(issues), [issues]);
 
+
+  const milestoneProgress = useMemo(() => computeMilestoneProgress({ issues, frames: FRAMES }), [issues]);
+  const [firedMilestones, setFiredMilestones] = useLocalStorage('whiz-milestone-events', []);
+  useEffect(() => {
+    const { events, firedMilestones: updated } = computeMilestoneUnlockEvents({ progress: milestoneProgress, alreadyFired: firedMilestones });
+    if (events.length === 0) return;
+    events.forEach((evt) => showToast(`Milestone unlocked: ${evt.label}`));
+    setFiredMilestones(updated);
+  }, [milestoneProgress, firedMilestones, setFiredMilestones, showToast]);
+
   const { registerHandlers } = useUIEventContext();
   const { t } = useIntl();
 
@@ -587,6 +597,22 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
       </div>
 
 
+
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, gap: 8 }}>
+          <strong>Milestone Tracker</strong>
+          <span style={{ fontFamily: 'var(--font-m)', fontSize: 10, color: 'var(--dim)' }}>{Math.round(milestoneProgress.progress * 100)}%</span>
+        </div>
+        <div style={{ height: 8, background: 'var(--bg-3)', borderRadius: 999, overflow: 'hidden', marginBottom: 10 }}>
+          <div style={{ height: '100%', width: `${Math.round(milestoneProgress.progress * 100)}%`, background: activeTheme.accent }} />
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>Next: {milestoneProgress.nextMilestone.label}</div>
+        <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12 }}>
+          {milestoneProgress.checklist.map((item) => <li key={item.id}>{item.complete ? '✓' : '○'} {item.label}{item.complete ? '' : ` (${item.remaining} left)`}</li>)}
+        </ul>
+        {milestoneProgress.guidance.length > 0 && <div style={{ marginTop: 8, fontSize: 11, color: 'var(--dim)' }}>{milestoneProgress.guidance[0]}</div>}
+      </div>
 
       {/* Intelligence Panel */}
       <div className="card" style={{ marginBottom: 16 }} aria-label="Cadence intelligence panel">
