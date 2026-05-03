@@ -3,6 +3,7 @@ import { useUIEventContext } from '../state/UIEventContext';
 import { FRAMES } from '../data/frames';
 import { THEMES } from '../data/themes';
 import { useLocalStorage } from '../hooks/useLocalStorage';
+import { normalizePlannerIssue } from '../utils/schemaContracts';
 
 const STATUSES = ['draft', 'planned', 'wip', 'done', 'published'];
 const CONFIDENCE = ['low', 'medium', 'high'];
@@ -87,7 +88,7 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
   });
   const normalizeIssueNum = (v) => String(v || '').replace(/\D/g, '').slice(-3).padStart(3, '0');
   const normalizeIssue = (issue) => ({
-    ...issue,
+    ...normalizePlannerIssue(issue),
     issueNum: normalizeIssueNum(issue.issueNum),
     priority: issue.priority || 'medium',
     confidence: CONFIDENCE.includes(issue.confidence) ? issue.confidence : 'medium',
@@ -173,7 +174,7 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
     setShowModal(true);
   };
 
-  const openEdit = (issue) => { setEditingIssue(issue.id); setForm({ confidence: 'medium', series: '', ...issue }); setShowModal(true); };
+  const openEdit = (issue) => { setEditingIssue(issue.id); setForm({ confidence: 'medium', series: '', ...normalizeIssue(issue) }); setShowModal(true); };
 
   // F5: Duplicate issue
   const duplicateIssue = (issue) => {

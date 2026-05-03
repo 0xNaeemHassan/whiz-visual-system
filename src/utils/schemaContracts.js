@@ -28,4 +28,29 @@ export function normalizeEditorImport(raw = {}) {
   };
 }
 
+export function normalizePlannerIssue(raw = {}) {
+  const issue = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  return {
+    ...issue,
+    metricSource: String(issue.metricSource || '').trim(),
+    metricValue: String(issue.metricValue || '').trim(),
+    metricUnit: String(issue.metricUnit || '').trim(),
+    metricProvenance: Array.isArray(issue.metricProvenance) ? issue.metricProvenance : [],
+  };
+}
+
+export function validatePlannerIssue(raw = {}) {
+  const issue = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  const errors = [];
+  if (issue.metricProvenance !== undefined && !Array.isArray(issue.metricProvenance)) {
+    errors.push('metricProvenance must be an array');
+  }
+  for (const key of ['metricSource', 'metricValue', 'metricUnit']) {
+    if (issue[key] !== undefined && typeof issue[key] !== 'string') {
+      errors.push(`${key} must be a string`);
+    }
+  }
+  return { valid: errors.length === 0, errors };
+}
+
 export { isPlainObject };

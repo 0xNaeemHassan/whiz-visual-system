@@ -3,6 +3,7 @@ import { FRAME_TEMPLATES, CONTENT_TEMPLATES, getFrameTemplate } from '../src/dat
 import { REQUIRED_CONTENT_KEYS, hasRequiredContentShape } from '../src/domain/editorDefaults.js';
 import { FRAMES } from '../src/data/frames.js';
 import { TYPE_SCALE, nearestTypeScale, getComplianceIssues, getBrandScore } from '../src/utils/editorCompliance.js';
+import { normalizePlannerIssue, validatePlannerIssue } from '../src/utils/schemaContracts.js';
 
 assert.ok(Array.isArray(FRAMES) && FRAMES.length >= 50, 'Expected at least 50 frame definitions');
 assert.ok(FRAME_TEMPLATES && Object.keys(FRAME_TEMPLATES).length > 0, 'FRAME_TEMPLATES should not be empty');
@@ -64,6 +65,40 @@ const manifestPayload = buildManifestPayload({
 assert.equal(manifestPayload.targetMetric, 'DAU', 'Manifest payload should include targetMetric when present');
 assert.equal(manifestPayload.metricConfidence, 'high', 'Manifest payload should include metricConfidence when present');
 assert.deepEqual(manifestPayload.metricProvenance, ['internal-analytics'], 'Manifest payload should include metricProvenance when present');
+
+
+
+const normalizedPlannerIssue = normalizePlannerIssue({
+  metricSource: ' Internal Dashboard ',
+  metricValue: 42,
+  metricUnit: ' % ',
+  metricProvenance: [{ source: 'internal' }],
+});
+assert.equal(normalizedPlannerIssue.metricSource, 'Internal Dashboard', 'normalizePlannerIssue should keep canonical metricSource');
+assert.equal(normalizedPlannerIssue.metricValue, '42', 'normalizePlannerIssue should stringify canonical metricValue');
+assert.equal(normalizedPlannerIssue.metricUnit, '%', 'normalizePlannerIssue should trim canonical metricUnit');
+assert.deepEqual(normalizedPlannerIssue.metricProvenance, [{ source: 'internal' }], 'normalizePlannerIssue should preserve metricProvenance');
+
+const plannerIssueValidation = validatePlannerIssue(normalizedPlannerIssue);
+assert.equal(plannerIssueValidation.valid, true, 'validatePlannerIssue should accept canonical metric fields');
+
+const invalidPlannerIssueValidation = validatePlannerIssue({ metricSource: {}, metricProvenance: 'bad' });
+assert.equal(invalidPlannerIssueValidation.valid, false, 'validatePlannerIssue should reject invalid metric field types');
+assert.ok(invalidPlannerIssueValidation.errors.includes('metricSource must be a string'), 'validatePlannerIssue should validate metricSource type');
+assert.ok(invalidPlannerIssueValidation.errors.includes('metricProvenance must be an array'), 'validatePlannerIssue should validate metricProvenance type');
+
+const existingIssue = normalizePlannerIssue({
+  id: 'i_1',
+  metricSource: 'Glassnode',
+  metricValue: '12345',
+  metricUnit: 'USD',
+  metricProvenance: [{ source: 'glassnode', method: 'api' }],
+});
+const editedIssue = { ...existingIssue, topic: 'Updated topic' };
+assert.equal(editedIssue.metricSource, 'Glassnode', 'Editing should preserve raw metricSource');
+assert.equal(editedIssue.metricValue, '12345', 'Editing should preserve raw metricValue');
+assert.equal(editedIssue.metricUnit, 'USD', 'Editing should preserve raw metricUnit');
+assert.deepEqual(editedIssue.metricProvenance, [{ source: 'glassnode', method: 'api' }], 'Editing should preserve metricProvenance metadata');
 
 console.log('Smoke tests passed');
 import './test-editor-mutations.mjs';
