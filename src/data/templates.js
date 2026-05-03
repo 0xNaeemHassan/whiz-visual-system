@@ -28,6 +28,20 @@ export const FRAME_TEMPLATES = {
     stats:[{label:'TVL',value:'$3.2B'},{label:'24H VOL',value:'$140M'},{label:'APY',value:'14.1%'},{label:'CHAINS',value:'6'}],
     body: 'Pendle splits yield-bearing tokens into two components: Principal Tokens (PT) and Yield Tokens (YT). This separation allows traders to take fixed-rate positions or speculate on yield direction.\n\nThe protocol has seen exponential growth in 2024-2025 as institutional appetite for yield derivatives grows.',
     pullQuote: 'The AMM that lets you trade time itself.',
+    thesis: 'Yield derivatives become a core fixed-income primitive once rates and carry are tradable on-chain.',
+    mechanismSteps: [
+      'Split yield-bearing assets into principal and future-yield claims.',
+      'Route PT/YT into concentrated AMM pools for price discovery.',
+      'Let users choose fixed yield (PT) or variable yield exposure (YT).',
+    ],
+    riskNotes: [
+      'Yield compression can reduce YT upside in lower-rate regimes.',
+      'Smart contract and oracle dependencies remain material.',
+    ],
+    evidencePoints: [
+      'Sustained TVL growth across multiple chains.',
+      'Improving daily volume and open interest in PT/YT markets.',
+    ],
   },
   // Frame 13 — Bull/Bear Split
   13: {
@@ -38,6 +52,14 @@ export const FRAME_TEMPLATES = {
     bearPoints: ['Fragmented liquidity reduces capital efficiency across the ecosystem','Bridge risks multiply as cross-rollup activity grows','No dominant L2 means no clear winner to bet on'],
     bigLabel: 'BULL CASE',
     verdict: 'BEAR CASE',
+    thesis: 'The L2 endgame is a fragmented but interoperable market, not winner-take-all.',
+    mechanismSteps: [
+      'Distribution channels seed users into different rollup ecosystems.',
+      'Developer tooling standards reduce switching costs across stacks.',
+      'Liquidity routers abstract fragmentation at execution time.',
+    ],
+    riskNotes: ['Bridge and messaging failures remain systemic risk vectors.'],
+    evidencePoints: ['TVL and activity are growing across multiple leading rollups in parallel.'],
   },
   // Frame 15 — The Audit Sheet
   15: {
@@ -55,9 +77,20 @@ export const FRAME_TEMPLATES = {
       {col1:'Catalysts',col2:'GHO stablecoin expansion',col3:'B+'},
       {col1:'Risk',col2:'Smart contract risk low; governance risk exists',col3:'B+'},
     ],
+    thesis: 'Aave remains the benchmark blue-chip lender due to durable product-market fit and governance execution.',
+    mechanismSteps: [
+      'Assess protocol quality across team, product, security, and market traction.',
+      'Translate each axis into a letter-grade scorecard.',
+      'Weight aggregate output toward downside protection and sustainability.',
+    ],
+    riskNotes: ['Governance capture and parameter mistakes can degrade risk posture quickly.'],
+    evidencePoints: ['Multi-year operating history with repeated audits and active governance cadence.'],
   },
   // Frame 16 — Leaderboard
   16: {
+    variantOf: 4,
+    inherit: ['tableHeaders', 'tableRows'],
+    override: ['deck'],
     topicTag: 'RANKINGS',
     title: 'TOP 10 PROTOCOLS BY TVL',
     deck: 'The biggest protocols by total value locked this week.',
@@ -96,6 +129,25 @@ export const FRAME_TEMPLATES = {
       col4: 'Always verify compiler version in audit scope. Reentrancy can exist at compiler, not just code level.',
     }],
   },
+
+  // Frame 38 — Bracket
+  38: {
+    topicTag: 'YIELD BRACKET',
+    title: 'TOP STRATEGIES SHOWDOWN',
+    deck: 'Seeded matchups auto-progress as scores update.',
+    bracketRound1: [
+      {leftSeed:'1',leftName:'Pendle PT-USDe',leftScore:'78',rightSeed:'8',rightName:'Curve crvUSD',rightScore:'65'},
+      {leftSeed:'4',leftName:'Aave USDC',leftScore:'71',rightSeed:'5',rightName:'Morpho Prime',rightScore:'74'},
+      {leftSeed:'2',leftName:'Ethena sUSDe',leftScore:'82',rightSeed:'7',rightName:'Spark sDAI',rightScore:'61'},
+      {leftSeed:'3',leftName:'Euler Boosted',leftScore:'69',rightSeed:'6',rightName:'Fluid Vault',rightScore:'67'}
+    ],
+    bracketRound2: [
+      {leftSeed:'',leftName:'',leftScore:'73',rightSeed:'',rightName:'',rightScore:'76'},
+      {leftSeed:'',leftName:'',leftScore:'84',rightSeed:'',rightName:'',rightScore:'79'}
+    ],
+    bracketRound3: [{leftSeed:'',leftName:'',leftScore:'88',rightSeed:'',rightName:'',rightScore:'85'}],
+    bracketWinner: {name:'',seed:'',score:''},
+  },
   // Frame 42 — Thesis
   42: {
     topicTag: 'THESIS',
@@ -103,17 +155,28 @@ export const FRAME_TEMPLATES = {
     deck: 'Why the era of unsustainable APYs is finally closing — and what comes next.',
     body: "Three years ago, triple-digit APYs were table stakes for any new DeFi protocol. Liquidity mining was the only customer acquisition strategy anyone needed.\n\nThe protocols that survived aren't the ones that offered the most — they're the ones that built real revenue. Aave. Uniswap. Curve. All of them generate genuine fees before offering incentives.\n\nThe next generation of yield is boring. And boring is exactly what we need.",
   },
+  // Frame 48 — Field Guide
+  48: {
+    topicTag: 'FIELD GUIDE',
+    title: 'SPECIES OF THE DEFI WILDS',
+    deck: 'A quick reference for the most common archetypes you’ll encounter on-chain.',
+    species: 'Yield Farmer',
+    habitat: 'Arbitrum and Base vault ecosystems with weekly rotation into high-incentive pools.',
+    diet: 'Point programs, emissions boosts, and short-term APY dislocations.',
+    spottingTips: 'Watch for sudden TVL surges after incentive announcements, then quick outflows before lock expiry.',
+    behaviorNote: 'Moves quickly between opportunities and rarely holds conviction once rewards normalize.',
+  },
   // Frame 49 — The Receipt
   49: {
     topicTag: 'THE RECEIPT',
     title: '$1,000 USDC IN PENDLE',
     deck: "Here's what you actually paid to deploy $1,000 in Pendle's stETH strategy.",
     tableRows: [
-      {col1:'ETH → Arbitrum bridge',col2:'LayerZero',col3:'$1.20',col4:'risk'},
-      {col1:'USDC → stETH swap',col2:'1inch, 0.1% slippage',col3:'$1.00',col4:'risk'},
-      {col1:'Pendle LP deposit',col2:'Gas: 0.003 ETH',col3:'$0.47',col4:'risk'},
-      {col1:'30-day yield',col2:'14.1% APY base',col3:'+$11.75',col4:'benefit'},
-      {col1:'PENDLE point rewards',col2:'~2000 pts est.',col3:'+$4.00',col4:'benefit'},
+      {col1:'ETH → Arbitrum bridge',col2:'LayerZero',col3:'-$1.20',col4:'risk',amount:-1.2,type:'fee',bps:12,feeUsd:1.2},
+      {col1:'USDC → stETH swap',col2:'1inch, 0.1% slippage',col3:'-$1.00',col4:'risk',amount:-1,type:'fee',bps:10,feeUsd:1},
+      {col1:'Pendle LP deposit',col2:'Gas: 0.003 ETH',col3:'-$0.47',col4:'risk',amount:-0.47,type:'fee',bps:5,feeUsd:0.47},
+      {col1:'30-day yield',col2:'14.1% APY base',col3:'+$11.75',col4:'benefit',amount:11.75,type:'benefit'},
+      {col1:'PENDLE point rewards',col2:'~2000 pts est.',col3:'+$4.00',col4:'benefit',amount:4,type:'benefit'},
     ],
   },
   // Frame 50 — Cover Story
@@ -127,12 +190,56 @@ export const FRAME_TEMPLATES = {
 };
 
 import { createDefaultContent, hasRequiredContentShape } from '../domain/editorDefaults.js';
+import { getLayoutDatasetShape } from './frameDatasetShapes.js';
 
 // Merge with canonical defaults for any unspecified fields
 export function getFrameTemplate(frameId) {
   const defaultContent = createDefaultContent();
-  const template = FRAME_TEMPLATES[frameId];
-  const merged = template ? { ...defaultContent, ...template } : defaultContent;
+  const visited = new Set();
+
+  function resolveTemplate(id) {
+    const template = FRAME_TEMPLATES[id];
+    if (!template) return {};
+    if (visited.has(id)) {
+      throw new Error(`Template inheritance cycle detected while resolving frame ${frameId} at frame ${id}`);
+    }
+    visited.add(id);
+
+    const parentId = template.variantOf;
+    const parentResolved = Number.isInteger(parentId) ? resolveTemplate(parentId) : {};
+    const inheritFields = Array.isArray(template.inherit) ? template.inherit : [];
+    const overrideFields = new Set(Array.isArray(template.override) ? template.override : []);
+
+    const ownFields = Object.fromEntries(
+      Object.entries(template).filter(([key]) => !['variantOf', 'inherit', 'override'].includes(key))
+    );
+
+    const inheritedFromParent = inheritFields.reduce((acc, field) => {
+      if (field in parentResolved) acc[field] = parentResolved[field];
+      return acc;
+    }, {});
+
+    const explicitOverrides = Object.fromEntries(
+      Object.entries(ownFields).filter(([key]) => overrideFields.has(key) || !inheritFields.includes(key))
+    );
+
+    return {
+      ...parentResolved,
+      ...inheritedFromParent,
+      ...explicitOverrides,
+    };
+  }
+
+  const merged = { ...defaultContent, ...resolveTemplate(frameId) };
+
+  if (frame?.defaultSort && Array.isArray(merged.tableHeaders) && Array.isArray(merged.tableRows)) {
+    validateDefaultSort({
+      defaultSort: frame.defaultSort,
+      tableHeaders: merged.tableHeaders,
+      tableRows: merged.tableRows,
+    });
+    merged.tableRows = applyDefaultSort(merged.tableRows, merged.tableHeaders, frame.defaultSort);
+  }
 
   if (!hasRequiredContentShape(merged)) {
     throw new Error(`Template merge removed required content keys for frame ${frameId}`);
@@ -151,6 +258,8 @@ export const CONTENT_TEMPLATES = Object.entries(FRAME_TEMPLATES).map(([id, conte
 
 const LAYOUT_REQUIRED_FIELDS = {
   table: ['tableRows'],
+  scorecard: ['tableRows'],
+  'tier-list': ['tableRows'],
   'bull-bear': ['bullPoints', 'bearPoints'],
   timeline: ['timelineEvents'],
   grid: ['gridItems'],
@@ -168,6 +277,11 @@ export function createTemplateForLayout(layout) {
   return base;
 }
 
+function validateRowShape(rows, shape) {
+  if (!Array.isArray(rows) || rows.length === 0 || !shape.fields.length) return true;
+  return rows.every((row) => shape.fields.every((field) => field.name in row));
+}
+
 export function checkTemplateLayoutCompatibility(template, layout) {
   const requiredFields = LAYOUT_REQUIRED_FIELDS[layout] || [];
   const missingFields = requiredFields.filter((field) => {
@@ -176,8 +290,18 @@ export function checkTemplateLayoutCompatibility(template, layout) {
     return value === undefined || value === null || value === '';
   });
 
+  const datasetShape = getLayoutDatasetShape(layout);
+
+  if (layout === 'table' || layout === 'scorecard' || layout === 'tier-list') {
+    const rows = template?.tableRows;
+    if (!validateRowShape(rows, datasetShape)) {
+      missingFields.push('tableRows schema mismatch');
+    }
+  }
+
   return {
     isCompatible: missingFields.length === 0,
     missingFields,
+    expectedDataShape: datasetShape,
   };
 }
