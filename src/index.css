@@ -2385,6 +2385,42 @@ input[type="range"]::-moz-range-thumb {
 .editor-compact-action-bar { padding: 12px 14px; }
 .editor-action-row { display: flex; gap: 6px; margin-bottom: 8px; }
 .editor-action-btn { flex: 1; }
+.editor-action-bar {
+  position: sticky;
+  top: var(--topbar-h);
+  z-index: 60;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  background: rgba(10, 13, 18, 0.92);
+  border-bottom: 1px solid var(--border);
+}
+.editor-action-group { display: flex; gap: 6px; align-items: center; }
+.editor-action-overflow { position: relative; }
+.editor-action-overflow-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 140px;
+  padding: 6px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+@media (max-width: 960px) {
+  .editor-action-bar { top: calc(var(--topbar-h) + 1px); flex-wrap: wrap; }
+}
+@media (max-width: 640px) {
+  .editor-action-bar { padding: 8px; }
+  .editor-action-group { width: 100%; }
+  .editor-action-group:first-child .btn { flex: 1; }
+  .editor-action-group:last-child .btn { flex: 1; }
+  .editor-action-group .btn:nth-child(n+3) { display: none; }
+}
 
 /* Whizframe wrapper utility classes */
 .wf-footer-shell { --wf-footer-label-color: #4A5568; }
