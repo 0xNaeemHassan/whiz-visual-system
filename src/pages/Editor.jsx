@@ -50,6 +50,7 @@ const DEFAULT_CONTENT = {
   bigNumber:'$47B',bigLabel:'TOTAL DeFi TVL',
   verdict:'Position in protocols with proven revenue. Avoid incentive-only models.',
   gridItems:[],timelineEvents:[],
+  bracketRound1:[],bracketRound2:[],bracketRound3:[],bracketWinner:{name:'',seed:'',score:''},
 };
 /** @type {StyleOverrides} */
 const DEFAULT_OVERRIDES = {frameBg:null,spineColor:null,tickerColor:null,tickerBg:null,title:{fontSize:52,fontWeight:700,color:'#F4F5F7',italic:false,lineHeight:1.05,letterSpacing:-0.02,textAlign:'left',opacity:1},deck:{fontSize:18,fontWeight:400,color:'#8B95A3',italic:true},body:{fontSize:15,fontWeight:400,color:'#8B95A3',lineHeight:1.75,textAlign:'left',opacity:1},accent:{color:null},tag:{background:null,color:null,borderColor:null},footer:{background:null},statsColor:null,bignumColor:null,avatarColor:null,ruleBg:null,handleColor:null};

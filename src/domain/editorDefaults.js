@@ -14,6 +14,18 @@ const DEFAULT_CONTENT = {
   bigNumber:'$47B',bigLabel:'TOTAL DeFi TVL',
   verdict:'Position in protocols with proven revenue. Avoid incentive-only models.',
   gridItems:[],timelineEvents:[],
+  bracketRound1:[
+    {leftSeed:'1',leftName:'Pendle PT-USDe',leftScore:'78',rightSeed:'8',rightName:'Curve crvUSD',rightScore:'65'},
+    {leftSeed:'4',leftName:'Aave USDC',leftScore:'71',rightSeed:'5',rightName:'Morpho Prime',rightScore:'74'},
+    {leftSeed:'2',leftName:'Ethena sUSDe',leftScore:'82',rightSeed:'7',rightName:'Spark sDAI',rightScore:'61'},
+    {leftSeed:'3',leftName:'Euler Boosted',leftScore:'69',rightSeed:'6',rightName:'Fluid Vault',rightScore:'67'},
+  ],
+  bracketRound2:[
+    {leftSeed:'',leftName:'',leftScore:'73',rightSeed:'',rightName:'',rightScore:'76'},
+    {leftSeed:'',leftName:'',leftScore:'84',rightSeed:'',rightName:'',rightScore:'79'},
+  ],
+  bracketRound3:[{leftSeed:'',leftName:'',leftScore:'88',rightSeed:'',rightName:'',rightScore:'85'}],
+  bracketWinner:{name:'',seed:'',score:''},
 };
 
 const DEFAULT_OVERRIDES = {frameBg:null,spineColor:null,tickerColor:null,tickerBg:null,title:{fontSize:52,fontWeight:700,color:'#F4F5F7',italic:false,lineHeight:1.05,letterSpacing:-0.02,textAlign:'left',opacity:1},deck:{fontSize:18,fontWeight:400,color:'#8B95A3',italic:true},body:{fontSize:15,fontWeight:400,color:'#8B95A3',lineHeight:1.75,textAlign:'left',opacity:1},accent:{color:null},tag:{background:null,color:null,borderColor:null},footer:{background:null},statsColor:null,bignumColor:null,avatarColor:null,ruleBg:null,handleColor:null};

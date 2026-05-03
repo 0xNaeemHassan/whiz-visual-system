@@ -1324,24 +1324,28 @@ function FlowLayout(props) {
 // ─── BracketLayout (Frame 38) ──────────────────────────────────────────────
 // Tournament-style: 8 strategies → 4 → 2 → WINNER
 function BracketLayout(props) {
-  const { content, ov, accentColor, SectionHead } = props;
-  const rows = content.tableRows || [];
-  const r1 = rows.length >= 8 ? rows.slice(0, 8) : Array.from({length: 8}, (_, i) => ({ col1: `Strategy ${i+1}`, col2: `${(Math.random()*20+5).toFixed(1)}%` }));
-  const r2 = rows.slice(8, 12).concat(Array.from({length: Math.max(0, 4 - rows.slice(8,12).length)}, (_, i) => ({ col1: r1[i * 2]?.col1 || `Winner ${i+1}` })));
-  const r3 = rows.slice(12, 14).concat(Array.from({length: Math.max(0, 2 - rows.slice(12,14).length)}, (_, i) => ({ col1: r2[i * 2]?.col1 || `Semi ${i+1}` })));
-  const winner = rows[14]?.col1 || r3[0]?.col1 || r1[0]?.col1;
+  const { content, accentColor, SectionHead } = props;
+  const progression = computeBracketProgression(content);
+  const round1 = progression.bracketRound1 || [];
+  const round2 = progression.bracketRound2 || [];
+  const round3 = progression.bracketRound3 || [];
+  const winner = progression.bracketWinner || {};
 
-  const MatchCard = ({ name, sub, isWinner }) => (
+  const MatchCard = ({ side = {} }) => (
     <div style={{
       padding: '5px 8px', borderRadius: 4, marginBottom: 3,
-      background: isWinner ? `${accentColor}20` : 'rgba(255,255,255,0.03)',
-      border: `1px solid ${isWinner ? accentColor : 'rgba(255,255,255,0.06)'}`,
-      minWidth: 80,
+      background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', minWidth: 114,
     }}>
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 10, fontWeight: isWinner ? 700 : 400, color: isWinner ? accentColor : '#C8D0D8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name || '—'}</div>
-      {sub && <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: '#5A6478' }}>{sub}</div>}
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 10, color: '#C8D0D8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {(side.seed ? `#${side.seed} ` : '') + (side.name || '—')}
+        </div>
+        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#8B95A3' }}>{side.score || '—'}</div>
+      </div>
     </div>
   );
+
+  const MatchPair = ({ match }) => <><MatchCard side={{ seed: match.leftSeed, name: match.leftName, score: match.leftScore }} /><MatchCard side={{ seed: match.rightSeed, name: match.rightName, score: match.rightScore }} /></>;
 
   return (
     <>
@@ -1349,29 +1353,18 @@ function BracketLayout(props) {
       <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 4 }}>{resolvedContent.title}</div>
       <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 12, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
       <div style={{ flex: 1, display: 'flex', gap: 12, alignItems: 'center' }}>
-        {/* Round 1 */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-evenly' }}>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: '#3A4560', textAlign: 'center', marginBottom: 6 }}>ROUND 1</div>
-          {r1.map((s, i) => <MatchCard key={i} name={s.col1} sub={s.col2} />)}
-        </div>
+        <div style={{ flex: 1 }}><div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: '#3A4560', textAlign: 'center', marginBottom: 6 }}>ROUND 1</div>{round1.map((m,i)=><MatchPair key={i} match={m} />)}</div>
         <div style={{ color: `${accentColor}30`, fontSize: 12 }}>▸</div>
-        {/* Round 2 */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-evenly', padding: '16px 0' }}>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: '#3A4560', textAlign: 'center', marginBottom: 6 }}>SEMIS</div>
-          {r2.slice(0, 4).map((s, i) => <MatchCard key={i} name={s.col1} />)}
-        </div>
+        <div style={{ flex: 1 }}><div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: '#3A4560', textAlign: 'center', marginBottom: 6 }}>SEMIS</div>{round2.map((m,i)=><MatchPair key={i} match={m} />)}</div>
         <div style={{ color: `${accentColor}30`, fontSize: 12 }}>▸</div>
-        {/* Final */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-evenly', padding: '32px 0' }}>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: '#3A4560', textAlign: 'center', marginBottom: 6 }}>FINAL</div>
-          {r3.slice(0, 2).map((s, i) => <MatchCard key={i} name={s.col1} />)}
-        </div>
+        <div style={{ flex: 1 }}><div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: '#3A4560', textAlign: 'center', marginBottom: 6 }}>FINAL</div>{round3.map((m,i)=><MatchPair key={i} match={m} />)}</div>
         <div style={{ color: accentColor, fontSize: 12 }}>★</div>
-        {/* Winner */}
         <div style={{ flex: 1 }}>
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: accentColor, textAlign: 'center', marginBottom: 8, letterSpacing: '0.1em' }}>WHIZ PICK</div>
           <div style={{ textAlign: 'center', padding: '12px 8px', background: `${accentColor}18`, border: `2px solid ${accentColor}`, borderRadius: 8 }}>
-            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 12, fontWeight: 700, color: accentColor }}>{winner}</div>
+            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 12, fontWeight: 700, color: accentColor }}>
+              {(winner.seed ? `#${winner.seed} ` : '') + (winner.name || 'TBD')}
+            </div>
           </div>
         </div>
       </div>
