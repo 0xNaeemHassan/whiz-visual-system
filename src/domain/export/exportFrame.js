@@ -1,6 +1,6 @@
 import { createExportContract } from './contracts';
 
-export async function exportFrame({ contractInput, sceneModel, sceneRenderer, domFallbackRenderer, preflightResult = null }) {
+export async function exportFrame({ contractInput, sceneModel, sceneRenderer, domFallbackRenderer, sceneWorkerRenderer = null, onExportProgress = null, preflightResult = null }) {
   const contract = createExportContract(contractInput);
   const exportMetadata = {
     preflight: preflightResult,
@@ -8,7 +8,9 @@ export async function exportFrame({ contractInput, sceneModel, sceneRenderer, do
     exportedAt: new Date().toISOString(),
   };
   try {
-    const canvas = await sceneRenderer(sceneModel, contract);
+    const canvas = sceneWorkerRenderer
+      ? await sceneWorkerRenderer({ sceneModel, contract, onProgress: onExportProgress, mainThreadRenderer: sceneRenderer })
+      : await sceneRenderer(sceneModel, contract);
     return { canvas, contract, usedFallback: false, exportMetadata };
   } catch (error) {
     if (!domFallbackRenderer) throw error;
