@@ -6,6 +6,8 @@ export function createDefaultEvidenceLedger(issueNum = '000') {
     fieldEntries: [],
     provenanceEntries: [],
     notes: [],
+    corrections: [],
+    lineage: [],
   };
 }
 
@@ -30,6 +32,31 @@ export function normalizeEvidenceLedger(raw, issueNum = '000') {
     fieldEntries: Array.isArray(base.fieldEntries) ? base.fieldEntries.map((e, i) => normalizeEntry(e, 'field', i)) : [],
     provenanceEntries: Array.isArray(base.provenanceEntries) ? base.provenanceEntries.map((e, i) => normalizeEntry(e, 'prov', i)) : [],
     notes: Array.isArray(base.notes) ? base.notes.map((e, i) => normalizeEntry(e, 'note', i)) : [],
+    corrections: Array.isArray(base.corrections) ? base.corrections.map((entry, index) => {
+      const obj = entry && typeof entry === 'object' ? entry : {};
+      return {
+        id: String(obj.id || makeStableId(normalizedIssueNum, 'corr', index)),
+        artifactId: String(obj.artifactId || '').trim(),
+        issueNum: String(obj.issueNum || normalizedIssueNum).trim(),
+        reviewerId: String(obj.reviewerId || '').trim(),
+        reviewerName: String(obj.reviewerName || '').trim(),
+        note: String(obj.note || '').trim(),
+        supersedesArtifactId: String(obj.supersedesArtifactId || '').trim(),
+        superseded: Boolean(obj.superseded),
+        timestamp: String(obj.timestamp || '').trim(),
+      };
+    }) : [],
+    lineage: Array.isArray(base.lineage) ? base.lineage.map((entry, index) => {
+      const obj = entry && typeof entry === 'object' ? entry : {};
+      return {
+        id: String(obj.id || makeStableId(normalizedIssueNum, 'lineage', index)),
+        artifactId: String(obj.artifactId || '').trim(),
+        issueNum: String(obj.issueNum || normalizedIssueNum).trim(),
+        state: String(obj.state || 'current').trim(),
+        supersedesArtifactId: String(obj.supersedesArtifactId || '').trim(),
+        timestamp: String(obj.timestamp || '').trim(),
+      };
+    }) : [],
   };
 }
 

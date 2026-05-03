@@ -137,6 +137,7 @@ const WORKFLOW_PHASES=['draft','review','publish-ready'];
 const REVIEW_STATES = ['draft', 'in_review', 'approved', 'published'];
 const SIGNOFF_CHECKLIST = ['factsVerified', 'styleChecked', 'brandSafe'];
 const createEmptySignoff = () => ({ reviewerName: '', reviewerId: '', timestamp: '', checklist: { factsVerified: false, styleChecked: false, brandSafe: false } });
+const createEmptyCorrectionDraft = () => ({ artifactId: '', issueNum: '', supersedesArtifactId: '', note: '' });
 function ColorRow({label,value,defaultVal,onChange}){const col=value||defaultVal;return(<div className="prop-color-row"><span className="prop-label-text">{label}</span><div className="prop-color-swatch" style={{background:col,position:'relative'}}><input type="color" value={col} onChange={e=>onChange(e.target.value)} aria-label={`${label} color`} style={{position:'absolute',inset:0,opacity:0,cursor:'pointer',width:'100%',height:'100%'}}/></div><input type="text" className="prop-hex" value={col} onChange={e=>{const v=e.target.value;if(/^#[0-9A-Fa-f]{0,6}$/.test(v)||v==='')onChange(v||null);}}/><button className="btn btn-ghost btn-sm editor-btn-reset" onClick={()=>onChange(null)} title="Reset">\u21BA</button></div>);}
 function SliderRow({label,value,min,max,step,unit,onChange}){return(<div className="editor-panel-row"><div className="editor-panel-row-head"><span className="prop-label-text">{label}</span><span className="size-val">{value}{unit}</span></div><input type="range" min={min} max={max} step={step||1} value={value} onChange={e=>onChange(Number(e.target.value))} aria-label={label}/></div>);}
 function WeightRow({label,value,weights,onChange}){return(<div className="editor-panel-row"><div className="prop-label-text editor-panel-label">{label}</div><div className="ww-grid">{weights.map(w=>(<button key={w} className={`ww-btn ${value===w?'on':''}`} onClick={()=>onChange(w)} style={{fontWeight:w}}>{w}</button>))}</div></div>);}
@@ -355,6 +356,26 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   useEffect(()=>{ _persistOverrides(overrides); },[overrides]);
   const[zoom,setZoom]=useState(0.35);const[saveName,setSaveName]=useState('');
   const[showSaveModal,setShowSaveModal]=useState(false);const[showLoadModal,setShowLoadModal]=useState(false);const[selectedSaveForLoad,setSelectedSaveForLoad]=useState(null);
+
+  const correctionHistory = Array.isArray(content?.evidenceLedger?.corrections) ? content.evidenceLedger.corrections : [];
+  const correctionCount = correctionHistory.length + normalizationAudit.filter(entry=>entry.accepted!==undefined).length;
+  const appendLedgerCorrection = () => {
+    if (reviewState === 'published' && !(correctionDraft.note || '').trim()) { showToast('Correction note is required for post-publish edits.','error'); return; }
+    const artifactId = (correctionDraft.artifactId || buildArtifactId({ issueNum: content.issueNum, slug: content.slug })).trim();
+    const issueNum = String(correctionDraft.issueNum || content.issueNum || '').trim();
+    if (!artifactId || !issueNum) { showToast('Artifact ID and issue # are required.','warning'); return; }
+    const timestamp = new Date().toISOString();
+    const reviewerId = (signoffRecord?.reviewerId || '').trim();
+    const reviewerName = (signoffRecord?.reviewerName || '').trim();
+    if (!reviewerId || !reviewerName) { showToast('Reviewer identity is required. Fill approver metadata first.','warning'); return; }
+    const nextLedger = normalizeEvidenceLedger(content.evidenceLedger, content.issueNum);
+    nextLedger.corrections.push({ id: `${issueNum}-corr-${nextLedger.corrections.length + 1}`, artifactId, issueNum, reviewerId, reviewerName, note: (correctionDraft.note || '').trim(), supersedesArtifactId: (correctionDraft.supersedesArtifactId || '').trim(), superseded: false, timestamp });
+    nextLedger.lineage = nextLedger.lineage.map((entry) => entry.artifactId === (correctionDraft.supersedesArtifactId || '').trim() ? { ...entry, state: 'superseded' } : entry);
+    nextLedger.lineage.push({ id: `${issueNum}-lineage-${nextLedger.lineage.length + 1}`, artifactId, issueNum, state: 'current', supersedesArtifactId: (correctionDraft.supersedesArtifactId || '').trim(), timestamp });
+    updateContent('evidenceLedger', nextLedger, true);
+    setCorrectionDraft(createEmptyCorrectionDraft());
+    showToast('Correction logged with immutable timestamp and reviewer identity.','success');
+  };
   const saveModalRef = useRef(null);
   const saveNameInputRef = useRef(null);
   const [pendingLoadSave, setPendingLoadSave] = useState(null);
@@ -397,6 +418,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const [collaborationMode, setCollaborationMode] = useLocalStorage('whiz-collaboration-mode', 'collaborative');
   const [requireSignoffInSolo, setRequireSignoffInSolo] = useLocalStorage('whiz-require-signoff-solo', false);
   const [reviewState, setReviewState] = useState('draft');
+  const [correctionDraft, setCorrectionDraft] = useState(createEmptyCorrectionDraft());
   const [signoffRecord, setSignoffRecord] = useState(createEmptySignoff());
   const [sectionLocks, setSectionLocks] = useLocalStorage('whiz-section-locks', {});
   const [datasetSnapshotRecord, setDatasetSnapshotRecord] = useLocalStorage('whiz-dataset-snapshot', null);
@@ -1400,13 +1422,27 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
           <div className="editor-section"><div className="editor-section-title">Images</div><ImageUpload label="Logo" value={uploadedImages.logo} onChange={v=>updateMedia(p=>({...p,uploadedImages:{...p.uploadedImages,logo:v}}))} maxSize={2} showToast={showToast}/><ImageUpload label="Hero" value={uploadedImages.hero} onChange={v=>updateMedia(p=>({...p,uploadedImages:{...p.uploadedImages,hero:v}}))} maxSize={4} showToast={showToast}/><ImageUpload label="Badge" value={uploadedImages.badge} onChange={v=>updateMedia(p=>({...p,uploadedImages:{...p.uploadedImages,badge:v}}))} maxSize={1} showToast={showToast}/></div>
           <div className="editor-section">
             <div className="editor-section-title">Evidence Ledger</div>
-            <div style={{fontSize:10,color:'var(--muted)',marginBottom:6}}>Track stable evidence IDs before publish.</div>
+            <div style={{fontSize:10,color:'var(--muted)',marginBottom:6}}>Track stable evidence IDs before publish, and retain correction lineage after publish.</div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6,marginBottom:8}}>
+              <input className="form-control" placeholder="artifact:001:slug" value={correctionDraft.artifactId} onChange={e=>setCorrectionDraft(prev=>({...prev,artifactId:e.target.value}))} />
+              <input className="form-control" placeholder="Issue #" value={correctionDraft.issueNum} onChange={e=>setCorrectionDraft(prev=>({...prev,issueNum:e.target.value}))} />
+              <input className="form-control" style={{gridColumn:'1 / -1'}} placeholder="Supersedes artifact ID (optional)" value={correctionDraft.supersedesArtifactId} onChange={e=>setCorrectionDraft(prev=>({...prev,supersedesArtifactId:e.target.value}))} />
+              <textarea className="form-control" style={{gridColumn:'1 / -1'}} rows={2} placeholder={reviewState==='published'?'Required note for post-publish edit':'Correction note'} value={correctionDraft.note} onChange={e=>setCorrectionDraft(prev=>({...prev,note:e.target.value}))} />
+              <button className="btn btn-secondary btn-sm" style={{gridColumn:'1 / -1'}} onClick={appendLedgerCorrection}>Attach Correction</button>
+            </div>
             <div style={{fontSize:11,display:'grid',gap:4}}>
               <div>Total entries: {ledgerValidation.total}</div>
               <div>Complete: {ledgerValidation.complete}</div>
+              <div>Correction history: {correctionHistory.length}</div>
               <div style={{color:ledgerValidation.missing.length?'#FFB3B3':'#8EF0B0'}}>
                 {ledgerValidation.missing.length?`Missing: ${ledgerValidation.missing.join(', ')}`:'Ledger complete for publish.'}
               </div>
+            </div>
+            <div style={{maxHeight:120,overflowY:'auto',marginTop:6,fontSize:10}}>
+              {correctionHistory.length===0 && <div style={{color:'var(--dim)'}}>No correction history.</div>}
+              {correctionHistory.length>0 && correctionHistory.slice().reverse().map((entry)=>(
+                <div key={entry.id} style={{padding:'4px 0',borderBottom:'1px solid rgba(255,255,255,.08)'}}>{entry.timestamp} · {entry.reviewerId} · {entry.artifactId} {entry.supersedesArtifactId ? `(supersedes ${entry.supersedesArtifactId})` : ''}</div>
+              ))}
             </div>
           </div>
           <div className="editor-section">
