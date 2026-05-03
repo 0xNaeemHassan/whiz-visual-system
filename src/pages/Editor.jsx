@@ -17,6 +17,7 @@ import { CONTENT_TEMPLATES } from '../data/templates';
 import { createDefaultContent, createDefaultOverrides, createDefaultEditorState } from '../domain/editorDefaults.js';
 import { nearestTypeScale, getComplianceIssues, getBrandScore, getEditorValidationReport } from '../utils/editorCompliance';
 import { normalizeContentTaxonomy } from '../utils/contentNormalization';
+import { validateEditorState } from '../utils/editorStateValidation';
 import { buildMutationDispatcher } from './EditorMutations.js';
 import { normalizeDateInput, normalizeTimelineEvents } from '../domain/services/dateNormalizationService';
 import { SemanticChip } from '../components/primitives';
@@ -61,6 +62,65 @@ function ColorRow({label,value,defaultVal,onChange}){const col=value||defaultVal
 function SliderRow({label,value,min,max,step,unit,onChange}){return(<div className="editor-panel-row"><div className="editor-panel-row-head"><span className="prop-label-text">{label}</span><span className="size-val">{value}{unit}</span></div><input type="range" min={min} max={max} step={step||1} value={value} onChange={e=>onChange(Number(e.target.value))} aria-label={label}/></div>);}
 function WeightRow({label,value,weights,onChange}){return(<div className="editor-panel-row"><div className="prop-label-text editor-panel-label">{label}</div><div className="ww-grid">{weights.map(w=>(<button key={w} className={`ww-btn ${value===w?'on':''}`} onClick={()=>onChange(w)} style={{fontWeight:w}}>{w}</button>))}</div></div>);}
 
+
+
+const parseDelimitedRows = (rawText = '') => {
+  const lines = String(rawText).split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (!lines.length) return [];
+  return lines.map((line) => {
+    const delimiter = line.includes('\t') ? '\t' : ',';
+    return line.split(delimiter).map((cell) => cell.trim());
+  });
+};
+
+const normalizeImportedTableRows = ({ rows, headerCount }) => rows.map((cells) => {
+  const row = {};
+  for (let idx = 0; idx < headerCount; idx += 1) row[`col${idx + 1}`] = String(cells[idx] || '').trim();
+  return row;
+});
+
+const buildTableImportReport = ({ rawText, headerCount, currentContent }) => {
+  const parsedRows = parseDelimitedRows(rawText);
+  const normalizedRows = normalizeImportedTableRows({ rows: parsedRows, headerCount });
+  const validRows = [];
+  const invalidRows = [];
+
+  normalizedRows.forEach((row, rowIndex) => {
+    const errors = [];
+    const cells = Object.values(row);
+    if (parsedRows[rowIndex]?.length !== headerCount) {
+      errors.push({
+        column: 'row',
+        message: `Expected ${headerCount} columns, got ${parsedRows[rowIndex]?.length || 0}.`,
+        suggestion: `Add/remove delimiters so the row has exactly ${headerCount} columns.`,
+      });
+    }
+    cells.forEach((cell, cellIndex) => {
+      if (typeof cell !== 'string') {
+        errors.push({ column: `col${cellIndex + 1}`, message: 'Cell must be text.', suggestion: 'Convert the value to plain text.' });
+      }
+      if (!cell) {
+        errors.push({ column: `col${cellIndex + 1}`, message: 'Cell is empty.', suggestion: 'Fill this value or remove the row.' });
+      }
+    });
+
+    const validation = validateEditorState({
+      content: { ...currentContent, tableRows: [row] },
+      overrides: {},
+      uploadedImages: {},
+    });
+    if (!validation.valid) {
+      validation.errors.filter((entry) => entry.path.startsWith('content.tableRows')).forEach((entry) => {
+        errors.push({ column: 'row', message: entry.message, suggestion: 'Match the table row object shape used by existing rows.' });
+      });
+    }
+
+    if (errors.length) invalidRows.push({ rowIndex, row, errors });
+    else validRows.push(row);
+  });
+
+  return { parsedRows, validRows, invalidRows };
+};
 function DesignPanel({selectedEl,setSelectedEl,overrides,setOverrides,theme,bgGradient,setBgGradient,showToast,resetOverrides,setPatternOverlay,strictMode}){
   const currentOverrides = overrides;
   const setOverrideValue = (key, value) => setOverrides((previousOverrides) => ({ ...previousOverrides, [key]: value }));
@@ -127,6 +187,9 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   useEffect(()=>{ _persistOverrides(overrides); },[overrides]);
   const[zoom,setZoom]=useState(0.35);const[saveName,setSaveName]=useState('');
   const[showSaveModal,setShowSaveModal]=useState(false);const[showLoadModal,setShowLoadModal]=useState(false);
+  const [showTableImportModal, setShowTableImportModal] = useState(false);
+  const [tableImportText, setTableImportText] = useState('');
+  const [tableImportReport, setTableImportReport] = useState(null);
   const[frameSearch,setFrameSearch]=useState('');const frameListRef=useRef(null);const[exporting,setExporting]=useState(false);
   const[showGrid,setShowGrid]=useState(false);const[editMode,setEditMode]=useState(false);
   const[selectedEl,setSelectedEl]=useState(null);const[rightTab,setRightTab]=useState('content');
@@ -182,6 +245,28 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
 
   useEffect(()=>{try{const r=localStorage.getItem('whiz-autosave');if(r){const d=JSON.parse(r);if(d.savedAt&&Date.now()-d.savedAt<86400000){autosaveDataRef.current=d;setShowAutosavePrompt(true);}}}catch(e){}},[]);
   const restoreAutosave=()=>{const d=autosaveDataRef.current;if(d){d.frameId&&setFrameId(d.frameId);d.theme&&(setTheme(d.theme),setActiveTheme(d.theme));d.content&&resetContent(d.content);d.overrides&&setOverrides(d.overrides);d.aspectRatio&&setAspectRatio(d.aspectRatio);d.bgGradient&&updateMedia(prev=>({...prev,bgGradient:d.bgGradient}));d.patternOverlay&&updateMedia(prev=>({...prev,patternOverlay:d.patternOverlay}));showToast('Restored');}setShowAutosavePrompt(false);};
+  const runTableImportValidation = () => {
+    const headerCount = (content.tableHeaders || []).length || 5;
+    const report = buildTableImportReport({ rawText: tableImportText, headerCount, currentContent: content });
+    setTableImportReport(report);
+    showToast(`Validated ${report.parsedRows.length} rows: ${report.validRows.length} valid / ${report.invalidRows.length} invalid.`, report.invalidRows.length ? 'warning' : 'success');
+  };
+
+  const applyValidImportedRows = () => {
+    if (!tableImportReport || !tableImportReport.validRows.length) {
+      showToast('No valid rows to apply.', 'warning');
+      return;
+    }
+    updateContent('tableRows', [...(content.tableRows || []), ...tableImportReport.validRows]);
+    showToast(`Applied ${tableImportReport.validRows.length} valid rows.`, 'success');
+  };
+
+  const discardInvalidImportedRows = () => {
+    if (!tableImportReport?.invalidRows?.length) return;
+    setTableImportReport((prev) => prev ? { ...prev, invalidRows: [] } : prev);
+    showToast('Discarded invalid rows from import batch.', 'info');
+  };
+
   const selectedFrame=FRAMES.find(f=>f.id===frameId)||FRAMES[0];
   const activeFramePitfalls = useMemo(() => getFramePitfalls(frameId), [frameId]);
   const preExportChecklist = useMemo(() => ({
@@ -502,7 +587,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
           ))}
         </div>
       </div>
-<div className="editor-section"><div className="editor-section-title">Table</div><div className="form-group"><label className="form-label">Headers (comma-sep)</label><input value={(content.tableHeaders||[]).join(', ')} onChange={e=>updateContent('tableHeaders',e.target.value.split(',').map(s=>s.trim()).filter(Boolean))}/></div>{(content.tableRows||[]).map((row,i)=>(<DragItem key={`tr-${i}`} index={i} id={`tr-${i}`} onMove={(f,t)=>{const a=[...content.tableRows];const[it]=a.splice(f,1);a.splice(t,0,it);updateContent('tableRows',a);}}><div style={{display:'grid',gridTemplateColumns:`auto repeat(${Object.keys(row).length},1fr) auto`,gap:3,marginBottom:3,alignItems:'center'}}><span style={{color:'var(--dim)',fontSize:10,cursor:'grab'}}>⋮⋮</span>{Object.keys(row).map(k=>(<input key={k} value={row[k]} style={{fontSize:10,padding:'5px 6px'}} onChange={e=>{const a=[...content.tableRows];a[i]={...a[i],[k]:e.target.value};updateContent('tableRows',a);}}/>))}<button className="btn btn-danger btn-sm" style={{padding:'0 7px',height:30}} onClick={()=>updateContent('tableRows',content.tableRows.filter((_,r)=>r!==i))}>✕</button></div></DragItem>))}<button className="btn btn-secondary btn-sm w-full" style={{marginTop:6}} onClick={()=>{const c=(content.tableHeaders||[]).length||5;const r={};for(let j=1;j<=c;j++)r[`col${j}`]='';updateContent('tableRows',[...(content.tableRows||[]),r]);}}>+ Row</button></div>
+<div className="editor-section"><div className="editor-section-title">Table</div><div className="form-group"><label className="form-label">Headers (comma-sep)</label><input value={(content.tableHeaders||[]).join(', ')} onChange={e=>updateContent('tableHeaders',e.target.value.split(',').map(s=>s.trim()).filter(Boolean))}/></div><button className="btn btn-secondary btn-sm w-full" style={{marginBottom:6}} onClick={()=>{setShowTableImportModal(true);setTableImportReport(null);}}>Paste TSV / CSV</button>{(content.tableRows||[]).map((row,i)=>(<DragItem key={`tr-${i}`} index={i} id={`tr-${i}`} onMove={(f,t)=>{const a=[...content.tableRows];const[it]=a.splice(f,1);a.splice(t,0,it);updateContent('tableRows',a);}}><div style={{display:'grid',gridTemplateColumns:`auto repeat(${Object.keys(row).length},1fr) auto`,gap:3,marginBottom:3,alignItems:'center'}}><span style={{color:'var(--dim)',fontSize:10,cursor:'grab'}}>⋮⋮</span>{Object.keys(row).map(k=>(<input key={k} value={row[k]} style={{fontSize:10,padding:'5px 6px'}} onChange={e=>{const a=[...content.tableRows];a[i]={...a[i],[k]:e.target.value};updateContent('tableRows',a);}}/>))}<button className="btn btn-danger btn-sm" style={{padding:'0 7px',height:30}} onClick={()=>updateContent('tableRows',content.tableRows.filter((_,r)=>r!==i))}>✕</button></div></DragItem>))}<button className="btn btn-secondary btn-sm w-full" style={{marginTop:6}} onClick={()=>{const c=(content.tableHeaders||[]).length||5;const r={};for(let j=1;j<=c;j++)r[`col${j}`]='';updateContent('tableRows',[...(content.tableRows||[]),r]);}}>+ Row</button></div>
           <div className="editor-section">
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
               <div className="editor-section-title" style={{marginBottom:0}}>Grid Items</div>
@@ -541,6 +626,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
       {/* MODALS */}
       {showSaveModal&&<div className="modal-overlay open" onClick={e=>e.target===e.currentTarget&&setShowSaveModal(false)}><div className="modal"><div className="modal-header"><span className="modal-title">Save</span><button className="modal-close" onClick={()=>setShowSaveModal(false)}>✕</button></div><div className="form-group"><label className="form-label">Name</label><input value={saveName} onChange={e=>setSaveName(e.target.value)} placeholder={`${content.topicTag}`} onKeyDown={e=>e.key==='Enter'&&doSave()} autoFocus/></div><div className="modal-footer"><button className="btn btn-secondary" onClick={()=>setShowSaveModal(false)}>Cancel</button><button className="btn btn-primary" onClick={doSave}>Save</button></div></div></div>}
       {showLoadModal&&<div className="modal-overlay open" onClick={e=>e.target===e.currentTarget&&setShowLoadModal(false)}><div className="modal"><div className="modal-header"><span className="modal-title">Load</span><button className="modal-close" onClick={()=>setShowLoadModal(false)}>✕</button></div>{saves.length===0?<div className="empty-state">No saves.</div>:<div className="saves-list" style={{maxHeight:400,overflowY:'auto'}}>{saves.slice().reverse().map(s=>(<div key={s.id} className="save-item" onClick={()=>loadSave(s)}><div style={{width:32,height:32,borderRadius:6,background:s.theme?.base||'var(--bg-3)',border:`2px solid ${s.theme?.accent||'var(--border)'}`,flexShrink:0}}/><div className="save-item-info"><div className="save-item-name">{s.title}</div><div className="save-item-meta">#{s.frameId} · {new Date(s.savedAt).toLocaleDateString()}</div></div><button className="btn btn-danger btn-sm" onClick={e=>{e.stopPropagation();setShowDeleteConfirm(s.id);}}>✕</button></div>))}</div>}</div></div>}
+      {showTableImportModal&&<div className="modal-overlay open" onClick={e=>e.target===e.currentTarget&&setShowTableImportModal(false)}><div className="modal" style={{maxWidth:760}}><div className="modal-header"><span className="modal-title">Paste TSV / CSV Rows</span><button className="modal-close" onClick={()=>setShowTableImportModal(false)}>✕</button></div><div className="form-group"><label className="form-label">Paste rows ({(content.tableHeaders||[]).length||5} columns expected)</label><textarea rows={8} value={tableImportText} onChange={e=>setTableImportText(e.target.value)} placeholder="protocol	asset	apy	risk	grade"/></div><div style={{display:'flex',gap:8,marginBottom:10}}><button className="btn btn-secondary" onClick={runTableImportValidation}>Validate</button><button className="btn btn-primary" onClick={applyValidImportedRows} disabled={!tableImportReport?.validRows?.length}>Apply Valid Rows ({tableImportReport?.validRows?.length||0})</button><button className="btn btn-ghost" onClick={discardInvalidImportedRows} disabled={!tableImportReport?.invalidRows?.length}>Discard Invalid ({tableImportReport?.invalidRows?.length||0})</button></div>{tableImportReport&&<div style={{maxHeight:220,overflowY:'auto',fontSize:11,border:'1px solid var(--border)',borderRadius:8,padding:8}}>{tableImportReport.invalidRows.length===0?<div style={{color:'var(--ok)'}}>No row errors found.</div>:tableImportReport.invalidRows.map((entry)=>(<div key={`invalid-${entry.rowIndex}`} style={{marginBottom:8,paddingBottom:8,borderBottom:'1px dashed var(--border)'}}><div style={{fontWeight:600}}>Row {entry.rowIndex+1}</div>{entry.errors.map((err,idx)=>(<div key={`${entry.rowIndex}-${idx}`} style={{color:'#FFB3B3'}}>• {err.column}: {err.message} — Suggestion: {err.suggestion}</div>))}</div>))}</div>}<div className="modal-footer"><button className="btn btn-secondary" onClick={()=>setShowTableImportModal(false)}>Close</button></div></div></div>}
       {showDeleteConfirm&&<div className="confirm-overlay" onClick={()=>setShowDeleteConfirm(null)}><div className="confirm-box" onClick={e=>e.stopPropagation()}><div className="confirm-title">Delete?</div><div className="confirm-actions"><button className="btn btn-secondary btn-sm" onClick={()=>setShowDeleteConfirm(null)}>Cancel</button><button className="btn btn-danger btn-sm" onClick={confirmDel}>Delete</button></div></div></div>}
       {showAutosavePrompt&&<div className="confirm-overlay" onClick={()=>setShowAutosavePrompt(false)}><div className="confirm-box" onClick={e=>e.stopPropagation()}><div className="confirm-title">Restore Session?</div><div className="confirm-msg">Found autosave from last session.</div><div className="confirm-actions"><button className="btn btn-secondary btn-sm" onClick={()=>setShowAutosavePrompt(false)}>Discard</button><button className="btn btn-primary btn-sm" onClick={restoreAutosave}>Restore</button></div></div></div>}
     </div>
