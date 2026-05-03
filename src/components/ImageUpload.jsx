@@ -1,4 +1,6 @@
 import { useRef, useState } from 'react';
+import { computeDecodeSafeDimensions, validateImageFileBeforeDecode } from '../utils/imagePayloadGuards';
+import { createManagedObjectURL, revokeManagedObjectURL } from '../utils/objectUrlManager';
 
 // A1-A14: Complete image upload with position, resize, opacity, rotation, fit controls
 export default function ImageUpload({ label, value, onChange, maxSize = 2, showToast }) {
@@ -8,52 +10,40 @@ export default function ImageUpload({ label, value, onChange, maxSize = 2, showT
 
   const handleFile = (file) => {
     if (!file) return;
-    // Check raw file size (before compression)
-    if (file.size > 20 * 1024 * 1024) { // 20MB hard limit before compression
-      showToast?.('File too large. Max 20MB.', 'error');
+    const fileValidation = validateImageFileBeforeDecode(file);
+    if (!fileValidation.valid) {
+      showToast?.(fileValidation.reason, 'error');
       return;
     }
-    if (!file.type.startsWith('image/')) {
-      showToast?.('Only image files are supported.', 'error');
-      return;
-    }
-    // H-09: Compress to max 1200px using canvas before storing as base64
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        const MAX = 1200;
-        const scale = Math.min(1, MAX / Math.max(img.width, img.height));
-        const w = Math.round(img.width * scale);
-        const h = Math.round(img.height * scale);
-        const canvas = document.createElement('canvas');
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, w, h);
-        // Use WebP if supported, fall back to JPEG
-        const webpTest = canvas.toDataURL('image/webp');
-        const format = webpTest.startsWith('data:image/webp') ? 'image/webp' : 'image/jpeg';
-        const dataUrl = canvas.toDataURL(format, 0.85);
-        const kb = Math.round(dataUrl.length * 0.75 / 1024);
-        if (kb > 400) {
-          showToast?.(`Image compressed to ~${kb}KB`, 'info');
+    createImageBitmap(file).then((bitmap) => {
+      const MAX = 1200;
+      const decodeSafe = computeDecodeSafeDimensions({ width: bitmap.width, height: bitmap.height });
+      const resizeScale = Math.min(1, MAX / Math.max(decodeSafe.width, decodeSafe.height));
+      const w = Math.max(1, Math.round(decodeSafe.width * resizeScale));
+      const h = Math.max(1, Math.round(decodeSafe.height * resizeScale));
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(bitmap, 0, 0, w, h);
+      bitmap.close();
+      const exportFormat = 'image/webp';
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          showToast?.('Failed to process image.', 'error');
+          return;
         }
-        onChange({
-          dataUrl,
-          name: file.name,
-          x: 50, y: 50,
-          width: 100,
-          opacity: 1,
-          rotation: 0,
-          fit: 'contain',
-          zIndex: 10,
-          visible: true,
-        });
-      };
-      img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
+        if (blob.size > 8 * 1024 * 1024) {
+          showToast?.('Processed image still exceeds memory cap (8MB).', 'error');
+          return;
+        }
+        if (value?.objectUrl) revokeManagedObjectURL(value.objectUrl);
+        const objectUrl = createManagedObjectURL(blob);
+        const kb = Math.round(blob.size / 1024);
+        if (decodeSafe.scaled || kb > 400) showToast?.(`Image optimized to ~${kb}KB`, 'info');
+        onChange({ objectUrl, name: file.name, x: 50, y: 50, width: 100, opacity: 1, rotation: 0, fit: 'contain', zIndex: 10, visible: true });
+      }, exportFormat, 0.85);
+    }).catch(() => showToast?.('Image decode failed.', 'error'));
   };
 
   const handleDrop = (e) => {
@@ -89,23 +79,23 @@ export default function ImageUpload({ label, value, onChange, maxSize = 2, showT
     <div className="image-upload-wrap">
       <div
         className="image-upload-label"
-        onClick={() => value?.dataUrl && setExpanded(e => !e)}
-        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && value?.dataUrl && setExpanded(v => !v)}
-        role={value?.dataUrl ? 'button' : undefined}
-        tabIndex={value?.dataUrl ? 0 : undefined}
-        style={{ cursor: value?.dataUrl ? 'pointer' : 'default' }}
+        onClick={() => (value?.objectUrl || value?.dataUrl) && setExpanded(e => !e)}
+        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (value?.objectUrl || value?.dataUrl) && setExpanded(v => !v)}
+        role={(value?.objectUrl || value?.dataUrl) ? 'button' : undefined}
+        tabIndex={(value?.objectUrl || value?.dataUrl) ? 0 : undefined}
+        style={{ cursor: (value?.objectUrl || value?.dataUrl) ? 'pointer' : 'default' }}
       >
         {label}
-        {value?.dataUrl && <span style={{ marginLeft: 'auto', fontSize: 8, color: 'var(--dim)' }}>{expanded ? '▼' : '▶'} controls</span>}
+        {(value?.objectUrl || value?.dataUrl) && <span style={{ marginLeft: 'auto', fontSize: 8, color: 'var(--dim)' }}>{expanded ? '▼' : '▶'} controls</span>}
       </div>
-      {value?.dataUrl ? (
+      {(value?.objectUrl || value?.dataUrl) ? (
         <>
           <div className="image-upload-preview">
-            <img src={value.dataUrl} alt={value.name || 'Uploaded'} />
+            <img src={value.objectUrl || value.dataUrl} alt={value.name || 'Uploaded'} />
             <div className="image-upload-overlay">
               <span className="image-upload-name">{value.name}</span>
               <button className="btn btn-ghost btn-sm" onClick={() => setExpanded(e => !e)} style={{ color: '#fff', fontSize: 10 }}>Edit</button>
-              <button className="btn btn-danger btn-sm" onClick={() => onChange(null)} aria-label="Remove image">Remove</button>
+              <button className="btn btn-danger btn-sm" onClick={() => { if (value?.objectUrl) revokeManagedObjectURL(value.objectUrl); onChange(null); }} aria-label="Remove image">Remove</button>
             </div>
           </div>
           {expanded && (

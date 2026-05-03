@@ -39,4 +39,64 @@ export function createDatasetSnapshot(input) {
   };
 }
 
+export function buildCanonicalExportAttemptPayload({
+  theme,
+  overrides,
+  normalizedContent,
+  contract,
+  outputMetadata,
+}) {
+  return stableSortValue({
+    theme,
+    overrides,
+    normalizedContent,
+    contract,
+    outputMetadata,
+  });
+}
+
+export function createExportAttemptSnapshot(input) {
+  const payload = buildCanonicalExportAttemptPayload(input);
+  const serialized = JSON.stringify(payload);
+  const hash = fnv1aHash(serialized);
+  return {
+    schemaVersion: SNAPSHOT_SCHEMA_VERSION,
+    hash,
+    snapshotId: `${SNAPSHOT_SCHEMA_VERSION}:${hash}`,
+    serialized,
+    payload,
+  };
+}
+
+function buildFieldDiff(field, beforePayload = {}, afterPayload = {}) {
+  const before = stableSortValue(beforePayload[field]);
+  const after = stableSortValue(afterPayload[field]);
+  const beforeSerialized = JSON.stringify(before ?? null);
+  const afterSerialized = JSON.stringify(after ?? null);
+  return {
+    changed: beforeSerialized !== afterSerialized,
+    before,
+    after,
+    beforeHash: fnv1aHash(beforeSerialized),
+    afterHash: fnv1aHash(afterSerialized),
+  };
+}
+
+export function diffCanonicalSnapshots(preSnapshot, postSnapshot) {
+  const fields = ['theme', 'overrides', 'normalizedContent', 'contract', 'outputMetadata'];
+  const fieldDiffs = fields.reduce((acc, field) => {
+    acc[field] = buildFieldDiff(field, preSnapshot?.payload, postSnapshot?.payload);
+    return acc;
+  }, {});
+  const changedFields = fields.filter((field) => fieldDiffs[field].changed);
+  return {
+    comparable: Boolean(preSnapshot && postSnapshot),
+    stable: changedFields.length === 0,
+    changedFields,
+    fieldDiffs,
+    preSnapshotId: preSnapshot?.snapshotId || null,
+    postSnapshotId: postSnapshot?.snapshotId || null,
+  };
+}
+
 export { SNAPSHOT_SCHEMA_VERSION };
