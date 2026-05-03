@@ -127,10 +127,11 @@ export function runTrustPreflightOrchestrator({ content = {}, strictMode = true,
     if (units.size > 1) addIssue('unit-compatibility', 'warning', `content.stats[${idx}].value`, 'Mixed unit families detected across stats.');
   });
 
-  stats.forEach((stat, idx) => {
-    const label = normalize(stat?.label).toLowerCase();
-    const value = normalize(stat?.value);
-    if ((label.includes('apy') || label.includes('rate') || label.includes('%')) && !value.includes('%')) addIssue('impossible-combinations', 'blocking', `content.stats[${idx}].value`, 'Rate-like labels should include percentage values.');
+  const impossibleStateFindings = evaluateImpossibleStateConstraints({ content, layoutId, domain });
+  impossibleStateFindings.forEach((finding) => {
+    const severity = finding.confidence === 'high' && finding.severity === 'warning' ? 'blocking' : finding.severity;
+    const message = `${finding.message} [${finding.ruleId}]${finding.remediation ? ` ${finding.remediation}` : ''}`;
+    addIssue('impossible-combinations', severity, finding.fieldPath || 'content.stats', message);
   });
 
 
