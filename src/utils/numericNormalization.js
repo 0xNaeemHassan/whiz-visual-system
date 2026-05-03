@@ -89,6 +89,8 @@ function buildMeta(parsed, fieldPath, rule = null) {
     fieldPath,
     kind: parsed.kind,
     canonicalValue: parsed.canonicalValue,
+    canonicalUnit: parsed.kind === UNIT_KIND.PERCENT ? 'decimal' : parsed.kind === UNIT_KIND.CURRENCY ? (parsed.currencyCode || 'USD') : parsed.kind === UNIT_KIND.BASIS_POINTS ? 'bps' : 'number',
+    displayUnit: parsed.kind === UNIT_KIND.PERCENT ? '%' : parsed.kind === UNIT_KIND.CURRENCY ? (parsed.currencyCode || 'USD') : parsed.kind === UNIT_KIND.BASIS_POINTS ? 'bps' : (parsed.scaleToken || 'raw'),
     currencyCode: parsed.currencyCode,
     displayHint: parsed.kind === UNIT_KIND.PERCENT ? DISPLAY_HINT.PERCENT : (parsed.scaleToken === 'M' ? DISPLAY_HINT.COMPACT_MILLIONS : parsed.scaleToken === 'B' ? DISPLAY_HINT.COMPACT_BILLIONS : parsed.kind === UNIT_KIND.CURRENCY ? DISPLAY_HINT.CURRENCY : DISPLAY_HINT.RAW),
     incompatible,
@@ -149,5 +151,40 @@ export function normalizeNumericFields(content = {}, { locale = 'en-US', fieldRu
   }
 
   normalizedContent.unitMetadata = unitMetadata;
-  return { content: normalizedContent, corrections, hasCorrections: corrections.length > 0, unitMetadata, contract: NUMERIC_NORMALIZATION_CONTRACT };
+  return {
+    content: normalizedContent,
+    corrections,
+    hasCorrections: corrections.length > 0,
+    unitMetadata,
+    contract: NUMERIC_NORMALIZATION_CONTRACT,
+    compatibility: buildCompatibilityReport(unitMetadata),
+  };
+}
+
+function collectMetaEntries(unitMetadata = {}) {
+  const entries = [];
+  ['bigNumber', 'bigValue', 'targetMetric'].forEach((key) => {
+    if (unitMetadata[key]?.kind) entries.push(unitMetadata[key]);
+  });
+  (unitMetadata.stats || []).forEach((meta) => { if (meta?.kind) entries.push(meta); });
+  (unitMetadata.tableRows || []).forEach((rowMeta = {}) => {
+    Object.values(rowMeta).forEach((meta) => { if (meta?.kind) entries.push(meta); });
+  });
+  return entries;
+}
+
+function buildCompatibilityReport(unitMetadata = {}) {
+  const entries = collectMetaEntries(unitMetadata);
+  const byKind = entries.reduce((acc, meta) => {
+    const key = meta.kind === UNIT_KIND.CURRENCY ? `${meta.kind}:${meta.canonicalUnit}` : meta.kind;
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+  const kinds = Object.keys(byKind);
+  return {
+    hasMixedKinds: kinds.length > 1,
+    kinds,
+    blockedArithmetic: kinds.length > 1,
+    blockedComparisons: kinds.length > 1,
+  };
 }
