@@ -4,12 +4,13 @@ import { useLocalStorage } from '../hooks/useLocalStorage';
 import { TICKER_CONTRACT } from '../domain/tickerContract';
 import { SemanticChip } from '../components/primitives';
 import { computeMilestoneProgress } from '../domain/services/milestoneTrackerService';
+import { secureStorage } from '../storage/secureStorage';
 
 export default function Dashboard({ navigateTo, showToast, activeTheme }) {
   const [saves] = useLocalStorage('whiz-saves', []);
   const [issues] = useLocalStorage('whiz-issues', []);
   const [showOnboarding, setShowOnboarding] = useState(() => {
-    try { return !localStorage.getItem('whiz-onboarded'); } catch(e) { return true; }
+    try { return !secureStorage.settings.get('whiz-onboarded'); } catch(e) { return true; }
   });
 
   const published = issues.filter(i => i.status === 'published').length;
@@ -26,7 +27,7 @@ export default function Dashboard({ navigateTo, showToast, activeTheme }) {
 
   const dismissOnboarding = () => {
     setShowOnboarding(false);
-    try { localStorage.setItem('whiz-onboarded', '1'); } catch(e) {}
+    try { secureStorage.settings.set('whiz-onboarded', '1'); } catch(e) {}
   };
 
   return (
