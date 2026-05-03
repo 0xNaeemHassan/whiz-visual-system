@@ -187,6 +187,23 @@ const buildTableImportReport = ({ rawText, headerCount, currentContent }) => {
 
   return { parsedRows, validRows, invalidRows };
 };
+
+const TABLE_CELL_MAX_LENGTH = 120;
+const CELL_FORMAT_REGEX = /^[\w\s.,:%$+\-/#()&@]+$/;
+
+const createInvalidRowsCsv = (invalidRows = []) => {
+  const headers = ['row_number', 'column', 'value', 'error', 'suggestion'];
+  const lines = [headers.join(',')];
+  invalidRows.forEach((entry) => {
+    entry.errors.forEach((error) => {
+      const value = error.column === 'row' ? '' : String(entry.row?.[error.column] || '');
+      const cells = [entry.rowIndex + 1, error.column, value, error.message, error.suggestion]
+        .map((item) => `"${String(item || '').replaceAll('"', '""')}"`);
+      lines.push(cells.join(','));
+    });
+  });
+  return lines.join('\n');
+};
 function DesignPanel({selectedEl,setSelectedEl,overrides,setOverrides,theme,bgGradient,setBgGradient,showToast,resetOverrides,setPatternOverlay,strictMode}){
   const currentOverrides = overrides;
   const setOverrideValue = (key, value) => setOverrides((previousOverrides) => ({ ...previousOverrides, [key]: value }));
@@ -285,6 +302,9 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const frameRef=useRef(null);const centerRef=useRef(null);
   const { registerHandlers } = useUIEventContext();
   const[showAutosavePrompt,setShowAutosavePrompt]=useState(false);const autosaveDataRef=useRef(null);
+  const [showTableImportModal, setShowTableImportModal] = useState(false);
+  const [tableImportText, setTableImportText] = useState('');
+  const [tableImportReport, setTableImportReport] = useState(null);
 
   // NOTE: editingFrame is now {frameId, serial, issue}; compare serial to detect re-opens
   useEffect(()=>{
@@ -323,7 +343,24 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const restoreAutosave=()=>{const d=autosaveDataRef.current;if(d){d.frameId&&setFrameId(d.frameId);d.theme&&(setTheme(d.theme),setActiveTheme(d.theme));d.content&&resetContent(normalizeContentWithProvenance(d.content));d.overrides&&setOverrides(d.overrides);d.aspectRatio&&setAspectRatio(d.aspectRatio);d.bgGradient&&updateMedia(prev=>({...prev,bgGradient:d.bgGradient}));d.patternOverlay&&updateMedia(prev=>({...prev,patternOverlay:d.patternOverlay}));showToast('Restored');}setShowAutosavePrompt(false);};
   const runTableImportValidation = () => {
     const headerCount = (content.tableHeaders || []).length || 5;
-    const report = buildTableImportReport({ rawText: tableImportText, headerCount, currentContent: content });
+    const baseReport = buildTableImportReport({ rawText: tableImportText, headerCount, currentContent: content });
+    const allEntries = [
+      ...baseReport.validRows.map((row, rowIndex) => ({ rowIndex, row, errors: [] })),
+      ...baseReport.invalidRows,
+    ].sort((a, b) => a.rowIndex - b.rowIndex);
+    const invalidRows = allEntries.map((entry) => {
+      const extraErrors = Object.entries(entry.row || {}).flatMap(([column, value]) => {
+        const cell = String(value || '');
+        const errors = [];
+        if (cell.length > TABLE_CELL_MAX_LENGTH) errors.push({ column, message: `Cell exceeds ${TABLE_CELL_MAX_LENGTH} characters.`, suggestion: 'Shorten this cell before applying.' });
+        if (cell && !CELL_FORMAT_REGEX.test(cell)) errors.push({ column, message: 'Cell has invalid format.', suggestion: 'Use plain text, numbers, and standard punctuation only.' });
+        return errors;
+      });
+      const errors = [...entry.errors, ...extraErrors].filter((error, index, arr) => arr.findIndex((candidate) => candidate.column === error.column && candidate.message === error.message) === index);
+      return { ...entry, errors };
+    }).filter((entry) => entry.errors.length);
+    const validRows = allEntries.filter((entry) => !invalidRows.some((invalidEntry) => invalidEntry.rowIndex === entry.rowIndex)).map((entry) => entry.row);
+    const report = { ...baseReport, validRows, invalidRows };
     setTableImportReport(report);
     showToast(`Validated ${report.parsedRows.length} rows: ${report.validRows.length} valid / ${report.invalidRows.length} invalid.`, report.invalidRows.length ? 'warning' : 'success');
   };
@@ -341,6 +378,22 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     if (!tableImportReport?.invalidRows?.length) return;
     setTableImportReport((prev) => prev ? { ...prev, invalidRows: [] } : prev);
     showToast('Discarded invalid rows from import batch.', 'info');
+  };
+  const exportInvalidImportRows = () => {
+    if (!tableImportReport?.invalidRows?.length) {
+      showToast('No invalid rows to export.', 'info');
+      return;
+    }
+    const blob = new Blob([createInvalidRowsCsv(tableImportReport.invalidRows)], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `invalid-table-rows-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    showToast(`Exported ${tableImportReport.invalidRows.length} invalid rows report.`, 'info');
   };
 
   const selectedFrame=FRAMES.find(f=>f.id===frameId)||FRAMES[0];
@@ -1035,6 +1088,12 @@ Apply these auto-corrections?`);
       </div>
       {showCommandPalette&&<div className="modal-overlay open" onClick={e=>e.target===e.currentTarget&&setShowCommandPalette(false)}><div className="modal" style={{maxWidth:640}}><div className="modal-header"><span className="modal-title">Command Palette</span><button className="modal-close" onClick={()=>setShowCommandPalette(false)}>✕</button></div><input className="form-control" autoFocus placeholder="Type a command..." value={paletteQuery} onChange={e=>setPaletteQuery(e.target.value)} style={{marginBottom:12}}/>{Object.entries(filterCommands(commandRegistry.filter(c=>c.id!=='palette.open'),paletteQuery).reduce((groups,cmd)=>{(groups[cmd.category] ||= []).push(cmd);return groups;},{})).map(([group,items])=>(<div key={group} style={{marginBottom:10}}><div style={{fontSize:11,color:'var(--dim)',marginBottom:6,textTransform:'uppercase'}}>{group}</div><div style={{display:'flex',flexDirection:'column',gap:4}}>{items.map(cmd=>(<button key={cmd.id} className="btn btn-ghost" style={{justifyContent:'space-between',display:'flex',width:'100%'}} disabled={!cmd.enabled()} onClick={()=>{cmd.handler();setShowCommandPalette(false);}}><span>{cmd.label}</span><span style={{fontFamily:'var(--font-m)',fontSize:10,color:'var(--dim)'}}>{cmd.shortcut}</span></button>))}</div></div>))}</div></div>}
       {/* MODALS */}
+      {showTableImportModal&&<div className="modal-overlay open" onClick={e=>e.target===e.currentTarget&&setShowTableImportModal(false)}><div className="modal" style={{maxWidth:760}}><div className="modal-header"><span className="modal-title">Bulk Paste Table Rows</span><button className="modal-close" onClick={()=>setShowTableImportModal(false)}>✕</button></div><div style={{fontSize:11,color:'var(--muted)',marginBottom:8}}>Workflow: paste → parse → validate → resolve → apply.</div><textarea className="form-control" rows={8} value={tableImportText} onChange={e=>setTableImportText(e.target.value)} placeholder="Paste TSV/CSV rows here..." /><div className="modal-footer" style={{justifyContent:'flex-start'}}><button className="btn btn-secondary btn-sm" onClick={runTableImportValidation}>Parse + Validate</button><button className="btn btn-ghost btn-sm" onClick={discardInvalidImportedRows}>Resolve: Discard Invalid</button><button className="btn btn-ghost btn-sm" onClick={exportInvalidImportRows}>Export Invalid Report</button><button className="btn btn-primary btn-sm" onClick={applyValidImportedRows}>Apply Valid Rows Only</button></div>{tableImportReport&&<div style={{marginTop:8,fontSize:11}}><div style={{marginBottom:8}}>Parsed: {tableImportReport.parsedRows.length} · Valid: {tableImportReport.validRows.length} · Invalid: {tableImportReport.invalidRows.length}</div>{tableImportReport.invalidRows.length>0&&<div style={{display:'grid',gap:6,maxHeight:220,overflowY:'auto'}}>{tableImportReport.invalidRows.map((entry)=>(
+              <div key={`invalid-${entry.rowIndex}`} style={{border:'1px solid rgba(235,87,87,.35)',borderRadius:6,padding:8}}>
+                <div style={{fontWeight:600,marginBottom:4}}>Row {entry.rowIndex+1}</div>
+                {entry.errors.map((error,errorIndex)=><div key={`${error.column}-${errorIndex}`} style={{display:'grid',gridTemplateColumns:'100px 1fr auto',gap:6,alignItems:'center',marginBottom:4}}><div style={{color:'var(--theme-accent)'}}>{error.column}</div><div>{error.message}</div><button className="btn btn-ghost btn-sm" onClick={()=>setTableImportText(prev=>{const lines=prev.split(/\r?\n/);if(error.column!=='row'&&lines[entry.rowIndex]){const delimiter=lines[entry.rowIndex].includes('\t')?'\t':',';const cells=lines[entry.rowIndex].split(delimiter);const colIdx=Math.max(0,Number(error.column.replace('col',''))-1);cells[colIdx]=(cells[colIdx]||'').slice(0,TABLE_CELL_MAX_LENGTH);lines[entry.rowIndex]=cells.join(delimiter);}return lines.join('\n');})}>Auto-fix</button></div>)}
+              </div>
+            ))}</div>}</div>}</div></div>}
       {showSaveModal&&<div className="modal-overlay open" onClick={e=>e.target===e.currentTarget&&setShowSaveModal(false)}><div className="modal"><div className="modal-header"><span className="modal-title">Save</span><button className="modal-close" onClick={()=>setShowSaveModal(false)}>✕</button></div><div className="form-group"><label className="form-label">Name</label><input value={saveName} onChange={e=>setSaveName(e.target.value)} placeholder={`${content.topicTag}`} onKeyDown={e=>e.key==='Enter'&&doSave()} autoFocus/></div><div className="form-group"><label className="form-label">Tags (comma-separated)</label><input value={saveTagsInput} onChange={e=>setSaveTagsInput(e.target.value)} placeholder="alpha, defi"/></div><div className="form-group"><label className="form-label">Folder</label><input value={saveFolder} onChange={e=>setSaveFolder(e.target.value)} placeholder="Research"/></div><div className="form-group"><label className="form-label">Status (optional)</label><input value={saveStatus} onChange={e=>setSaveStatus(e.target.value)} placeholder="Draft"/></div><div className="modal-footer"><button className="btn btn-secondary" onClick={()=>setShowSaveModal(false)}>Cancel</button><button className="btn btn-primary" onClick={doSave}>Save</button></div></div></div>}
       {showLoadModal&&<div className="modal-overlay open" onClick={e=>e.target===e.currentTarget&&setShowLoadModal(false)}><div className="modal"><div className="modal-header"><span className="modal-title">Load</span><button className="modal-close" onClick={()=>setShowLoadModal(false)}>✕</button></div><div className="form-group"><label className="form-label">Name</label><input value={saveSearch} onChange={e=>setSaveSearch(e.target.value)} placeholder="Search name"/></div><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}><div className="form-group"><label className="form-label">Tag</label><input value={loadTagFilter} onChange={e=>setLoadTagFilter(e.target.value)} placeholder="defi"/></div><div className="form-group"><label className="form-label">Folder</label><input value={loadFolderFilter} onChange={e=>setLoadFolderFilter(e.target.value)} placeholder="Research"/></div><div className="form-group"><label className="form-label">Frame</label><input value={loadFrameFilter} onChange={e=>setLoadFrameFilter(e.target.value.replace(/[^0-9]/g,''))} placeholder="4"/></div><div className="form-group"><label className="form-label">From</label><input type="date" value={loadDateFrom} onChange={e=>setLoadDateFrom(e.target.value)}/></div><div className="form-group"><label className="form-label">To</label><input type="date" value={loadDateTo} onChange={e=>setLoadDateTo(e.target.value)}/></div></div>{filteredSaves.length===0?<div className="empty-state">No matching saves.</div>:<div className="saves-list" style={{maxHeight:400,overflowY:'auto'}}>{filteredSaves.map(s=>(<div key={s.id} className="save-item"><div style={{width:32,height:32,borderRadius:6,background:s.theme?.base||'var(--bg-3)',border:`2px solid ${s.theme?.accent||'var(--border)'}`,flexShrink:0}}/><div className="save-item-info" onClick={()=>openSaveDiffModal(s)} style={{cursor:'pointer'}}><div className="save-item-name">{s.title}</div><div className="save-item-meta">#{s.frameId} · {(s.folder||'Root')} · {Array.isArray(s.tags)&&s.tags.length?s.tags.join(', '):'No tags'} · {new Date(s.savedAt).toLocaleDateString()}</div></div><button className="btn btn-secondary btn-sm" onClick={()=>openSaveDiffModal(s)}>Compare</button><button className="btn btn-danger btn-sm" onClick={e=>{e.stopPropagation();setShowDeleteConfirm(s.id);}}>✕</button></div>))}</div>}</div></div>}
       {pendingLoadSave&&pendingSaveDiff&&<div className="modal-overlay open" onClick={()=>{setPendingLoadSave(null);setPendingSaveDiff(null);}}><div className="modal" onClick={e=>e.stopPropagation()}><div className="modal-header"><span className="modal-title">Compare before load</span><button className="modal-close" onClick={()=>{setPendingLoadSave(null);setPendingSaveDiff(null);}}>✕</button></div>{!pendingSaveDiff.hasChanges?<div className="empty-state">No changes detected.</div>:<div style={{display:'flex',flexDirection:'column',gap:10,maxHeight:360,overflowY:'auto'}}>{pendingSaveDiff.groups.map(group=><div key={group.key} className="editor-section"><div className="editor-section-title">{group.label}</div><div style={{display:'flex',flexDirection:'column',gap:6}}>{group.changes.map((change,idx)=><div key={`${group.key}-${idx}`} style={{padding:'7px 8px',borderRadius:6,border:`1px solid ${change.destructive?'rgba(235,87,87,0.55)':'var(--border)'}`,background:change.destructive?'rgba(235,87,87,0.08)':'var(--bg-3)'}}><strong>{change.type==='added'?'Added':change.type==='removed'?'Removed':'Changed'}</strong> · {change.label}<div style={{fontSize:11,opacity:0.85}}>{change.details}</div></div>)}</div></div>)}</div>}{pendingSaveDiff.destructiveFlags.length>0&&<div style={{marginTop:8,padding:8,borderRadius:6,border:'1px solid rgba(235,87,87,0.55)',background:'rgba(235,87,87,0.08)',fontSize:11}}>Destructive changes require confirmation before load.</div>}<div className="modal-footer"><button className="btn btn-secondary" onClick={()=>{setPendingLoadSave(null);setPendingSaveDiff(null);}}>Cancel</button><button className="btn btn-primary" onClick={confirmLoadAfterDiff}>Load save</button></div></div></div>}
