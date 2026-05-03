@@ -2,6 +2,7 @@ import { FRAME_CONTENT_SCHEMA, EDITOR_STATE_SCHEMA } from './mappings.js';
 import { normalizeContentTaxonomy } from '../../utils/contentNormalization.js';
 import { normalizeDateInput, normalizeTimelineEvents } from '../services/dateNormalizationService.js';
 import { normalizeProvenanceShape } from '../../utils/provenance.js';
+import { sanitizeAndValidateImportPayload, validateEditorStateShape } from './validators.js';
 
 function toString(v, fallback = '') { return v == null ? fallback : String(v); }
 function toNumber(v, fallback = 0) { const n = Number(v); return Number.isFinite(n) ? n : fallback; }
@@ -59,10 +60,12 @@ export function normalizeFrameContent(raw, defaults = {}) {
 
 export function normalizeFrameContentSafe(raw, defaults = {}) {
   try {
+    const { value: sanitized, errors } = sanitizeAndValidateImportPayload(raw);
+    const normalized = normalizeFrameContent(sanitized, defaults);
     return {
       ok: true,
-      value: normalizeFrameContent(raw, defaults),
-      errors: [],
+      value: normalized,
+      errors,
     };
   } catch {
     return {
@@ -83,10 +86,13 @@ export function normalizeEditorState(raw, defaults = {}) {
 
 export function normalizeEditorStateSafe(raw, defaults = {}) {
   try {
+    const { value: sanitized, errors: sanitizeErrors } = sanitizeAndValidateImportPayload(raw);
+    const schemaValidation = validateEditorStateShape(toObject(sanitized, {}));
+    const normalized = normalizeEditorState(sanitized, defaults);
     return {
-      ok: true,
-      value: normalizeEditorState(raw, defaults),
-      errors: [],
+      ok: schemaValidation.ok,
+      value: normalized,
+      errors: [...sanitizeErrors, ...schemaValidation.errors],
     };
   } catch {
     return {

@@ -6,3 +6,5 @@ export {
   normalizeEditorStateSafe,
   normalizeFrameContentSafe,
 } from './normalizers';
+
+export { sanitizeAndValidateImportPayload, validateEditorStateShape } from './validators.js';
