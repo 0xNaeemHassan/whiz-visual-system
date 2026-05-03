@@ -5,7 +5,8 @@ import { FRAME_GUIDANCE_BY_ID } from './data/frameGuidance';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
-ReactDOM.createRoot(document.getElementById('root')).render(<React.StrictMode><App /></React.StrictMode>);
+import { IntlProvider } from './i18n/IntlProvider';
+ReactDOM.createRoot(document.getElementById('root')).render(<React.StrictMode><IntlProvider><App /></IntlProvider></React.StrictMode>);
 
 
 if (import.meta.env.DEV) {

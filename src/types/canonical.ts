@@ -48,6 +48,7 @@ export type ExportContract = {
   quality: number;
   background: string | null;
   version: string;
+  locale: string;
 };
 
 export type PluginManifest = {

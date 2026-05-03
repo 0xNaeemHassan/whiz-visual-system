@@ -88,7 +88,8 @@ export async function renderSceneToCanvas(sceneModel, contract) {
 
   ctx.fillStyle = sceneModel.palette.textSecondary;
   ctx.font = '600 10px "JetBrains Mono", monospace';
-  ctx.fillText(`#${String(sceneModel.content.issueNum).padStart(3, '0')} · ${sceneModel.content.topicTag}`, 24, 32);
+  const localizedIssueNum = new Intl.NumberFormat(sceneModel.locale || 'en-US', { minimumIntegerDigits: 3, useGrouping: false }).format(Number(sceneModel.content.issueNum) || 0);
+  ctx.fillText(`#${localizedIssueNum} · ${sceneModel.content.topicTag}`, 24, 32);
 
   ctx.fillStyle = sceneModel.palette.textPrimary;
   ctx.font = `700 ${sceneModel.typography.titleSize}px "Space Grotesk", sans-serif`;

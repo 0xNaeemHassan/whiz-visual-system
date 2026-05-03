@@ -1,6 +1,6 @@
 import { resolveRiskAccent } from '../riskAccentPolicy';
 
-export function createSceneModel({ frameId, theme, content, overrides, aspectRatio, bgGradient }) {
+export function createSceneModel({ frameId, theme, content, overrides, aspectRatio, bgGradient, locale = 'en-US' }) {
   const accentResolution = resolveRiskAccent({ frameId, theme, overrides });
   return {
     frameId,
@@ -20,6 +20,7 @@ export function createSceneModel({ frameId, theme, content, overrides, aspectRat
       deckSize: overrides?.deck?.fontSize || 18,
       bodySize: overrides?.body?.fontSize || 15,
     },
+    locale,
     content: {
       issueNum: content?.issueNum || '',
       topicTag: content?.topicTag || '',

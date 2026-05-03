@@ -7,6 +7,7 @@ import { useLocalStorage } from './hooks/useLocalStorage';
 import { MOTION_PREFERENCE, useMotionPreference } from './hooks/useMotionPreference';
 import { DEFAULT_THEME } from './data/themes';
 import { UIEventProvider, useUIEventContext } from './state/UIEventContext';
+import { useIntl } from './i18n/IntlProvider';
 
 // K4: Code splitting — lazy load pages
 const Dashboard  = lazy(() => import('./pages/Dashboard'));
@@ -17,15 +18,6 @@ const Typography = lazy(() => import('./pages/Typography'));
 const Planner    = lazy(() => import('./pages/Planner'));
 const Docs       = lazy(() => import('./pages/Docs'));
 
-const PAGES = {
-  dashboard:  'Dashboard',
-  library:    'Frame Library',
-  editor:     'Frame Editor',
-  themes:     'Color Themes',
-  typography: 'Typography',
-  planner:    'Content Planner',
-  docs:       'Documentation',
-};
 
 // L1, L2: SVG icons instead of Unicode
 const NAV_ICONS = {
@@ -40,13 +32,7 @@ const NAV_ICONS = {
 };
 
 // Fix #87: Show all 7 pages on mobile bottom nav
-const BOTTOM_NAV = [
-  { id: 'dashboard', label: 'Home' },
-  { id: 'library',   label: 'Library' },
-  { id: 'editor',    label: 'Create' },
-  { id: 'planner',   label: 'Plan' },
-  { id: 'themes',    label: 'Themes' },
-];
+const BOTTOM_NAV = ['dashboard', 'library', 'editor', 'planner', 'themes'];
 
 // K1: Real React Error Boundary per page (class component)
 class PageErrorBoundary extends Component {
@@ -66,14 +52,14 @@ class PageErrorBoundary extends Component {
         <div style={{ padding: 40, textAlign: 'center', color: '#8B95A3' }}>
           <div style={{ fontSize: 36, marginBottom: 12 }}>⚠</div>
           <h3 style={{ color: '#F4F5F7', marginBottom: 8, fontSize: 16 }}>
-            Something went wrong in {this.props.page}
+            {this.props.messages.pageCrashTitle.replace('{page}', this.props.page)}
           </h3>
           <p style={{ fontSize: 12, marginBottom: 16, maxWidth: 360, lineHeight: 1.6, margin: '0 auto 16px' }}>
-            {this.state.error?.message || 'An unexpected error occurred.'}
+            {this.state.error?.message || this.props.messages.unexpected}
           </p>
           <button className="btn btn-primary btn-sm"
             onClick={() => this.setState({ hasError: false, error: null })}>
-            Try Again
+            {this.props.messages.tryAgain}
           </button>
         </div>
       );
@@ -107,6 +93,7 @@ function AppContent() {
   const [hasSeenOnboarding, setHasSeenOnboarding] = useLocalStorage('whiz-onboarding-done', false);
   const [showOnboarding, setShowOnboarding] = useState(!hasSeenOnboarding);
   const { dispatchEscape, dispatchGlobalAction } = useUIEventContext();
+  const { t, locale, locales, setLocale } = useIntl();
 
   // Fix #63: newFrameSignal — bump this to tell Editor to reset to a blank new frame
   const [newFrameSignal, setNewFrameSignal] = useState(0);
@@ -178,7 +165,7 @@ function AppContent() {
   useEffect(() => {
     const handler = (e) => {
       const key = e?.detail?.key || 'saved data';
-      showToast(`Recovered from invalid ${key} storage data. Defaults restored for safety.`, 'warning');
+      showToast(t('errors.storageRecovery', { key }), 'warning');
     };
     window.addEventListener('whiz-storage-recovery', handler);
     return () => window.removeEventListener('whiz-storage-recovery', handler);
@@ -209,7 +196,7 @@ function AppContent() {
       aria-hidden={page !== id}
     >
       {/* Fix #110: Per-page error boundaries so one crash doesn't kill the whole app */}
-      <PageErrorBoundary page={id}>
+      <PageErrorBoundary page={id} messages={{ pageCrashTitle: t('errors.pageCrashTitle', { page: '{page}' }), unexpected: t('errors.unexpected'), tryAgain: t('errors.tryAgain') }}>
         <Suspense fallback={<PageLoader />}>
           <PageComponent {...pageProps} isActive={page === id} />
         </Suspense>
@@ -219,7 +206,7 @@ function AppContent() {
 
   return (
     <div id="app" style={pageStyle}>
-      <a href="#main-content" className="skip-link">Skip to content</a>
+      <a href="#main-content" className="skip-link">{t('app.skipToContent')}</a>
       <div
         className={`sidebar-overlay ${sidebarOpen ? 'open' : ''}`}
         onClick={() => setSidebarOpen(false)}
@@ -228,7 +215,7 @@ function AppContent() {
       <Sidebar page={page} onNav={navigateTo} open={sidebarOpen} theme={activeTheme} />
       <main className="main">
         <TopBar
-          title={PAGES[page]}
+          title={t(`app.pages.${page}`)}
           page={page}
           onHamburger={() => setSidebarOpen(o => !o)}
           showToast={showToast}
@@ -237,6 +224,14 @@ function AppContent() {
           motionPreference={motionPreference}
           setMotionPreference={setMotionPreference}
         />
+        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 12px' }}>
+          <label style={{ fontSize: 12, color: 'var(--dim)' }}>
+            Locale:{' '}
+            <select value={locale} onChange={(e) => setLocale(e.target.value)}>
+              {locales.map((item) => <option key={item.code} value={item.code}>{item.nativeLabel}</option>)}
+            </select>
+          </label>
+        </div>
         {renderPage('dashboard', Dashboard)}
         {renderPage('library', Library)}
         {renderPage('editor', Editor)}
@@ -247,17 +242,17 @@ function AppContent() {
       </main>
 
       {/* Fix #87: All 5 primary nav items shown */}
-      <nav className="bottom-nav" role="navigation" aria-label="Mobile navigation">
-        {BOTTOM_NAV.map(item => (
+      <nav className="bottom-nav" role="navigation" aria-label={t('app.mobileNavAria')}>
+        {BOTTOM_NAV.map((item) => (
           <button
-            key={item.id}
-            className={`bottom-nav-item ${page === item.id ? 'active' : ''}`}
-            onClick={() => navigateTo(item.id)}
-            aria-label={`Go to ${item.label}`}
-            aria-current={page === item.id ? 'page' : undefined}
+            key={item}
+            className={`bottom-nav-item ${page === item ? 'active' : ''}`}
+            onClick={() => navigateTo(item)}
+            aria-label={t('app.goToPage', { label: t(`app.bottomNav.${item}`) })}
+            aria-current={page === item ? 'page' : undefined}
           >
-            <span className="bnav-icon" aria-hidden="true">{NAV_ICONS[item.id]}</span>
-            <span className="bnav-label">{item.label}</span>
+            <span className="bnav-icon" aria-hidden="true">{NAV_ICONS[item]}</span>
+            <span className="bnav-label">{t(`app.bottomNav.${item}`)}</span>
           </button>
         ))}
       </nav>
@@ -266,7 +261,7 @@ function AppContent() {
       <button
         className="fab"
         onClick={() => navigateTo('editor', undefined, { newFrame: true })}
-        aria-label="Create New Frame"
+        aria-label={t('app.createFrame')}
         title="New Frame"
       >
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
