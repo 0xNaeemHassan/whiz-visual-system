@@ -1,5 +1,6 @@
 /** @typedef {{ id:number, tier:string, tierName:string, name:string, desc:string, tags:string[], layout:string, defaultAccentPolicy?:{ themeId:string } }} FrameDefinition */
-/** @typedef {{ source?:string, date?:string, confidence?:'low'|'medium'|'high'|string, notes?:string, links?:string }} Provenance */
+/** @typedef {'primary'|'secondary'|'derived'|'unknown'} SourceType */
+/** @typedef {{ source?:string, date?:string, confidence?:'low'|'medium'|'high'|string, notes?:string, links?:string, sourceType?:SourceType|string, sourceAuthorityScore?:number }} Provenance */
 /** @typedef {{ label:string, value:string, provenance?:Provenance }} StatItem */
 /** @typedef {{ provenance?:Provenance, [key:string]: string|Provenance|undefined }} TableRow */
 /** @typedef {{ issueNum:string, date:string, desk:string, volume:string, topicTag:string, title:string, deck:string, body:string, handle:string, socialX?:string, socialSub?:string, status?:string, tickerSpeed?:number, sparkData?:string, stats:StatItem[], tableRows:TableRow[], tableHeaders:string[], bullPoints:string[], bearPoints:string[], thesis?:string, mechanismSteps?:string[], riskNotes?:string[], evidencePoints?:string[], bigNumber?:string, bigLabel?:string, verdict?:string, gridItems?:unknown[], timelineEvents?:unknown[], [key:string]: unknown }} FrameContent */
