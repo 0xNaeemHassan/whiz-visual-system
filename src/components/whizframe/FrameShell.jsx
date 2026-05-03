@@ -7,6 +7,7 @@ import { calculateReceiptSummary } from '../../domain/services/receiptCalcServic
 import { FrameFooter } from './FrameFooter';
 import SemanticChip, { SemanticMarker, semanticLabel } from '../SemanticChip';
 import { resolveRiskAccent } from '../../domain/riskAccentPolicy';
+import { getSourceTypeBadgeMeta, normalizeProvenanceShape } from '../../utils/provenance';
 
 export function FrameShell({ frameRef, frame, theme, content, editMode, selectedEl, onSelectEl, styleOverrides, showGrid, aspectRatio, uploadedImages, bgGradient, patternOverlay, strictWhizMode = false, whizEffects = { glow: true, noise: true, intenseAccent: false } }) {
   const reduceMotion = typeof document !== 'undefined' && document.documentElement?.dataset?.motion === 'reduce';
@@ -1998,6 +1999,16 @@ function TradeRoutesLayout(props) {
   );
 }
 
+
+function SourceTypeInlineBadge({ provenance, accentColor }) {
+  const normalized = normalizeProvenanceShape(provenance);
+  const meta = getSourceTypeBadgeMeta(normalized.sourceType);
+  return (
+    <span title={meta.tooltip} style={{ marginLeft: 8, padding: '1px 6px', borderRadius: 999, border: `1px solid ${accentColor}30`, fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.04em', opacity: 0.85 }}>
+      {meta.label}
+    </span>
+  );
+}
 function BodyLayout(props) {
   const { content, ov, ec, sel, accentColor, SectionHead } = props;
   return (
@@ -2066,7 +2077,7 @@ function TableLayout(props) {
                     fontSize: j === 0 ? '13px' : '12px',
                     color: j === 0 ? (resolvedOv.title?.color || 'var(--text-primary)') : (resolvedOv.body?.color || 'var(--text-secondary)'),
                     fontWeight: j === 0 ? 500 : 400,
-                  }}>{v}</td>
+                  }}>{v}{j === 0 ? <SourceTypeInlineBadge provenance={row?.provenance} accentColor={accentColor} /> : null}</td>
                 ))}
               
                 {row.sparkData && <td style={{padding:'4px 8px',verticalAlign:'middle'}}><Sparkline values={parseSparkData(row.sparkData)} accentColor={accentColor} colorRole="accent" strokeWidth="thin" baseline="none" marker="last" width={56} height={22}/></td>}</tr>
@@ -2181,7 +2192,7 @@ function TimelineLayout(props) {
               {ev.date || ev.label || `EVENT ${i + 1}`}
             </div>
             <div style={{ fontFamily: "'Inter', sans-serif", fontSize: '14px', color: 'var(--text-status)', lineHeight: 1.55 }}>
-              {ev.text || ev.value || ev}
+              {ev.text || ev.value || ev}<SourceTypeInlineBadge provenance={ev?.provenance} accentColor={accentColor} />
             </div>
           </div>
         ))}

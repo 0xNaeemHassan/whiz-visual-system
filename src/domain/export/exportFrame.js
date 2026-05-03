@@ -4,6 +4,7 @@ export async function exportFrame({ contractInput, sceneModel, sceneRenderer, do
   const contract = createExportContract(contractInput);
   const exportMetadata = {
     preflight: preflightResult,
+    citationMode: contract.citationMode || 'off',
     exportedAt: new Date().toISOString(),
   };
   try {
