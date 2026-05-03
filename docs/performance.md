@@ -32,3 +32,20 @@ In development (`import.meta.env.DEV`), logs are emitted under `[perf]` with:
 - contextual metadata (frame id, layout, format, field)
 
 Logs exceeding budgets are emitted with `console.warn`; compliant logs use `console.log`.
+
+## 2026-05 Editor store churn audit
+
+### Scope
+- Audited editor-side write paths for media, timeline delta flags, and slice selection.
+- Split static media defaults out of the editor page module into `src/state/editorStore.js`.
+
+### Changes
+- Added memoized selector (`createEditorSelectors().selectMediaSlices`) so unchanged media slice references stay stable across unrelated editor updates.
+- Added immutable slice helper (`updateSliceImmutable`) to skip no-op writes for media keys.
+- Added selector timing instrumentation (`measureSelectorPhase`) via existing perf profiler hooks.
+- Added guarded `setRowDeltaFlags` update to return previous array when computed flags are structurally unchanged.
+
+### Before / after hot-path signal (dev profiler logs)
+- **Before**: media slice extraction recreated render-time objects on every editor render, generating frequent downstream prop identity churn.
+- **After**: selector logs under `editor.media-selector` show only keyed updates when media changes (`hasGradient` / `hasPattern` toggles), with unrelated content edits no longer forcing new slice objects.
+- **Result**: lower avoidable rerender pressure in media consumers and timeline warning panel.
