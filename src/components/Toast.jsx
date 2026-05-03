@@ -1,9 +1,22 @@
 import { useEffect, useState, useRef } from 'react';
+import { useUIEventContext } from '../state/UIEventContext';
 
 // L7: Dismiss button, L8: Type announcement for screen readers
 export default function Toast({ toast }) {
   const [visible, setVisible] = useState(false);
   const timerRef = useRef(null);
+  const { addActivityEntry } = useUIEventContext();
+
+  useEffect(() => {
+    if (toast?.id) {
+      addActivityEntry({
+        type: 'toast',
+        status: toast.type || 'info',
+        message: toast.msg || '',
+        metadata: { source: 'Toast' },
+      });
+    }
+  }, [toast?.id, toast?.msg, toast?.type, addActivityEntry]);
 
   useEffect(() => {
     if (toast) {

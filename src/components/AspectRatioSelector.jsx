@@ -7,13 +7,16 @@ const RATIOS = [
 
 export default function AspectRatioSelector({ value, onChange }) {
   return (
-    <div className="aspect-selector">
+    <div className="aspect-selector" role="radiogroup" aria-label="Aspect ratio">
       {RATIOS.map(r => (
         <button
           key={r.id}
           className={`aspect-btn ${value === r.id ? 'active' : ''}`}
           onClick={() => onChange(r)}
           title={`${r.w}×${r.h}`}
+          role="radio"
+          aria-checked={value === r.id}
+          tabIndex={value === r.id || (!value && r.id === RATIOS[0].id) ? 0 : -1}
         >
           <div className="aspect-preview" style={{
             width: r.id === '9:16' ? 12 : r.id === '16:9' ? 24 : r.id === '1:1' ? 16 : 14,
