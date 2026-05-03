@@ -1,7 +1,7 @@
 import { registerTheme, getRegisteredThemes } from './index.js';
 
 const BUILTIN_THEMES = [
-  { id: 'yield-green',     name: 'Yield Green',      useFor: 'APYs, farming, staking',           base: '#0A3D2E', accent: '#3CE6A6', text: '#B8F5E0' },
+  { id: 'yield-green',     name: 'Yield Green',      useFor: 'APYs, farming, staking',           base: '#0A3D2E', accent: '#3CE6A6', text: '#B8F5E0', semanticTextPrimary:'#F4F6FA', semanticTextSecondary:'#D3DAE6', semanticTextMuted:'#A4AFBF', semanticTextStatus:'#B9C6D9', semanticBgSurface:'#0F1117', semanticBgElevated:'#161922', semanticBgMuted:'#1C2030' },
   { id: 'vault-navy',      name: 'Vault Navy',        useFor: 'Stablecoins, treasuries, RWAs',    base: '#0B1A3A', accent: '#6FA8FF', text: '#BFDBFF' },
   { id: 'bull-gold',       name: 'Bull Gold',         useFor: 'BTC, store-of-value, macro',       base: '#1F1608', accent: '#E5B23A', text: '#F7DFA0' },
   { id: 'liquidation-red', name: 'Liquidation Red',   useFor: 'Exploits, hacks, risk warnings',   base: '#2A0A0A', accent: '#FF5A5A', text: '#FFBBBB' },
