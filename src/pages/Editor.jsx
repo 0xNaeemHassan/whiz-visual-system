@@ -22,8 +22,8 @@ import { normalizeDateInput, normalizeTimelineEvents } from '../domain/services/
 import { SemanticChip } from '../components/primitives';
 import { getFramePitfalls } from '../data/framePitfalls';
 
-/** @typedef {import('../types/editor.js').FrameContent} FrameContent */
-/** @typedef {import('../types/editor.js').StyleOverrides} StyleOverrides */
+/** @typedef {import('../types/canonical').FrameContent} FrameContent */
+/** @typedef {import('../types/canonical').StyleOverrides} StyleOverrides */
 /** @typedef {import('../types/editor.js').Theme} Theme */
 /** @typedef {import('../types/editor.js').ExportPayload} ExportPayload */
 
