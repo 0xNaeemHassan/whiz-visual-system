@@ -728,7 +728,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     setExporting(true);showToast('Generating WebP…');
     try{
       const sceneModel=createSceneModel({frameId,theme,content:{...content,...normalizedContent},overrides,aspectRatio,bgGradient});
-      const {canvas:cv,usedFallback}=await exportFrame({contractInput:{format:'webp',dimensions:{width:aspectRatio.w,height:aspectRatio.h},quality:0.92,background:overrides.frameBg||theme.base,version:'1.0.0'},sceneModel,sceneRenderer:renderSceneToCanvas,domFallbackRenderer:(contract)=>renderDomSnapshotToCanvas(frameRef.current,{width:contract.dimensions.width,height:contract.dimensions.height,backgroundColor:contract.background})});
+      const {canvas:cv,usedFallback}=await exportFrame({contractInput:{format:'webp',dimensions:{width:aspectRatio.w,height:aspectRatio.h},quality:0.92,background:overrides.frameBg||theme.base,citationMode:content.exportCitationMode||content.citationMode||'off',version:'1.0.0'},sceneModel,sceneRenderer:renderSceneToCanvas,domFallbackRenderer:(contract)=>renderDomSnapshotToCanvas(frameRef.current,{width:contract.dimensions.width,height:contract.dimensions.height,backgroundColor:contract.background})});
       await new Promise((res,rej)=>cv.toBlob(b=>{
         if(!b){rej(new Error('WebP blob empty'));return;}
         const u=URL.createObjectURL(b);const a=document.createElement('a');

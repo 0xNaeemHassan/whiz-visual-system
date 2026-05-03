@@ -47,6 +47,7 @@ export type ExportContract = {
   dimensions: { width: number; height: number };
   quality: number;
   background: string | null;
+  citationMode?: 'off' | 'compact' | 'full';
   version: string;
   locale: string;
 };
