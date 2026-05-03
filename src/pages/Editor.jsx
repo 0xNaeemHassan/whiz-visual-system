@@ -253,6 +253,26 @@ const createOverrideAuditEntry = ({ reasonCode = '', warningSource = '' } = {}) 
   at: reasonCode ? new Date().toISOString() : '',
 });
 
+const MANUAL_FIELD_CONSTRAINTS = Object.freeze({
+  'content.issueNum': { type: 'number', min: 1, max: 999999 },
+  'content.tickerSpeed': { type: 'number', min: 1, max: 120, unit: 'ticks/s' },
+  'content.metricConfidence': { type: 'number', min: 0, max: 1, unit: 'ratio' },
+  'overrides.title.fontSize': { type: 'number', min: 28, max: 80, unit: 'px' },
+  'overrides.deck.fontSize': { type: 'number', min: 12, max: 32, unit: 'px' },
+  'overrides.body.fontSize': { type: 'number', min: 11, max: 22, unit: 'px' },
+});
+
+const validateManualConstraint = (fieldPath, rawValue) => {
+  const rule = MANUAL_FIELD_CONSTRAINTS[fieldPath];
+  if (!rule) return { valid: true };
+  if (rule.type === 'number') {
+    const value = Number(rawValue);
+    if (!Number.isFinite(value)) return { valid: false, reason: `${fieldPath} must be numeric.` };
+    if (value < rule.min || value > rule.max) return { valid: false, reason: `${fieldPath} must be between ${rule.min} and ${rule.max}${rule.unit ? ` ${rule.unit}` : ''}.` };
+  }
+  return { valid: true };
+};
+
 const createInvalidRowsCsv = (invalidRows = []) => {
   const headers = ['row_number', 'column', 'value', 'error', 'suggestion'];
   const lines = [headers.join(',')];
@@ -577,7 +597,16 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
       alert(`High-risk frame pitfalls detected:\n\n${highRiskLines.join('\n')}\n\nHints:\n${preExportChecklist.blocking.map((p) => `- ${p.triggerHint}`).join('\n')}`);
       return false;
     }
-    if (mediumRiskLines.length && !(await requestConfirmation({ title:'Export with non-blocking pitfalls?', message:'This export has non-blocking frame pitfalls.', details: mediumRiskLines, confirmLabel:'Continue export', skipKey:'export-pitfalls' }))) return false;
+    if (mediumRiskLines.length) {
+      const accepted = await requestConfirmation({ title:'Export with non-blocking pitfalls?', message:'This export has non-blocking frame pitfalls.', details: mediumRiskLines, confirmLabel:'Continue export', skipKey:'export-pitfalls' });
+      if (!accepted) return false;
+      const reason = window.prompt('Override reason required for high-severity warning bypass:')?.trim();
+      if (!reason) {
+        showToast('Override reason is required to continue.', 'warning');
+        return false;
+      }
+      setActivityLog((prev) => [...prev, { id: `override_${Date.now()}`, ts: Date.now(), outcome: 'override', actionId: 'export-pitfalls', label: reason, severity: 'high', source: 'pitfall-preflight' }]);
+    }
     return true;
   };
 
@@ -851,10 +880,10 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     setExporting(false);
   };
   const mutations = useMemo(() => buildMutationDispatcher({ setContent, setOverrides, setMedia: setMediaState, commitContent, commitOverrides, commitMedia }), [setContent, setOverrides, setMediaState, commitContent, commitOverrides, commitMedia]);
-  const updateContent=(k,v,forceImmediate=false)=>mutations.content(k,c=>{const next={...c,[k]:v};if(k==='date'){const normalized=normalizeDateInput(v);if(normalized.valid)return{...next,date:normalized.displayDate};}if(k==='timelineEvents'){return{...next,timelineEvents:normalizeTimelineEvents(v)};}if(k==='topicTag'||k==='slug'){return normalizeContentTaxonomy(next).content;}if(['bigNumber','bigValue','targetMetric','stats','tableRows'].includes(k)){return normalizeNumericFields(next).content;}return next;},forceImmediate);
+  const updateContent=(k,v,forceImmediate=false)=>{const constraint=validateManualConstraint(`content.${k}`,v);if(!constraint.valid){showToast(`Manual edit blocked: ${constraint.reason}`,'warning');return;}mutations.content(k,c=>{const next={...c,[k]:v};if(k==='date'){const normalized=normalizeDateInput(v);if(normalized.valid)return{...next,date:normalized.displayDate};}if(k==='timelineEvents'){return{...next,timelineEvents:normalizeTimelineEvents(v)};}if(k==='topicTag'||k==='slug'){return normalizeContentTaxonomy(next).content;}if(['bigNumber','bigValue','targetMetric','stats','tableRows'].includes(k)){return normalizeNumericFields(next).content;}return next;},forceImmediate);};
   const isSectionLocked = (key) => Boolean(sectionLocks?.[key]);
   const toggleSectionLock = (sectionKey) => setSectionLocks(prev => ({ ...prev, [sectionKey]: !prev[sectionKey] }));
-  const updateStyle=(updater)=>mutations.style(updater);
+  const updateStyle=(updater)=>mutations.style((current)=>{const next=typeof updater==='function'?updater(current):updater;const checks=[['overrides.title.fontSize',next?.title?.fontSize],['overrides.deck.fontSize',next?.deck?.fontSize],['overrides.body.fontSize',next?.body?.fontSize]];for(const [path,val] of checks){if(val==null)continue;const result=validateManualConstraint(path,val);if(!result.valid){showToast(`Manual edit blocked: ${result.reason}`,'warning');return current;}}return next;});
   const updateMedia=(updater)=>mutations.image(updater);
   const strictWhizMode = Boolean(strictMode);
   const trackActionBar = (action, group, surface) => track(TELEMETRY_EVENTS.ACTION_BAR, { action, group, surface });
