@@ -131,6 +131,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const[showGrid,setShowGrid]=useState(false);const[editMode,setEditMode]=useState(false);
   const[selectedEl,setSelectedEl]=useState(null);const[rightTab,setRightTab]=useState('content');
   const[mobileTab,setMobileTab]=useState('preview');const[aspectRatio,setAspectRatio]=useState(RATIOS[0]);
+  const[showActionOverflow,setShowActionOverflow]=useState(false);
   const [_savedMedia, persistMedia] = useLocalStorage('whiz-media',{uploadedImages:{logo:null,hero:null,badge:null},bgGradient:null,patternOverlay:null});
   const { state: mediaState, set: setMediaState, reset: resetMediaState, commit: commitMedia } = useUndoRedo(_savedMedia);
   const uploadedImages = mediaState.uploadedImages;
@@ -335,6 +336,22 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const updateStyle=(updater)=>mutations.style(updater);
   const updateMedia=(updater)=>mutations.image(updater);
   const strictWhizMode = Boolean(strictMode);
+  const trackActionBar = (action, group, surface) => track(TELEMETRY_EVENTS.ACTION_BAR, { action, group, surface });
+  const handleUndo = (surface='desktop') => {
+    const did = undo();
+    track(TELEMETRY_EVENTS.UNDO,{scope:did?'content':'overrides'});
+    trackActionBar('undo', 'primary', surface);
+  };
+  const handleRedo = (surface='desktop') => {
+    const did = redo();
+    track(TELEMETRY_EVENTS.REDO,{scope:did?'content':'overrides'});
+    trackActionBar('redo', 'primary', surface);
+  };
+  const handleDuplicate = (surface='desktop') => {
+    const n=`${content.title||'Frame'} (copy)`;setSaves(p=>[...p,{id:`s_${Date.now()}`,title:n,...buildSave()}]);showToast('Duplicated');
+    trackActionBar('duplicate', 'overflow', surface);
+  };
+  const triggerImport = () => document.getElementById('editor-action-import')?.click();
   const toggleEffectWithCompliance = (effectKey, nextValue) => {
     if (strictWhizMode && nextValue) {
       showToast('Strict Whiz Mode blocks non-essential effects.', 'warning');
@@ -362,6 +379,25 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
 
   return(
     <div className="editor-wrap">
+      <div className="editor-action-bar">
+        <div className="editor-action-group">
+          <button className="btn btn-primary btn-sm" onClick={()=>{setShowSaveModal(true);trackActionBar('save','primary',mobileTab==='preview'?'mobile':'desktop');}}>Save</button>
+          <button className="btn btn-ghost btn-sm" onClick={()=>{setSaveSearch('');setShowLoadModal(true);trackActionBar('load','primary',mobileTab==='preview'?'mobile':'desktop');}}>Load</button>
+          <button className="btn btn-ghost btn-sm" onClick={()=>{handleUndo(mobileTab==='preview'?'mobile':'desktop');}} disabled={!canUndo}>Undo</button>
+          <button className="btn btn-ghost btn-sm" onClick={()=>{handleRedo(mobileTab==='preview'?'mobile':'desktop');}} disabled={!canRedo}>Redo</button>
+        </div>
+        <div className="editor-action-group">
+          <button className="btn btn-secondary btn-sm" onClick={()=>{exportPNG();trackActionBar('export','primary',mobileTab==='preview'?'mobile':'desktop');}} disabled={exporting}>Export</button>
+          <button className="btn btn-secondary btn-sm" onClick={()=>{triggerImport();trackActionBar('import','overflow',mobileTab==='preview'?'mobile':'desktop');}}>Import</button>
+          <div className="editor-action-overflow">
+            <button className="btn btn-ghost btn-sm" onClick={()=>setShowActionOverflow(v=>!v)}>More ▾</button>
+            {showActionOverflow && <div className="editor-action-overflow-menu">
+              <button className="btn btn-ghost btn-sm" onClick={()=>{handleDuplicate(mobileTab==='preview'?'mobile':'desktop');setShowActionOverflow(false);}}>Duplicate</button>
+            </div>}
+          </div>
+        </div>
+        <input id="editor-action-import" type="file" accept=".json" onChange={importJSON} style={{display:'none'}} />
+      </div>
       <div className="editor-mob-tabs">{[{id:'frame',label:'Frame'},{id:'preview',label:'Preview'},{id:'content',label:'Content'}].map(t=>(<div key={t.id} className={`editor-mob-tab ${mobileTab===t.id?'active':''}`} onClick={()=>setMobileTab(t.id)}>{t.label}</div>))}</div>
       {/* LEFT */}
       <div className={`editor-left ${mobileTab==='frame'?'mob-active':''}`}>
@@ -374,7 +410,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
       <div className={`editor-center ${mobileTab==='preview'?'mob-active':''}`} ref={centerRef}>
         <div className="frame-scale-wrap" style={{transform:`scale(${zoom})`}}><WhizFrame frameRef={frameRef} frame={selectedFrame} theme={theme} content={content} editMode={editMode} selectedEl={selectedEl} onSelectEl={k=>{setSelectedEl(k);k&&setRightTab('design');}} styleOverrides={overrides} showGrid={showGrid} aspectRatio={aspectRatio} uploadedImages={uploadedImages} bgGradient={bgGradient} patternOverlay={patternOverlay} strictWhizMode={strictWhizMode} whizEffects={whizEffects}
             fontPairing={activeFontPairing}/></div>
-        <div className="zoom-bar"><button className="zoom-btn" onClick={()=>setZoom(z=>Math.max(0.1,+(z-0.05).toFixed(2)))}>−</button><span className="zoom-pct">{Math.round(zoom*100)}%</span><button className="zoom-btn" onClick={()=>setZoom(z=>Math.min(1,+(z+0.05).toFixed(2)))}>+</button><button className="zoom-btn" onClick={updateZoom} style={{fontSize:10}}>⊡</button><div style={{width:1,height:16,background:'var(--border)'}}/><button className={`zoom-btn ${showGrid?'active':''}`} onClick={()=>setShowGrid(g=>!g)} style={{color:showGrid?'var(--theme-accent)':undefined}}>▦</button><button className={`zoom-btn ${editMode?'active':''}`} onClick={()=>{setEditMode(m=>!m);editMode&&setSelectedEl(null);}} style={{color:editMode?'var(--theme-accent)':undefined}}>✎</button><div style={{width:1,height:16,background:'var(--border)'}}/><button className="zoom-btn" onClick={()=>{const did=undo();track(TELEMETRY_EVENTS.UNDO,{scope:did?'content':'overrides'});}} disabled={!canUndo} style={{opacity:canUndo?1:0.3}}>↶</button><button className="zoom-btn" onClick={()=>{const did=redo();track(TELEMETRY_EVENTS.REDO,{scope:did?'content':'overrides'});}} disabled={!canRedo} style={{opacity:canRedo?1:0.3}}>↷</button></div>
+        <div className="zoom-bar"><button className="zoom-btn" onClick={()=>setZoom(z=>Math.max(0.1,+(z-0.05).toFixed(2)))}>−</button><span className="zoom-pct">{Math.round(zoom*100)}%</span><button className="zoom-btn" onClick={()=>setZoom(z=>Math.min(1,+(z+0.05).toFixed(2)))}>+</button><button className="zoom-btn" onClick={updateZoom} style={{fontSize:10}}>⊡</button><div style={{width:1,height:16,background:'var(--border)'}}/><button className={`zoom-btn ${showGrid?'active':''}`} onClick={()=>setShowGrid(g=>!g)} style={{color:showGrid?'var(--theme-accent)':undefined}}>▦</button><button className={`zoom-btn ${editMode?'active':''}`} onClick={()=>{setEditMode(m=>!m);editMode&&setSelectedEl(null);}} style={{color:editMode?'var(--theme-accent)':undefined}}>✎</button><div style={{width:1,height:16,background:'var(--border)'}}/><button className="zoom-btn" onClick={()=>handleUndo(mobileTab==='preview'?'mobile':'desktop')} disabled={!canUndo} style={{opacity:canUndo?1:0.3}}>↶</button><button className="zoom-btn" onClick={()=>handleRedo(mobileTab==='preview'?'mobile':'desktop')} disabled={!canRedo} style={{opacity:canRedo?1:0.3}}>↷</button></div>
         <div style={{position:'absolute',top:10,left:10,fontFamily:'var(--font-m)',fontSize:9,color:'var(--dim)',background:'rgba(0,0,0,0.6)',padding:'4px 8px',borderRadius:'var(--r)',backdropFilter:'blur(4px)'}}>{String(frameId).padStart(2,'0')} — {selectedFrame.name} · {aspectRatio.w}×{aspectRatio.h}</div>
         <div style={{position:'absolute',top:12,right:12,display:'flex',gap:6,background:'var(--glass)',padding:'6px 10px',borderRadius:'var(--r)',border:'1px solid var(--glass-border)',backdropFilter:'blur(12px)'}}><button className="btn btn-ghost btn-sm" onClick={exportJSON} style={{fontSize:10}}>JSON</button><button className="btn btn-ghost btn-sm" onClick={exportManifest} style={{fontSize:10}}>Manifest</button><button className="btn btn-secondary btn-sm" onClick={exportHTML} style={{fontSize:10}}>HTML</button><button className="btn btn-secondary btn-sm" onClick={applyStrictPolish} style={{fontSize:10}}>Polish</button><button className="btn btn-primary btn-sm" data-format="png" onClick={exportPNG} disabled={exporting} style={{fontSize:10}}>{exporting?'⟳':'↓'} PNG</button></div>
         {complianceIssues.length>0&&<div style={{position:'absolute',top:52,right:12,fontFamily:'var(--font-m)',fontSize:10,color:'#FFB3B3',background:'rgba(42,10,10,.9)',padding:'6px 8px',borderRadius:6,border:'1px solid #FF5A5A66',maxWidth:300}}>Compliance: {complianceIssues[0]}{complianceIssues.length>1?` +${complianceIssues.length-1} more`:''}</div>}
