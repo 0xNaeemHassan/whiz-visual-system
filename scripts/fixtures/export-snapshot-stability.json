@@ -1,0 +1,169 @@
+{
+  "fixedRuntime": {
+    "iso": "2026-01-02T03:04:05.678Z",
+    "locale": "en-US",
+    "devicePixelRatio": 2
+  },
+  "citations": {
+    "mode": "full",
+    "anchoredClaims": [
+      {
+        "anchor": "[1]",
+        "citationNumber": 1,
+        "resolved": true
+      },
+      {
+        "anchor": "[2]",
+        "citationNumber": 2,
+        "resolved": true
+      }
+    ],
+    "entries": [
+      {
+        "number": 1,
+        "key": "Metric|Dashboard||2025-12-31",
+        "label": "Metric",
+        "source": "Dashboard",
+        "url": "",
+        "date": "2025-12-31"
+      },
+      {
+        "number": 2,
+        "key": "Row|Warehouse||2025-12-30",
+        "label": "Row",
+        "source": "Warehouse",
+        "url": "",
+        "date": "2025-12-30"
+      }
+    ],
+    "boundText": {
+      "title": "Stable exports ¹",
+      "deck": "",
+      "body": "Body claim ² with proof."
+    }
+  },
+  "profile": {
+    "key": "mobile:low:png",
+    "deviceClass": "mobile",
+    "performanceTier": "low",
+    "targetDimensions": {
+      "width": 864,
+      "height": 486
+    },
+    "quality": 0.8,
+    "compressionLevel": "aggressive",
+    "effectToggles": {
+      "shadows": false,
+      "gradients": false,
+      "textures": false
+    },
+    "retryPolicy": {
+      "attempts": 3,
+      "backoffMs": 125
+    },
+    "rendererFallbackChain": [
+      "primary-renderer",
+      "simplified-renderer",
+      "dom-snapshot-fallback"
+    ]
+  },
+  "datasetSnapshot": {
+    "schemaVersion": "1.0.0",
+    "hash": "01a1314c",
+    "snapshotId": "1.0.0:01a1314c",
+    "serialized": "{\"aspectRatio\":{\"h\":675,\"w\":1200},\"bgGradient\":{\"from\":\"#0f172a\",\"to\":\"#1e293b\"},\"content\":{\"body\":\"Body claim [2] with proof.\",\"deck\":\"Deterministic payload for CI\",\"title\":\"Stable exports [1]\"},\"frameId\":7,\"overrides\":{\"title\":{\"color\":\"#ffffff\",\"fontSize\":52}},\"patternOverlay\":\"grid\",\"theme\":{\"accent\":\"#33AAFF\",\"base\":\"#111111\"}}",
+    "payload": {
+      "aspectRatio": {
+        "h": 675,
+        "w": 1200
+      },
+      "bgGradient": {
+        "from": "#0f172a",
+        "to": "#1e293b"
+      },
+      "content": {
+        "body": "Body claim [2] with proof.",
+        "deck": "Deterministic payload for CI",
+        "title": "Stable exports [1]"
+      },
+      "frameId": 7,
+      "overrides": {
+        "title": {
+          "color": "#ffffff",
+          "fontSize": 52
+        }
+      },
+      "patternOverlay": "grid",
+      "theme": {
+        "accent": "#33AAFF",
+        "base": "#111111"
+      }
+    }
+  },
+  "exportAttemptSnapshot": {
+    "schemaVersion": "1.0.0",
+    "hash": "c6b2ddc8",
+    "snapshotId": "1.0.0:c6b2ddc8",
+    "serialized": "{\"contract\":{\"citationMode\":\"full\",\"dimensions\":{\"height\":486,\"width\":864},\"quality\":0.8},\"normalizedContent\":{\"body\":\"Body claim [2] with proof.\",\"citations\":{\"body\":\"Body claim ² with proof.\",\"deck\":\"\",\"title\":\"Stable exports ¹\"},\"deck\":\"Deterministic payload for CI\",\"title\":\"Stable exports [1]\"},\"outputMetadata\":{\"devicePixelRatio\":2,\"exportedAt\":\"2026-01-02T03:04:05.678Z\",\"locale\":\"en-US\",\"profile\":{\"compressionLevel\":\"aggressive\",\"deviceClass\":\"mobile\",\"effectToggles\":{\"gradients\":false,\"shadows\":false,\"textures\":false},\"key\":\"mobile:low:png\",\"performanceTier\":\"low\",\"quality\":0.8,\"rendererFallbackChain\":[\"primary-renderer\",\"simplified-renderer\",\"dom-snapshot-fallback\"],\"retryPolicy\":{\"attempts\":3,\"backoffMs\":125},\"targetDimensions\":{\"height\":486,\"width\":864}}},\"overrides\":{\"title\":{\"color\":\"#ffffff\",\"fontSize\":52}},\"theme\":{\"accent\":\"#33AAFF\",\"base\":\"#111111\"}}",
+    "payload": {
+      "contract": {
+        "citationMode": "full",
+        "dimensions": {
+          "height": 486,
+          "width": 864
+        },
+        "quality": 0.8
+      },
+      "normalizedContent": {
+        "body": "Body claim [2] with proof.",
+        "citations": {
+          "body": "Body claim ² with proof.",
+          "deck": "",
+          "title": "Stable exports ¹"
+        },
+        "deck": "Deterministic payload for CI",
+        "title": "Stable exports [1]"
+      },
+      "outputMetadata": {
+        "devicePixelRatio": 2,
+        "exportedAt": "2026-01-02T03:04:05.678Z",
+        "locale": "en-US",
+        "profile": {
+          "compressionLevel": "aggressive",
+          "deviceClass": "mobile",
+          "effectToggles": {
+            "gradients": false,
+            "shadows": false,
+            "textures": false
+          },
+          "key": "mobile:low:png",
+          "performanceTier": "low",
+          "quality": 0.8,
+          "rendererFallbackChain": [
+            "primary-renderer",
+            "simplified-renderer",
+            "dom-snapshot-fallback"
+          ],
+          "retryPolicy": {
+            "attempts": 3,
+            "backoffMs": 125
+          },
+          "targetDimensions": {
+            "height": 486,
+            "width": 864
+          }
+        }
+      },
+      "overrides": {
+        "title": {
+          "color": "#ffffff",
+          "fontSize": 52
+        }
+      },
+      "theme": {
+        "accent": "#33AAFF",
+        "base": "#111111"
+      }
+    }
+  }
+}
