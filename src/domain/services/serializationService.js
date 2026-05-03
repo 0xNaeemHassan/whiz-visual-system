@@ -1,6 +1,6 @@
 import { normalizeContentTaxonomy } from '../../utils/contentNormalization';
 
-export function buildFrameSave({ frameId, theme, content, overrides, aspectRatio, bgGradient, patternOverlay, workflowPhase = "draft", phaseChecklist = null }) {
+export function buildFrameSave({ frameId, theme, content, overrides, aspectRatio, bgGradient, patternOverlay, workflowPhase = "draft", phaseChecklist = null, sectionLocks = {} }) {
   const normalization = normalizeContentTaxonomy(content || {});
   return {
     frameId,
@@ -11,6 +11,7 @@ export function buildFrameSave({ frameId, theme, content, overrides, aspectRatio
     bgGradient,
     patternOverlay,
     workflowPhase,
+    sectionLocks,
     phaseChecklist: phaseChecklist || { draftAt: Date.now(), reviewAt: null, publishReadyAt: null, lastTransitionAt: Date.now() },
     savedAt: Date.now(),
     saveMetadata,
