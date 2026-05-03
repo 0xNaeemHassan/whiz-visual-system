@@ -5,17 +5,18 @@ import { TICKER_CONTRACT, normalizeTickerSpeed } from '../../domain/tickerContra
 import { SPINE_DESIGN_TOKENS } from '../../domain/spineDesignTokens';
 import { calculateReceiptSummary } from '../../domain/services/receiptCalcService';
 import { FrameFooter } from './FrameFooter';
-import SemanticChip from '../SemanticChip';
+import SemanticChip, { SemanticMarker, semanticLabel } from '../SemanticChip';
 import { resolveRiskAccent } from '../../domain/riskAccentPolicy';
 
 export function FrameShell({ frameRef, frame, theme, content, editMode, selectedEl, onSelectEl, styleOverrides, showGrid, aspectRatio, uploadedImages, bgGradient, patternOverlay, strictWhizMode = false, whizEffects = { glow: true, noise: true, intenseAccent: false } }) {
+  const reduceMotion = typeof document !== 'undefined' && document.documentElement?.dataset?.motion === 'reduce';
   const ov = styleOverrides || {};
   const sel = (key, e) => { if (editMode) { e?.stopPropagation(); onSelectEl?.(selectedEl === key ? null : key); } };
   const ec = (key) => editMode ? `wf-editable${selectedEl === key ? ' wf-sel' : ''}` : '';
   const accentResolution = resolveRiskAccent({ frameId: frame?.id, theme, overrides: ov });
   const accentColor = accentResolution.accent;
   const noiseEnabled = !strictWhizMode && whizEffects?.noise !== false;
-  const glowEnabled = !strictWhizMode && whizEffects?.glow !== false;
+  const glowEnabled = !reduceMotion && !strictWhizMode && whizEffects?.glow !== false;
   const intenseAccentEnabled = !strictWhizMode && whizEffects?.intenseAccent === true;
   const accentIntensity = intenseAccentEnabled ? '70' : '50';
 
@@ -122,7 +123,7 @@ export function FrameShell({ frameRef, frame, theme, content, editMode, selected
         style={{
           background: ov.tickerBg || TICKER_CONTRACT.background.default,
           borderBottom: `1px solid ${accentColor}20`,
-          backdropFilter: 'blur(12px)',
+          backdropFilter: reduceMotion ? 'none' : 'blur(12px)',
           height: `${TICKER_CONTRACT.heightPx}px`,
         }}
         onClick={e => sel('ticker', e)}>
@@ -130,6 +131,7 @@ export function FrameShell({ frameRef, frame, theme, content, editMode, selected
           color: ov.tickerColor || accentColor,
           opacity: 0.7,
           animationDuration: `${normalizeTickerSpeed(content.tickerSpeed)}s`,
+          animationPlayState: reduceMotion ? 'paused' : 'running',
           fontFamily: TICKER_CONTRACT.typography.fontFamily,
           fontSize: `${TICKER_CONTRACT.typography.fontSizePx}px`,
           fontWeight: TICKER_CONTRACT.typography.fontWeight,
@@ -163,9 +165,9 @@ export function FrameShell({ frameRef, frame, theme, content, editMode, selected
       {/* Header */}
       <div className="wf-header" style={{ flexShrink: 0 }}>
         <div className={`wf-slug ${ec('slug')}`} onClick={e => sel('slug', e)}>
-          <span className="wf-slug-line"><span style={{ color: '#5A6478' }}>ISSUE /</span> <span style={{ color: accentColor }}>{resolvedContent.issueNum}</span></span>
-          <span className="wf-slug-line"><span style={{ color: '#5A6478' }}>FILED /</span> {content.date}</span>
-          <span className="wf-slug-line"><span style={{ color: '#5A6478' }}>DESK /</span> {content.desk}</span>
+          <span className="wf-slug-line"><span style={{ color: 'var(--text-muted)' }}>ISSUE /</span> <span style={{ color: accentColor }}>{resolvedContent.issueNum}</span></span>
+          <span className="wf-slug-line"><span style={{ color: 'var(--text-muted)' }}>FILED /</span> {content.date}</span>
+          <span className="wf-slug-line"><span style={{ color: 'var(--text-muted)' }}>DESK /</span> {content.desk}</span>
         </div>
         <div className={`wf-topic-tag ${ec('tag')}`} style={tagStyle} onClick={e => sel('tag', e)}>
           <span style={{ fontSize: '10px', marginRight: '4px' }}>&#9654;</span> {resolvedTagText}
@@ -177,9 +179,9 @@ export function FrameShell({ frameRef, frame, theme, content, editMode, selected
         <div className={`wf-title ${ec('title')}`}
           style={{
             fontFamily: "'Space Grotesk', sans-serif",
-            fontSize: `${resolvedOv.title?.fontSize || baseTitleSize}px`,
+            fontSize: `${Math.max(14, resolvedOv.title?.fontSize || baseTitleSize)}px`,
             fontWeight: resolvedOv.title?.fontWeight || 700,
-            color: resolvedOv.title?.color || '#F4F5F7',
+            color: resolvedOv.title?.color || 'var(--text-primary)',
             fontStyle: resolvedOv.title?.italic ? 'italic' : 'normal',
             lineHeight: resolvedOv.title?.lineHeight || 1.05,
             letterSpacing: `${resolvedOv.title?.letterSpacing || -0.02}em`,
@@ -191,9 +193,9 @@ export function FrameShell({ frameRef, frame, theme, content, editMode, selected
         <div className={`wf-deck ${ec('deck')}`}
           style={{
             fontFamily: "'Inter', sans-serif",
-            fontSize: `${resolvedOv.deck?.fontSize || 18}px`,
+            fontSize: `${Math.max(14, resolvedOv.deck?.fontSize || 18)}px`,
             fontWeight: resolvedOv.deck?.fontWeight || 400,
-            color: resolvedOv.deck?.color || '#8B95A3',
+            color: resolvedOv.deck?.color || 'var(--text-secondary)',
             fontStyle: resolvedOv.deck?.italic !== false ? 'italic' : 'normal',
             lineHeight: 1.45,
           }}
@@ -270,7 +272,7 @@ function StatRibbon({ stats, ov, accentColor, maxVisible }) {
           }}>{s.label}</div>
           <div style={{
             fontFamily: "'Space Grotesk', sans-serif", fontSize: '18px',
-            fontWeight: 700, color: resolvedOv.title?.color || '#F4F5F7',
+            fontWeight: 700, color: resolvedOv.title?.color || 'var(--text-primary)',
             lineHeight: 1, letterSpacing: '-0.01em',
           }}>{s.value}</div>
         </div>
@@ -314,7 +316,7 @@ function BigNumber({ content, ov, accentColor }) {
             fontFamily: "'JetBrains Mono', monospace",
             fontSize: `${unitSize}px`,
             fontWeight: 600,
-            color: '#B0BAC8',
+            color: 'var(--text-status)',
             lineHeight: 1,
             marginBottom: Math.max(2, Math.round(unitSize * 0.1)),
           }}>{content.bigUnit}</div>
@@ -323,7 +325,7 @@ function BigNumber({ content, ov, accentColor }) {
       {content.bigSub && (
         <div style={{
           fontFamily: "'Inter', sans-serif", fontSize: '14px',
-          color: '#8B95A3', marginTop: 8, fontStyle: 'italic',
+          color: 'var(--text-secondary)', marginTop: 8, fontStyle: 'italic',
         }}>{content.bigSub}</div>
       )}
     </div>
@@ -338,7 +340,7 @@ function BodyText({ content, ov, ec, sel, maxParagraphs }) {
       {visible.map((p, i) => (
         <p key={i} style={{
           marginBottom: '18px', fontFamily: "'Inter', sans-serif",
-          fontSize: `${resolvedOv.body?.fontSize || 15}px`, color: resolvedOv.body?.color || '#B0BAC8',
+          fontSize: `${Math.max(12, resolvedOv.body?.fontSize || 15)}px`, color: resolvedOv.body?.color || 'var(--text-status)',
           lineHeight: resolvedOv.body?.lineHeight || 1.75,
           textAlign: resolvedOv.body?.textAlign || 'left', opacity: resolvedOv.body?.opacity ?? 1,
         }}>{p}</p>
@@ -387,7 +389,7 @@ function CompareLayout(props) {
   return (
     <>
       <SectionHead>{content.topicTag || 'COMPARISON'}</SectionHead>
-      <div style={{ fontSize: resolvedOv.title?.fontSize || 46, fontWeight: 700, lineHeight: 1.05, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 12, fontFamily: "'Space Grotesk', sans-serif" }}>
+      <div style={{ fontSize: resolvedOv.title?.fontSize || 46, fontWeight: 700, lineHeight: 1.05, color: resolvedOv.title?.color || 'var(--text-primary)', marginBottom: 12, fontFamily: "'Space Grotesk', sans-serif" }}>
         {resolvedContent.title}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, flex: 1 }}>
@@ -398,18 +400,18 @@ function CompareLayout(props) {
           {leftItems.map((pt, i) => (
             <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'flex-start' }}>
               <span style={{ color: accentColor, fontSize: 14, lineHeight: 1, flexShrink: 0, marginTop: 1 }}>✓</span>
-              <span style={{ fontFamily: "'Inter', sans-serif", fontSize: 12, color: resolvedOv.body?.color || '#8B95A3', lineHeight: 1.5 }}>{pt}</span>
+              <span style={{ fontFamily: "'Inter', sans-serif", fontSize: 12, color: resolvedOv.body?.color || 'var(--text-secondary)', lineHeight: 1.5 }}>{pt}</span>
             </div>
           ))}
         </div>
         <div style={{ padding: 16, borderRadius: 8, background: 'rgba(139,149,163,0.06)', border: '1px solid rgba(139,149,163,0.15)' }}>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: '#8B95A3', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 12 }}>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 12 }}>
             {content.verdict || 'OPTION B'}
           </div>
           {rightItems.map((pt, i) => (
             <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'flex-start' }}>
-              <span style={{ color: '#8B95A3', fontSize: 14, lineHeight: 1, flexShrink: 0, marginTop: 1 }}>◦</span>
-              <span style={{ fontFamily: "'Inter', sans-serif", fontSize: 12, color: resolvedOv.body?.color || '#8B95A3', lineHeight: 1.5 }}>{pt}</span>
+              <span style={{ color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1, flexShrink: 0, marginTop: 1 }}>◦</span>
+              <span style={{ fontFamily: "'Inter', sans-serif", fontSize: 12, color: resolvedOv.body?.color || 'var(--text-secondary)', lineHeight: 1.5 }}>{pt}</span>
             </div>
           ))}
         </div>
@@ -427,19 +429,19 @@ function ScoreCardLayout(props) {
     <>
       <StatRibbon stats={content.stats?.slice(0, 4)} ov={ov} accentColor={accentColor} />
       <SectionHead>{content.topicTag || 'SCORECARD'}</SectionHead>
-      <div style={{ fontSize: resolvedOv.title?.fontSize ? Math.min(resolvedOv.title.fontSize, 40) : 40, fontWeight: 700, lineHeight: 1.05, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 12, fontFamily: "'Space Grotesk', sans-serif" }}>
+      <div style={{ fontSize: resolvedOv.title?.fontSize ? Math.min(resolvedOv.title.fontSize, 40) : 40, fontWeight: 700, lineHeight: 1.05, color: resolvedOv.title?.color || 'var(--text-primary)', marginBottom: 12, fontFamily: "'Space Grotesk', sans-serif" }}>
         {resolvedContent.title}
       </div>
       <div style={{ flex: 1 }}>
         {rows.map((row, i) => {
           const grade = row.col5 || row.col4 || '';
-          const gradeColor = scoreColors[grade] || '#8B95A3';
+          const gradeColor = scoreColors[grade] || 'var(--text-secondary)';
           return (
             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: '#555', width: 18, textAlign: 'right', flexShrink: 0 }}>{i + 1}</div>
+              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: 'var(--text-muted)', width: 18, textAlign: 'right', flexShrink: 0 }}>{i + 1}</div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 13, fontWeight: 600, color: resolvedOv.title?.color || '#F4F5F7' }}>{row.col1}</div>
-                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: '#555', marginTop: 2 }}>{row.col2} · {row.col3}</div>
+                <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 13, fontWeight: 600, color: resolvedOv.title?.color || 'var(--text-primary)' }}>{row.col1}</div>
+                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>{row.col2} · {row.col3}</div>
               </div>
               <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 16, fontWeight: 700, color: gradeColor, background: `${gradeColor}15`, borderRadius: 6, padding: '4px 10px', flexShrink: 0 }}>{grade || '-'}</div>
             </div>
@@ -463,18 +465,18 @@ function QuoteLayout(props) {
           fontSize: Math.min(resolvedOv.title?.fontSize || 40, 40),
           fontWeight: 700,
           lineHeight: 1.2,
-          color: resolvedOv.title?.color || '#F4F5F7',
+          color: resolvedOv.title?.color || 'var(--text-primary)',
           marginBottom: 24,
         }}>
           {resolvedContent.title}
         </div>
-        <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 15, color: resolvedOv.deck?.color || '#8B95A3', lineHeight: 1.6, marginBottom: 24 }}>
+        <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 15, color: resolvedOv.deck?.color || 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 24 }}>
           {resolvedContent.deck}
         </div>
         {resolvedContent.body && (
           <div style={{ padding: '12px 16px', borderLeft: `2px solid ${accentColor}`, background: `${accentColor}06`, borderRadius: '0 6px 6px 0' }}>
             <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: accentColor }}>{content.handle || '@source'}</div>
-            <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 11, color: '#8B95A3', marginTop: 2 }}>{resolvedContent.body.slice(0, 120)}</div>
+            <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>{resolvedContent.body.slice(0, 120)}</div>
           </div>
         )}
       </div>
@@ -513,9 +515,9 @@ function TierListLayout(props) {
       <div style={{
         fontFamily: "'Space Grotesk', sans-serif",
         fontSize: 36, fontWeight: 700, lineHeight: 1.05,
-        color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 10,
+        color: resolvedOv.title?.color || 'var(--text-primary)', marginBottom: 10,
       }}>{resolvedContent.title}</div>
-      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 16, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
+      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: 'var(--text-secondary)', marginBottom: 16, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
       <div style={{ flex: 1 }}>
         {displayTiers.map((tier) => {
           const items = hasTiers ? grouped[tier] : rows.filter((_, i) => i % TIER_ORDER.length === TIER_ORDER.indexOf(tier));
@@ -539,21 +541,28 @@ function TierListLayout(props) {
                 {items.length > 0 ? items.map((it, j) => (
                   <span key={j} style={{
                     fontFamily: "'Space Grotesk', sans-serif", fontSize: 12, fontWeight: 600,
-                    color: '#F4F5F7', background: 'rgba(255,255,255,0.06)',
+                    color: 'var(--text-primary)', background: 'rgba(255,255,255,0.06)',
                     padding: '3px 10px', borderRadius: 20,
                   }}>{it.col1 || it.col3 || `Item ${j+1}`}</span>
                 )) : (
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#3A4560' }}>—</span>
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: 'var(--text-muted)' }}>—</span>
                 )}
               </div>
             </div>
           );
         })}
       </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8, marginBottom: 8 }}>
+        {displayTiers.map((tier) => (
+          <SemanticChip key={tier} role="tier" tone={tier} style={{ fontSize: 9, padding: '2px 7px' }}>
+            {tier} ▦ Tier {tier}
+          </SemanticChip>
+        ))}
+      </div>
       <div style={{
-        fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#5A6478',
+        fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: 'var(--text-muted)',
         paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.05)', marginTop: 8,
-      }}>{resolvedContent.body?.split('\n')[0] || 'Criteria: TVL × team × product × momentum'}</div>
+      }}>{resolvedContent.body?.split('\n')[0] || 'Criteria: TVL × team × product × momentum. Legend uses text + shape markers.'}</div>
     </>
   );
 }
@@ -580,9 +589,9 @@ function PostmortemLayout(props) {
       <div style={{
         fontFamily: "'Space Grotesk', sans-serif",
         fontSize: 36, fontWeight: 700, lineHeight: 1.05,
-        color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 8,
+        color: resolvedOv.title?.color || 'var(--text-primary)', marginBottom: 8,
       }}>{resolvedContent.title}</div>
-      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 18, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
+      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: 'var(--text-secondary)', marginBottom: 18, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
         {SECTIONS_PM.map(({ key, label }, idx) => {
           const value = rows[0]?.[key] || content[key] || (idx === 0 ? resolvedContent.body?.split('\n')[0] : '—');
@@ -600,7 +609,7 @@ function PostmortemLayout(props) {
               }}>{String(idx+1).padStart(2,'0')} / {label}</div>
               <div style={{
                 fontFamily: "'Inter', sans-serif", fontSize: 12,
-                color: '#C8D0D8', lineHeight: 1.55,
+                color: 'var(--text-secondary)', lineHeight: 1.55,
               }}>{value}</div>
             </div>
           );
@@ -632,12 +641,12 @@ function TrustStackLayout(props) {
       <SectionHead>TRUST STACK ANALYSIS</SectionHead>
       <div style={{
         fontFamily: "'Space Grotesk', sans-serif", fontSize: 24,
-        fontWeight: 700, lineHeight: 1.1, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 6,
+        fontWeight: 700, lineHeight: 1.1, color: resolvedOv.title?.color || 'var(--text-primary)', marginBottom: 6,
       }}>{resolvedContent.title}</div>
-      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 16, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
+      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: 'var(--text-secondary)', marginBottom: 16, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-evenly' }}>
         {layers.map((layer, i) => {
-          const riskAcc = RISK_COLOR[layer.risk?.toUpperCase()] || '#8B95A3';
+          const riskAcc = RISK_COLOR[layer.risk?.toUpperCase()] || 'var(--text-secondary)';
           const width = `${100 - i * (20 / total)}%`;
           return (
             <div key={i} style={{
@@ -652,7 +661,7 @@ function TrustStackLayout(props) {
                 fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
                 letterSpacing: '0.12em', color: accentColor, width: 80, flexShrink: 0,
               }}>{layer.name}</div>
-              <div style={{ flex: 1, fontFamily: "'Inter', sans-serif", fontSize: 11, color: '#8B95A3', lineHeight: 1.4 }}>{layer.trust}</div>
+              <div style={{ flex: 1, fontFamily: "'Inter', sans-serif", fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.4 }}>{layer.trust}</div>
               <div style={{
                 fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
                 color: riskAcc, background: `${riskAcc}18`,
@@ -664,7 +673,7 @@ function TrustStackLayout(props) {
       </div>
       {resolvedContent.body && (
         <div style={{
-          fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#5A6478',
+          fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: 'var(--text-muted)',
           paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.05)',
         }}>{resolvedContent.body.split('\n')[0]}</div>
       )}
@@ -683,8 +692,8 @@ function PitchDeckLayout(props) {
           ? <img src={content.logoUrl} alt="logo" style={{ width: 48, height: 48, borderRadius: 12, objectFit: 'contain', margin: '0 auto 10px', display: 'block' }} />
           : <div style={{ width: 48, height: 48, borderRadius: 12, background: `${accentColor}20`, border: `1px solid ${accentColor}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px', fontFamily: "'Space Grotesk', sans-serif", fontSize: 20, fontWeight: 700, color: accentColor }}>{(content.title || '?').charAt(0)}</div>
         }
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 56, fontWeight: 700, color: resolvedOv.title?.color || '#F4F5F7', lineHeight: 1, letterSpacing: '-0.02em' }}>{resolvedContent.title}</div>
-        <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 18, color: '#8B95A3', marginTop: 8, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 56, fontWeight: 700, color: resolvedOv.title?.color || 'var(--text-primary)', lineHeight: 1, letterSpacing: '-0.02em' }}>{resolvedContent.title}</div>
+        <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 18, color: 'var(--text-secondary)', marginTop: 8, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
       </div>
       {content.stats?.length > 0 && (
         <div style={{ display: 'flex', gap: 8, marginBottom: 18, flexShrink: 0 }}>
@@ -694,7 +703,7 @@ function PitchDeckLayout(props) {
               background: 'rgba(255,255,255,0.03)', border: `1px solid ${accentColor}15`, borderRadius: 8,
             }}>
               <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>{s.label}</div>
-              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 18, fontWeight: 700, color: '#F4F5F7' }}>{s.value}</div>
+              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>{s.value}</div>
             </div>
           ))}
         </div>
@@ -703,11 +712,11 @@ function PitchDeckLayout(props) {
         {content.thesis && (
           <div style={{ marginBottom: 10, padding: '10px 12px', border: `1px solid ${accentColor}20`, background: `${accentColor}08`, borderRadius: 8 }}>
             <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, letterSpacing: '0.14em', color: accentColor, marginBottom: 4 }}>THESIS</div>
-            <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 13, color: '#C8D0D8', lineHeight: 1.5 }}>{content.thesis}</div>
+            <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{content.thesis}</div>
           </div>
         )}
         {(resolvedContent.body || '').split('\n\n').slice(0, 2).map((para, i) => (
-          <div key={i} style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', lineHeight: 1.65, marginBottom: 14 }}>{para}</div>
+          <div key={i} style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.65, marginBottom: 14 }}>{para}</div>
         ))}
         {(content.mechanismSteps?.length > 0 || content.evidencePoints?.length > 0 || content.riskNotes?.length > 0) && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
@@ -718,7 +727,7 @@ function PitchDeckLayout(props) {
         )}
         {content.pullQuote && (
           <div style={{ padding: '12px 16px', borderLeft: `3px solid ${accentColor}`, background: `${accentColor}08`, borderRadius: '0 6px 6px 0', margin: '14px 0' }}>
-            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 14, fontWeight: 600, color: '#F4F5F7', fontStyle: 'italic' }}>"{content.pullQuote}"</div>
+            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', fontStyle: 'italic' }}>"{content.pullQuote}"</div>
           </div>
         )}
       </div>
@@ -732,8 +741,32 @@ function MiniList({ title, items = [], color }) {
     <div style={{ padding: '8px 10px', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6, background: 'rgba(255,255,255,0.02)' }}>
       <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, letterSpacing: '0.12em', color, marginBottom: 4 }}>{title}</div>
       {items.slice(0, 3).map((item, i) => (
-        <div key={i} style={{ fontFamily: "'Inter', sans-serif", fontSize: 11, color: '#8B95A3', lineHeight: 1.45, marginBottom: 3 }}>• {item}</div>
+        <div key={i} style={{ fontFamily: "'Inter', sans-serif", fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.45, marginBottom: 3 }}>• {item}</div>
       ))}
+    </div>
+  );
+}
+
+function DataEmptyState({ title, instructions, actionLabel, actionHint, accentColor, state = 'no-data' }) {
+  const borderTone = state === 'failed' ? 'rgba(255,90,90,0.45)' : `${accentColor}30`;
+  const bgTone = state === 'failed' ? 'rgba(255,90,90,0.08)' : `${accentColor}08`;
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      tabIndex={0}
+      style={{
+        border: `1px dashed ${borderTone}`,
+        background: bgTone,
+        borderRadius: 8,
+        padding: '14px 16px',
+      }}
+    >
+      <h3 style={{ margin: 0, marginBottom: 6, fontSize: 14, color: '#F4F5F7' }}>{title}</h3>
+      <p style={{ margin: 0, fontSize: 12, color: '#B0BAC8', lineHeight: 1.5 }}>{instructions}</p>
+      <p style={{ margin: '8px 0 0', fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: accentColor }}>
+        {actionLabel}: {actionHint}
+      </p>
     </div>
   );
 }
@@ -752,9 +785,9 @@ function MechanismLayout(props) {
       <SectionHead>MECHANISM</SectionHead>
       <div style={{
         fontFamily: "'Space Grotesk', sans-serif", fontSize: 36,
-        fontWeight: 700, lineHeight: 1.05, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 6,
+        fontWeight: 700, lineHeight: 1.05, color: resolvedOv.title?.color || 'var(--text-primary)', marginBottom: 6,
       }}>{resolvedContent.title}</div>
-      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 20, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
+      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: 'var(--text-secondary)', marginBottom: 20, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-evenly' }}>
         {steps.slice(0, 6).map((step, i) => (
           <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 14, position: 'relative', paddingBottom: i < steps.length - 1 ? 12 : 0 }}>
@@ -777,8 +810,8 @@ function MechanismLayout(props) {
               </span>
             </div>
             <div style={{ flex: 1, paddingTop: 4 }}>
-              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 14, fontWeight: 700, color: '#F4F5F7', marginBottom: 2 }}>{step.title}</div>
-              <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 12, color: '#8B95A3', lineHeight: 1.5 }}>{step.detail}</div>
+              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 2 }}>{step.title}</div>
+              <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{step.detail}</div>
             </div>
           </div>
         ))}
@@ -813,10 +846,10 @@ function ThesisLayout(props) {
           fontFamily: "'Space Grotesk', sans-serif",
           fontSize: getTitleFontSizeForLayout(content.title, 56),
           fontWeight: 700, lineHeight: 1, letterSpacing: '-0.02em',
-          color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 16,
+          color: resolvedOv.title?.color || 'var(--text-primary)', marginBottom: 16,
         }}>{resolvedContent.title}</div>
         <div style={{ height: 1, background: `linear-gradient(90deg, ${accentColor}, transparent)`, marginBottom: 14 }} />
-        <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 18, color: '#8B95A3', fontStyle: 'italic', lineHeight: 1.4, marginBottom: 20 }}>
+        <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 18, color: 'var(--text-secondary)', fontStyle: 'italic', lineHeight: 1.4, marginBottom: 20 }}>
           {resolvedContent.deck}
         </div>
       </div>
@@ -824,7 +857,7 @@ function ThesisLayout(props) {
         {paragraphs.slice(0, 3).map((para, i) => (
           <div key={i} style={{
             fontFamily: "'Inter', sans-serif", fontSize: 14,
-            color: i === 0 ? '#C8D0D8' : '#8B95A3',
+            color: i === 0 ? 'var(--text-secondary)' : 'var(--text-secondary)',
             lineHeight: 1.7, marginBottom: 14,
             fontWeight: i === 0 ? 500 : 400,
           }}>{para}</div>
@@ -882,12 +915,12 @@ function CoverStoryLayout(props) {
           fontFamily: "'Space Grotesk', sans-serif",
           fontSize: getTitleFontSizeForLayout(content.title, 84),
           fontWeight: 700, lineHeight: 0.95, letterSpacing: '-0.03em',
-          color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 16,
+          color: resolvedOv.title?.color || 'var(--text-primary)', marginBottom: 16,
         }}>{resolvedContent.title}</div>
         <div style={{ height: 2, background: accentColor, width: '40%', marginBottom: 16 }} />
         <div className="wf-cover-deck" style={{
           fontFamily: "'Inter', sans-serif", fontSize: 18,
-          color: '#8B95A3', fontStyle: 'italic', lineHeight: 1.45, maxWidth: '80%',
+          color: 'var(--text-secondary)', fontStyle: 'italic', lineHeight: 1.45, maxWidth: '80%',
         }}>{resolvedContent.deck}</div>
         {content.handle && (
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: accentColor, marginTop: 12, letterSpacing: '0.1em' }}>
@@ -913,52 +946,52 @@ function ReceiptLayout(props) {
         <div style={{ fontSize: 10, letterSpacing: '0.2em', color: accentColor, textTransform: 'uppercase', marginBottom: 6 }}>
           *** WHIZ DEFI DESK ***
         </div>
-        <div style={{ fontSize: 14, fontWeight: 700, color: '#F4F5F7', letterSpacing: '0.1em' }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '0.1em' }}>
           {content.topicTag || 'THE RECEIPT'}
         </div>
-        <div style={{ fontSize: 10, color: '#5A6478', marginTop: 4 }}>{content.date}</div>
-        <div style={{ fontSize: 10, color: '#3A4560', marginTop: 8 }}>{dashes}</div>
+        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>{content.date}</div>
+        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 8 }}>{dashes}</div>
       </div>
-      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#8B95A3', marginBottom: 6, display: 'flex', justifyContent: 'space-between' }}>
+      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: 'var(--text-secondary)', marginBottom: 6, display: 'flex', justifyContent: 'space-between' }}>
         <span style={{ flex: 1 }}>ITEM</span>
         <span style={{ width: 80, textAlign: 'right' }}>VALUE</span>
       </div>
-      <div style={{ fontSize: 10, color: '#3A4560', marginBottom: 8 }}>{dashes}</div>
+      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 8 }}>{dashes}</div>
       <div style={{ flex: 1 }}>
         {rows.map((row, i) => (
           <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, alignItems: 'flex-start' }}>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 12, color: '#F4F5F7', fontWeight: 600 }}>{row.col1}</div>
-              {row.col2 && <div style={{ fontSize: 10, color: '#5A6478', marginTop: 2 }}>{row.col2}</div>}
+              <div style={{ fontSize: 12, color: 'var(--text-primary)', fontWeight: 600 }}>{row.col1}</div>
+              {row.col2 && <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>{row.col2}</div>}
             </div>
             <div style={{ textAlign: 'right', flexShrink: 0 }}>
-              <div style={{ fontSize: 12, color: row.col4 === 'benefit' ? accentColor : row.col4 === 'risk' ? '#FF5A5A' : '#F4F5F7', fontWeight: 600 }}>{row.col3 || fmtUsd(summary.rows[i]?.amount || 0)}</div>
+              <div style={{ fontSize: 12, color: row.col4 === 'benefit' ? accentColor : row.col4 === 'risk' ? '#FF5A5A' : 'var(--text-primary)', fontWeight: 600 }}>{row.col3 || fmtUsd(summary.rows[i]?.amount || 0)}</div>
               {summary.rows[i]?.isManualMismatch && <div style={{ fontSize: 9, color: '#FFB020', marginTop: 2 }}>⚠ manual fee mismatch</div>}
             </div>
           </div>
         ))}
       </div>
       <div>
-        <div style={{ fontSize: 10, color: '#3A4560', margin: '8px 0' }}>{dashes}</div>
+        <div style={{ fontSize: 10, color: 'var(--text-muted)', margin: '8px 0' }}>{dashes}</div>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-          <span style={{ fontSize: 12, color: '#8B95A3' }}>SUBTOTAL FEES</span>
+          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>SUBTOTAL FEES</span>
           <span style={{ fontSize: 12, color: '#FF5A5A', fontWeight: 700 }}>-${summary.subtotalFees.toFixed(2)}</span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-          <span style={{ fontSize: 12, color: '#8B95A3' }}>TOTAL BENEFITS</span>
+          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>TOTAL BENEFITS</span>
           <span style={{ fontSize: 12, color: accentColor, fontWeight: 700 }}>+${summary.totalBenefits.toFixed(2)}</span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-          <span style={{ fontSize: 12, color: '#8B95A3' }}>NET RESULT</span>
+          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>NET RESULT</span>
           <span style={{ fontSize: 12, color: summary.netResult >= 0 ? accentColor : '#FF5A5A', fontWeight: 700 }}>{fmtUsd(summary.netResult)}</span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-          <span style={{ fontSize: 12, color: '#8B95A3' }}>IMPLIED SLIPPAGE</span>
-          <span style={{ fontSize: 12, color: '#F4F5F7', fontWeight: 700 }}>{summary.impliedSlippageBps === null ? '—' : `${summary.impliedSlippageBps.toFixed(1)} bps`}</span>
+          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>IMPLIED SLIPPAGE</span>
+          <span style={{ fontSize: 12, color: 'var(--text-primary)', fontWeight: 700 }}>{summary.impliedSlippageBps === null ? '—' : `${summary.impliedSlippageBps.toFixed(1)} bps`}</span>
         </div>
         {summary.hasManualMismatch && <div style={{ fontSize: 10, color: '#FFB020', marginBottom: 6 }}>⚠ One or more feeUsd values are inconsistent with amount×bps.</div>}
-        <div style={{ fontSize: 10, color: '#3A4560', marginBottom: 8 }}>{dashes}</div>
-        <div style={{ textAlign: 'center', fontSize: 10, color: '#5A6478' }}>
+        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 8 }}>{dashes}</div>
+        <div style={{ textAlign: 'center', fontSize: 10, color: 'var(--text-muted)' }}>
           THANK YOU FOR BEING DEFI-PILLED
         </div>
         <div style={{ textAlign: 'center', fontSize: 10, color: accentColor, marginTop: 4, letterSpacing: '0.1em' }}>
@@ -1007,8 +1040,8 @@ function GlossaryLayout(props) {
   return (
     <>
       <SectionHead>{content.topicTag || 'GLOSSARY'}</SectionHead>
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 36, fontWeight: 700, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 6 }}>{resolvedContent.title}</div>
-      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 16, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
+      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 36, fontWeight: 700, color: resolvedOv.title?.color || 'var(--text-primary)', marginBottom: 6 }}>{resolvedContent.title}</div>
+      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: 'var(--text-secondary)', marginBottom: 16, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
       <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 20px', overflow: 'hidden' }}>
         {columns.map((column, ci) => (
           <div key={ci}>
@@ -1022,7 +1055,7 @@ function GlossaryLayout(props) {
                     <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, color: accentColor, width: 80, flexShrink: 0, paddingTop: 1 }}>
                       {row.term}
                     </div>
-                    <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 11, color: '#8B95A3', lineHeight: 1.5, flex: 1 }}>
+                    <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5, flex: 1 }}>
                       {row.definition}
                     </div>
                   </div>
@@ -1047,8 +1080,8 @@ function MatrixLayout(props) {
   return (
     <>
       <SectionHead>{content.topicTag || 'MATRIX'}</SectionHead>
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 36, fontWeight: 700, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 4 }}>{resolvedContent.title}</div>
-      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 12, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
+      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 36, fontWeight: 700, color: resolvedOv.title?.color || 'var(--text-primary)', marginBottom: 4 }}>{resolvedContent.title}</div>
+      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: 'var(--text-secondary)', marginBottom: 12, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
       <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         {/* Quadrant grid */}
         <div style={{ position: 'relative', width: '90%', height: '90%' }}>
@@ -1060,7 +1093,7 @@ function MatrixLayout(props) {
             { top: '0%', left: '50%', label: 'HIGH YIELD / HIGH RISK', color: '#FF5A5A' },
             { top: '0%', left: '0%', label: 'HIGH YIELD / LOW RISK', color: accentColor },
             { top: '50%', left: '50%', label: 'LOW YIELD / HIGH RISK', color: '#FF8A3D' },
-            { top: '50%', left: '0%', label: 'LOW YIELD / LOW RISK', color: '#5A6478' },
+            { top: '50%', left: '0%', label: 'LOW YIELD / LOW RISK', color: 'var(--text-muted)' },
           ].map((q, i) => (
             <div key={i} style={{
               position: 'absolute', top: q.top, left: q.left, width: '50%', height: '50%',
@@ -1086,7 +1119,7 @@ function MatrixLayout(props) {
                 }} title={row.col1} />
                 <div style={{
                   fontFamily: "'JetBrains Mono', monospace", fontSize: 9,
-                  color: '#F4F5F7', whiteSpace: 'nowrap',
+                  color: 'var(--text-primary)', whiteSpace: 'nowrap',
                   position: 'absolute', left: '50%', top: -16, transform: 'translateX(-50%)',
                   background: 'rgba(9,13,16,0.85)', padding: '1px 4px', borderRadius: 3,
                 }}>{row.col1}</div>
@@ -1094,8 +1127,8 @@ function MatrixLayout(props) {
             );
           })}
           {/* Axis labels */}
-          <div style={{ position: 'absolute', bottom: -18, left: '50%', transform: 'translateX(-50%)', fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: '#5A6478', letterSpacing: '0.1em' }}>{xLabel} →</div>
-          <div style={{ position: 'absolute', left: -22, top: '50%', transform: 'translateY(-50%) rotate(-90deg)', fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: '#5A6478', letterSpacing: '0.1em' }}>↑ {yLabel}</div>
+          <div style={{ position: 'absolute', bottom: -18, left: '50%', transform: 'translateX(-50%)', fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>{xLabel} →</div>
+          <div style={{ position: 'absolute', left: -22, top: '50%', transform: 'translateY(-50%) rotate(-90deg)', fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>↑ {yLabel}</div>
         </div>
       </div>
     </>
@@ -1114,28 +1147,33 @@ function ThreatModelLayout(props) {
     { key: 'go', label: 'GOVERNANCE', color: '#E5B23A', items: rows.filter((_, i) => i % 4 === 2) },
     { key: 'op', label: 'OPERATIONAL', color: '#9DB4D0', items: rows.filter((_, i) => i % 4 === 3) },
   ];
-  const SeverityDots = ({ level }) => {
+  const severityTone = (level) => { const n = parseInt(level) || 3; return n >= 5 ? 'critical' : n >= 4 ? 'high' : n >= 3 ? 'medium' : 'low'; };
+  const SeverityBadge = ({ level }) => {
     const n = parseInt(level) || 3;
+    const tone = severityTone(level);
     return (
-      <span>
-        {Array.from({ length: 5 }, (_, i) => (
-          <span key={i} style={{ color: i < n ? '#FF5A5A' : '#2A3040', fontSize: 8 }}>●</span>
-        ))}
-      </span>
+      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        <SemanticMarker role="severity" tone={tone} text={`${semanticLabel('severity', tone)} (${n}/5)`} style={{ fontSize: 9, padding: '2px 6px' }} />
+        <span aria-hidden="true">
+          {Array.from({ length: 5 }, (_, i) => (
+            <span key={i} style={{ color: i < n ? '#FF5A5A' : '#2A3040', fontSize: 8 }}>●</span>
+          ))}
+        </span>
+      </div>
     );
   };
   return (
     <>
       <SectionHead>THREAT MODEL</SectionHead>
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 6 }}>{resolvedContent.title}</div>
-      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 14, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
+      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: resolvedOv.title?.color || 'var(--text-primary)', marginBottom: 6 }}>{resolvedContent.title}</div>
+      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: 'var(--text-secondary)', marginBottom: 14, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
       <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
         {QUADRANTS.map(q => (
           <div key={q.key} style={{ padding: '10px 12px', background: `${q.color}08`, border: `1px solid ${q.color}20`, borderRadius: 8 }}>
             <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, letterSpacing: '0.12em', color: q.color, marginBottom: 10, textTransform: 'uppercase' }}>{q.label}</div>
             {(q.items.length > 0 ? q.items : [{ col1: 'Reentrancy', col2: 'Flash loan attack', col3: '4' }, { col1: 'Oracle manipulation', col2: 'Price feed exploit', col3: '3' }]).slice(0, 3).map((item, i) => (
               <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 11, color: '#C8D0D8', lineHeight: 1.3 }}>{item.col1}</div>
+                <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.3 }}>{item.col1}</div>
                 <SeverityDots level={item.col3 || item.col4 || '3'} />
               </div>
             ))}
@@ -1182,11 +1220,11 @@ function FailureTreeLayout(props) {
             </div>
             <div style={{ padding: '8px 10px', background: `${accentColor}0A`, border: `1px solid ${accentColor}20`, borderRadius: 6 }}>
               <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, color: accentColor, marginBottom: 4 }}>{cause.cause}</div>
-              <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 11, color: '#8B95A3', lineHeight: 1.4 }}>{cause.detail}</div>
+              <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.4 }}>{cause.detail}</div>
             </div>
             {cause.subcauses.map((sub, j) => sub && (
               <div key={j} style={{ marginLeft: 8, padding: '5px 8px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 4 }}>
-                <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 10, color: '#5A6478', lineHeight: 1.3 }}>└ {sub}</div>
+                <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.3 }}>└ {sub}</div>
               </div>
             ))}
           </div>
@@ -1212,9 +1250,9 @@ function FounderLayout(props) {
           : <div style={{ width: 64, height: 64, borderRadius: '50%', background: `${accentColor}18`, border: `2px solid ${accentColor}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif", color: accentColor, flexShrink: 0 }}>{(content.handle || '?').charAt(0).toUpperCase()}</div>
         }
         <div>
-          <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: '#F4F5F7', lineHeight: 1 }}>{resolvedContent.title}</div>
+          <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1 }}>{resolvedContent.title}</div>
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: accentColor, marginTop: 4, letterSpacing: '0.1em' }}>{content.topicTag || 'FOUNDER'}</div>
-          <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 12, color: '#8B95A3', marginTop: 4 }}>{resolvedContent.deck}</div>
+          <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>{resolvedContent.deck}</div>
         </div>
       </div>
       {/* Quotes */}
@@ -1224,8 +1262,8 @@ function FounderLayout(props) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: quotes.length > 0 && ships.length === 0 ? 1 : 'none' }}>
             {quotes.map((q, i) => (
               <div key={i} style={{ padding: '8px 12px', borderLeft: `2px solid ${accentColor}60`, background: `${accentColor}06` }}>
-                <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 12, color: '#C8D0D8', fontStyle: 'italic', lineHeight: 1.5 }}>"{q.col1}"</div>
-                {q.col2 && <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: '#5A6478', marginTop: 4 }}>— {q.col2}</div>}
+                <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 12, color: 'var(--text-secondary)', fontStyle: 'italic', lineHeight: 1.5 }}>"{q.col1}"</div>
+                {q.col2 && <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: 'var(--text-muted)', marginTop: 4 }}>— {q.col2}</div>}
               </div>
             ))}
           </div>
@@ -1239,7 +1277,7 @@ function FounderLayout(props) {
             {ships.map((s, i) => (
               <div key={i} style={{ display: 'flex', gap: 10, marginBottom: 8, alignItems: 'flex-start' }}>
                 <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: accentColor, width: 50, flexShrink: 0 }}>{s.col2}</div>
-                <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 12, color: '#C8D0D8' }}>{s.col1}</div>
+                <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 12, color: 'var(--text-secondary)' }}>{s.col1}</div>
               </div>
             ))}
           </div>
@@ -1270,8 +1308,8 @@ function AnatomyLayout(props) {
   return (
     <>
       <SectionHead>ANATOMY</SectionHead>
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 6 }}>{resolvedContent.title}</div>
-      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 12, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
+      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: resolvedOv.title?.color || 'var(--text-primary)', marginBottom: 6 }}>{resolvedContent.title}</div>
+      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: 'var(--text-secondary)', marginBottom: 12, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
       <div style={{ flex: 1, position: 'relative', minHeight: 200 }}>
         {/* Center node */}
         <div style={{
@@ -1300,7 +1338,7 @@ function AnatomyLayout(props) {
               borderRadius: 4, padding: '5px 8px',
             }}>
               <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: accentColor, letterSpacing: '0.1em', marginBottom: 2 }}>{comp.label}</div>
-              <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 10, color: '#8B95A3', lineHeight: 1.4 }}>{comp.desc}</div>
+              <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 10, color: 'var(--text-secondary)', lineHeight: 1.4 }}>{comp.desc}</div>
             </div>
           );
         })}
@@ -1328,8 +1366,8 @@ function FlowLayout(props) {
   return (
     <>
       <SectionHead>YIELD FLOW</SectionHead>
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 6 }}>{resolvedContent.title}</div>
-      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 16, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
+      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: resolvedOv.title?.color || 'var(--text-primary)', marginBottom: 6 }}>{resolvedContent.title}</div>
+      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: 'var(--text-secondary)', marginBottom: 16, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-evenly' }}>
         {steps.map((step, i) => (
           <div key={i}>
@@ -1346,8 +1384,8 @@ function FlowLayout(props) {
                 </span>
               </div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 14, fontWeight: 700, color: i === steps.length - 1 ? accentColor : '#F4F5F7' }}>{step.amount}</div>
-                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#5A6478', letterSpacing: '0.08em' }}>{step.label} · {step.note}</div>
+                <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 14, fontWeight: 700, color: i === steps.length - 1 ? accentColor : 'var(--text-primary)' }}>{step.amount}</div>
+                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: 'var(--text-muted)', letterSpacing: '0.08em' }}>{step.label} · {step.note}</div>
               </div>
               {i < steps.length - 1 && (
                 <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: ARROW_COLOR }}>▸</div>
@@ -1379,10 +1417,10 @@ function BracketLayout(props) {
       background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', minWidth: 114,
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 10, color: '#C8D0D8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 10, color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {(side.seed ? `#${side.seed} ` : '') + (side.name || '—')}
         </div>
-        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: '#8B95A3' }}>{side.score || '—'}</div>
+        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: 'var(--text-secondary)' }}>{side.score || '—'}</div>
       </div>
     </div>
   );
@@ -1392,14 +1430,14 @@ function BracketLayout(props) {
   return (
     <>
       <SectionHead>BRACKET</SectionHead>
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 4 }}>{resolvedContent.title}</div>
-      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 12, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
+      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: resolvedOv.title?.color || 'var(--text-primary)', marginBottom: 4 }}>{resolvedContent.title}</div>
+      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: 'var(--text-secondary)', marginBottom: 12, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
       <div style={{ flex: 1, display: 'flex', gap: 12, alignItems: 'center' }}>
-        <div style={{ flex: 1 }}><div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: '#3A4560', textAlign: 'center', marginBottom: 6 }}>ROUND 1</div>{round1.map((m,i)=><MatchPair key={i} match={m} />)}</div>
+        <div style={{ flex: 1 }}><div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: 'var(--text-muted)', textAlign: 'center', marginBottom: 6 }}>ROUND 1</div>{round1.map((m,i)=><MatchPair key={i} match={m} />)}</div>
         <div style={{ color: `${accentColor}30`, fontSize: 12 }}>▸</div>
-        <div style={{ flex: 1 }}><div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: '#3A4560', textAlign: 'center', marginBottom: 6 }}>SEMIS</div>{round2.map((m,i)=><MatchPair key={i} match={m} />)}</div>
+        <div style={{ flex: 1 }}><div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: 'var(--text-muted)', textAlign: 'center', marginBottom: 6 }}>SEMIS</div>{round2.map((m,i)=><MatchPair key={i} match={m} />)}</div>
         <div style={{ color: `${accentColor}30`, fontSize: 12 }}>▸</div>
-        <div style={{ flex: 1 }}><div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: '#3A4560', textAlign: 'center', marginBottom: 6 }}>FINAL</div>{round3.map((m,i)=><MatchPair key={i} match={m} />)}</div>
+        <div style={{ flex: 1 }}><div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: 'var(--text-muted)', textAlign: 'center', marginBottom: 6 }}>FINAL</div>{round3.map((m,i)=><MatchPair key={i} match={m} />)}</div>
         <div style={{ color: accentColor, fontSize: 12 }}>★</div>
         <div style={{ flex: 1 }}>
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: accentColor, textAlign: 'center', marginBottom: 8, letterSpacing: '0.1em' }}>WHIZ PICK</div>
@@ -1422,12 +1460,12 @@ function ThreeLayerLayout(props) {
   const TIERS = [
     { label: 'PREMISE', sublabel: 'The starting truth', color: 'rgba(255,255,255,0.35)', bg: 'rgba(255,255,255,0.04)', row: rows[0] },
     { label: 'MECHANISM', sublabel: 'Why it works', color: accentColor, bg: `${accentColor}0C`, row: rows[1] },
-    { label: 'IMPLICATION', sublabel: 'What it means for you', color: '#F4F5F7', bg: 'rgba(255,255,255,0.06)', row: rows[2] },
+    { label: 'IMPLICATION', sublabel: 'What it means for you', color: 'var(--text-primary)', bg: 'rgba(255,255,255,0.06)', row: rows[2] },
   ];
   return (
     <>
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 36, fontWeight: 700, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 6, flexShrink: 0 }}>{resolvedContent.title}</div>
-      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 20, fontStyle: 'italic', flexShrink: 0 }}>{resolvedContent.deck}</div>
+      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 36, fontWeight: 700, color: resolvedOv.title?.color || 'var(--text-primary)', marginBottom: 6, flexShrink: 0 }}>{resolvedContent.title}</div>
+      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: 'var(--text-secondary)', marginBottom: 20, fontStyle: 'italic', flexShrink: 0 }}>{resolvedContent.deck}</div>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
         {TIERS.map(({ label, sublabel, color, bg, row }, i) => (
           <div key={label} style={{ flex: 1, padding: '14px 16px', background: bg, border: `1px solid rgba(255,255,255,0.06)`, borderRadius: 8 }}>
@@ -1435,10 +1473,10 @@ function ThreeLayerLayout(props) {
               <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 22, fontWeight: 700, color: `${color}40` }}>{String(i+1).padStart(2,'0')}</span>
               <div>
                 <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', color }}>{label}</div>
-                <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 10, color: '#5A6478', marginTop: 1 }}>{sublabel}</div>
+                <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>{sublabel}</div>
               </div>
             </div>
-            <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 13, color: '#C8D0D8', lineHeight: 1.65 }}>
+            <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.65 }}>
               {row?.col1 || (resolvedContent.body || '').split('\n\n')[i] || `${label.toLowerCase()} content goes here.`}
             </div>
           </div>
@@ -1466,8 +1504,8 @@ function LongBetLayout(props) {
   return (
     <>
       <SectionHead>LONG BETS</SectionHead>
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 36, fontWeight: 700, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 6 }}>{resolvedContent.title}</div>
-      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 20, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
+      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 36, fontWeight: 700, color: resolvedOv.title?.color || 'var(--text-primary)', marginBottom: 6 }}>{resolvedContent.title}</div>
+      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: 'var(--text-secondary)', marginBottom: 20, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
       <div style={{ flex: 1, position: 'relative' }}>
         {/* Timeline spine */}
         <div style={{ position: 'absolute', left: 38, top: 0, bottom: 0, width: 2, background: `linear-gradient(180deg, ${accentColor}, ${accentColor}10)` }} />
@@ -1484,7 +1522,7 @@ function LongBetLayout(props) {
                 <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 700, color: accentColor }}>{ev.year}</span>
               </div>
               <div style={{ flex: 1, paddingTop: 4 }}>
-                <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 13, color: '#F4F5F7', lineHeight: 1.45, marginBottom: 4 }}>{ev.event}</div>
+                <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.45, marginBottom: 4 }}>{ev.event}</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <div style={{ flex: 1, height: 3, background: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden' }}>
                     <div style={{ height: '100%', width: `${ev.confidence}%`, background: cc, borderRadius: 2 }} />
@@ -1514,8 +1552,8 @@ function OrgChartLayout(props) {
   return (
     <>
       <SectionHead>ECOSYSTEM HIERARCHY</SectionHead>
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 6 }}>{resolvedContent.title}</div>
-      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 14, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
+      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: resolvedOv.title?.color || 'var(--text-primary)', marginBottom: 6 }}>{resolvedContent.title}</div>
+      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: 'var(--text-secondary)', marginBottom: 14, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
       <div style={{ flex: 1, display: 'flex', gap: 8 }}>
         {(levels.length > 0 ? levels : [
           [{col1:'Ethereum'},{col1:'Solana'}],
@@ -1523,7 +1561,7 @@ function OrgChartLayout(props) {
           [{col1:'Aave'},{col1:'Uniswap'},{col1:'Compound'},{col1:'Curve'}],
         ]).map((lvl, li) => (
           <div key={li} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6, justifyContent: 'space-evenly' }}>
-            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: '#3A4560', textAlign: 'center', letterSpacing: '0.1em', marginBottom: 4 }}>{LEVEL_LABELS[li]}</div>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: 'var(--text-muted)', textAlign: 'center', letterSpacing: '0.1em', marginBottom: 4 }}>{LEVEL_LABELS[li]}</div>
             {lvl.map((item, ii) => (
               <div key={ii} style={{
                 padding: '6px 8px', textAlign: 'center',
@@ -1531,8 +1569,8 @@ function OrgChartLayout(props) {
                 border: `1px solid ${li === 0 ? accentColor + '40' : 'rgba(255,255,255,0.06)'}`,
                 borderRadius: 6,
               }}>
-                <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 11, fontWeight: li === 0 ? 700 : 400, color: li === 0 ? accentColor : '#C8D0D8' }}>{item.col1}</div>
-                {item.col3 && <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: '#5A6478', marginTop: 2 }}>{item.col3}</div>}
+                <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 11, fontWeight: li === 0 ? 700 : 400, color: li === 0 ? accentColor : 'var(--text-secondary)' }}>{item.col1}</div>
+                {item.col3 && <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>{item.col3}</div>}
               </div>
             ))}
           </div>
@@ -1551,8 +1589,8 @@ function PeriodicLayout(props) {
   return (
     <>
       <SectionHead>PERIODIC TABLE</SectionHead>
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 4 }}>{resolvedContent.title}</div>
-      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 12, color: '#8B95A3', marginBottom: 12, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
+      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: resolvedOv.title?.color || 'var(--text-primary)', marginBottom: 4 }}>{resolvedContent.title}</div>
+      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
       <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(64px, 1fr))', gap: 5, alignContent: 'start' }}>
         {(rows.length > 0 ? rows : Array.from({length:18}, (_,i) => ({col1:`P${i+1}`, col2:`Protocol ${i+1}`, col3:'$1B', col4:'ETH'}))).slice(0,30).map((row, i) => {
           const chain = (row.col4 || 'ETH').toUpperCase();
@@ -1564,8 +1602,8 @@ function PeriodicLayout(props) {
               borderRadius: 4, borderTop: `3px solid ${chainColor}`,
             }}>
               <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 14, fontWeight: 700, color: chainColor, lineHeight: 1 }}>{(row.col1 || '').slice(0,4)}</div>
-              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: '#F4F5F7', margin: '2px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.col2}</div>
-              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 7, color: '#5A6478' }}>{row.col3}</div>
+              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: 'var(--text-primary)', margin: '2px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.col2}</div>
+              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 7, color: 'var(--text-muted)' }}>{row.col3}</div>
               <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 7, color: chainColor, marginTop: 1 }}>{chain}</div>
             </div>
           );
@@ -1601,8 +1639,8 @@ function CurveLayout(props) {
   return (
     <>
       <SectionHead>{content.topicTag || 'CHART'}</SectionHead>
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 4 }}>{resolvedContent.title}</div>
-      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 12, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
+      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: resolvedOv.title?.color || 'var(--text-primary)', marginBottom: 4 }}>{resolvedContent.title}</div>
+      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: 'var(--text-secondary)', marginBottom: 12, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
       <div style={{ flex: 1, position: 'relative' }}>
         <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', overflow: 'visible' }}>
           <defs>
@@ -1646,23 +1684,23 @@ function FieldGuideLayout(props) {
   return (
     <>
       <SectionHead>FIELD GUIDE</SectionHead>
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 4 }}>{resolvedContent.title}</div>
-      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 14, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
+      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: resolvedOv.title?.color || 'var(--text-primary)', marginBottom: 4 }}>{resolvedContent.title}</div>
+      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: 'var(--text-secondary)', marginBottom: 14, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
       <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
         {species.slice(0, 4).map((s, i) => (
           <div key={i} style={{ padding: '10px 12px', background: 'rgba(255,255,255,0.02)', border: `1px solid ${accentColor}15`, borderRadius: 8 }}>
             <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 13, fontWeight: 700, color: accentColor, marginBottom: 6 }}>{s.name}</div>
             <div style={{ marginBottom: 4 }}>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: '#5A6478', letterSpacing: '0.1em' }}>HABITAT </span>
-              <span style={{ fontFamily: "'Inter', sans-serif", fontSize: 11, color: '#8B95A3' }}>{s.habitat}</span>
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>HABITAT </span>
+              <span style={{ fontFamily: "'Inter', sans-serif", fontSize: 11, color: 'var(--text-secondary)' }}>{s.habitat}</span>
             </div>
             <div style={{ marginBottom: 4 }}>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: '#5A6478', letterSpacing: '0.1em' }}>DIET </span>
-              <span style={{ fontFamily: "'Inter', sans-serif", fontSize: 11, color: '#8B95A3' }}>{s.diet}</span>
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>DIET </span>
+              <span style={{ fontFamily: "'Inter', sans-serif", fontSize: 11, color: 'var(--text-secondary)' }}>{s.diet}</span>
             </div>
             <div>
               <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: accentColor, letterSpacing: '0.1em' }}>TIP </span>
-              <span style={{ fontFamily: "'Inter', sans-serif", fontSize: 11, color: '#C8D0D8' }}>{s.tip}</span>
+              <span style={{ fontFamily: "'Inter', sans-serif", fontSize: 11, color: 'var(--text-secondary)' }}>{s.tip}</span>
             </div>
           </div>
         ))}
@@ -1680,15 +1718,15 @@ function MentalModelLayout(props) {
   return (
     <>
       <SectionHead>MENTAL MODEL</SectionHead>
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 36, fontWeight: 700, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 6 }}>{resolvedContent.title}</div>
-      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 18, color: '#8B95A3', marginBottom: 18, fontStyle: 'italic', lineHeight: 1.45 }}>{resolvedContent.deck}</div>
+      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 36, fontWeight: 700, color: resolvedOv.title?.color || 'var(--text-primary)', marginBottom: 6 }}>{resolvedContent.title}</div>
+      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 18, color: 'var(--text-secondary)', marginBottom: 18, fontStyle: 'italic', lineHeight: 1.45 }}>{resolvedContent.deck}</div>
       {/* Concept illustration box */}
       <div style={{
         padding: '16px', background: `${accentColor}06`, border: `1px solid ${accentColor}15`,
         borderRadius: 10, marginBottom: 18, flexShrink: 0,
         display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 80,
       }}>
-        <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#C8D0D8', lineHeight: 1.65, textAlign: 'center' }}>
+        <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.65, textAlign: 'center' }}>
           {(resolvedContent.body || '').split('\n\n')[0] || content.deck}
         </div>
       </div>
@@ -1698,7 +1736,7 @@ function MentalModelLayout(props) {
             <div style={{ width: 24, height: 24, borderRadius: '50%', background: `${accentColor}18`, border: `1px solid ${accentColor}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, color: accentColor }}>{i+1}</span>
             </div>
-            <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 13, color: '#C8D0D8', lineHeight: 1.6, paddingTop: 3 }}>{r.col1}</div>
+            <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, paddingTop: 3 }}>{r.col1}</div>
           </div>
         ))}
       </div>
@@ -1726,8 +1764,8 @@ function SubwayLayout(props) {
   return (
     <>
       <SectionHead>SUBWAY MAP</SectionHead>
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 6 }}>{resolvedContent.title}</div>
-      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 16, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
+      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: resolvedOv.title?.color || 'var(--text-primary)', marginBottom: 6 }}>{resolvedContent.title}</div>
+      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: 'var(--text-secondary)', marginBottom: 16, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 16 }}>
         {lines.map(([lineName, stations], li) => {
           const lineColor = SUBWAY_COLORS[li % SUBWAY_COLORS.length];
@@ -1751,7 +1789,7 @@ function SubwayLayout(props) {
                       borderRadius: 12, padding: '3px 8px',
                     }}>
                       <div style={{ width: 6, height: 6, borderRadius: '50%', background: lineColor, flexShrink: 0 }} />
-                      <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 10, fontWeight: 600, color: '#F4F5F7', whiteSpace: 'nowrap' }}>{station}</span>
+                      <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 10, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>{station}</span>
                     </div>
                   ))}
                 </div>
@@ -1816,8 +1854,8 @@ function ConstellationLayout(props) {
       ))}
       {/* Title */}
       <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 2 }}>
-        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 4 }}>{resolvedContent.title}</div>
-        <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 12, color: '#8B95A3', fontStyle: 'italic', marginBottom: 8 }}>{resolvedContent.deck}</div>
+        <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: resolvedOv.title?.color || 'var(--text-primary)', marginBottom: 4 }}>{resolvedContent.title}</div>
+        <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 12, color: 'var(--text-secondary)', fontStyle: 'italic', marginBottom: 8 }}>{resolvedContent.deck}</div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {cats.map(cat => (
             <span key={cat} style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: CATEGORY_COLORS[cat] || accentColor, background: `${CATEGORY_COLORS[cat] || accentColor}15`, padding: '2px 6px', borderRadius: 10 }}>{cat}</span>
@@ -1843,7 +1881,7 @@ function ConstellationLayout(props) {
             }}>
               <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 10, fontWeight: 700, color }}>{(node.col1||'').slice(0,4)}</span>
             </div>
-            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: '#8B95A3', whiteSpace: 'nowrap' }}>{node.col1}</div>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{node.col1}</div>
           </div>
         );
       })}
@@ -1872,8 +1910,8 @@ function StackLayout(props) {
   return (
     <>
       <SectionHead>TECH STACK</SectionHead>
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 4 }}>{resolvedContent.title}</div>
-      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 14, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
+      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: resolvedOv.title?.color || 'var(--text-primary)', marginBottom: 4 }}>{resolvedContent.title}</div>
+      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: 'var(--text-secondary)', marginBottom: 14, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
         {grouped.map((layer, i) => (
           <div key={i} style={{
@@ -1885,14 +1923,14 @@ function StackLayout(props) {
           }}>
             <div style={{ width: 90, flexShrink: 0 }}>
               <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 700, color: layer.color, letterSpacing: '0.1em' }}>{layer.name}</div>
-              <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 10, color: '#5A6478' }}>{layer.desc}</div>
+              <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 10, color: 'var(--text-muted)' }}>{layer.desc}</div>
             </div>
             <div style={{ flex: 1, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               {layer.items.slice(0, 4).map((item, j) => (
-                <span key={j} style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 11, fontWeight: 600, color: '#F4F5F7', background: 'rgba(255,255,255,0.05)', padding: '2px 8px', borderRadius: 12 }}>{item.col1}</span>
+                <span key={j} style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', background: 'rgba(255,255,255,0.05)', padding: '2px 8px', borderRadius: 12 }}>{item.col1}</span>
               ))}
               {layer.items.length === 0 && (
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: '#3A4560' }}>Add protocols in table rows (col2={layer.name.split(' ')[0]})</span>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: 'var(--text-muted)' }}>Add protocols in table rows (col2={layer.name.split(' ')[0]})</span>
               )}
             </div>
           </div>
@@ -1921,15 +1959,15 @@ function TradeRoutesLayout(props) {
   return (
     <>
       <SectionHead>TRADE ROUTES</SectionHead>
-      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: resolvedOv.title?.color || '#F4F5F7', marginBottom: 4 }}>{resolvedContent.title}</div>
-      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: '#8B95A3', marginBottom: 16, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
+      <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, color: resolvedOv.title?.color || 'var(--text-primary)', marginBottom: 4 }}>{resolvedContent.title}</div>
+      <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 14, color: 'var(--text-secondary)', marginBottom: 16, fontStyle: 'italic' }}>{resolvedContent.deck}</div>
       <div style={{ flex: 1 }}>
         {HUBS.map((route, i) => {
           const color = VOL_COLORS[i % VOL_COLORS.length];
           return (
             <div key={i} style={{ display: 'flex', alignItems: 'center', marginBottom: Math.round(6 + spacing * 8), gap: Math.round(8 + spacing * 4) }}>
               {/* Source */}
-              <div style={{ width: 80, fontFamily: "'Space Grotesk', sans-serif", fontSize: 11, fontWeight: 700, color: '#F4F5F7', textAlign: 'right', flexShrink: 0 }}>{route.col1}</div>
+              <div style={{ width: 80, fontFamily: "'Space Grotesk', sans-serif", fontSize: 11, fontWeight: 700, color: 'var(--text-primary)', textAlign: 'right', flexShrink: 0 }}>{route.col1}</div>
               {/* Flow arc */}
               <div style={{ flex: 1, position: 'relative', height: 24, display: 'flex', alignItems: 'center' }}>
                 <div style={{ height: Math.max(1, Math.round(1 + (density * 1.6))), background: `linear-gradient(90deg, ${color}60, ${color}, ${color}60)`, flex: 1, borderRadius: 1 }} />
@@ -1938,10 +1976,10 @@ function TradeRoutesLayout(props) {
                 {/* Volume label */}
                 <div style={{ position: 'absolute', left: '50%', top: -14, transform: 'translateX(-50%)', fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color, fontWeight: 700, whiteSpace: 'nowrap', background: '#0F1318', padding: '1px 4px', borderRadius: 3 }}>{route.col3}</div>
                 {/* Protocol tag */}
-                {route.col4 && <div style={{ position: 'absolute', left: '50%', top: 6, transform: 'translateX(-50%)', fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: '#5A6478', whiteSpace: 'nowrap' }}>via {route.col4}</div>}
+                {route.col4 && <div style={{ position: 'absolute', left: '50%', top: 6, transform: 'translateX(-50%)', fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>via {route.col4}</div>}
               </div>
               {/* Destination */}
-              <div style={{ width: 80, fontFamily: "'Space Grotesk', sans-serif", fontSize: 11, fontWeight: 700, color: '#F4F5F7', flexShrink: 0 }}>{route.col2}</div>
+              <div style={{ width: 80, fontFamily: "'Space Grotesk', sans-serif", fontSize: 11, fontWeight: 700, color: 'var(--text-primary)', flexShrink: 0 }}>{route.col2}</div>
             </div>
           );
         })}
@@ -1949,8 +1987,8 @@ function TradeRoutesLayout(props) {
           <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', gap: 16 }}>
             {content.stats.slice(0, 3).map((s, i) => (
               <div key={i} style={{ textAlign: 'center' }}>
-                <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 18, fontWeight: 700, color: '#F4F5F7' }}>{s.value}</div>
-                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: '#5A6478', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{s.label}</div>
+                <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>{s.value}</div>
+                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{s.label}</div>
               </div>
             ))}
           </div>
@@ -1989,6 +2027,12 @@ function TableLayout(props) {
   const { content, ov, accentColor, SectionHead } = props;
   const headers = content.tableHeaders || [];
   const rows = content.tableRows || [];
+  if (content.loadError) {
+    return <DataEmptyState title="Table failed to load" instructions="We couldn't render rows for this frame." actionLabel="Next step" actionHint="Re-import data or paste table rows again." accentColor={accentColor} state="failed" />;
+  }
+  if (!rows.length) {
+    return <DataEmptyState title="No table data yet" instructions="This table layout needs at least one row to render insights." actionLabel="Next step" actionHint="Paste table rows or import CSV data." accentColor={accentColor} />;
+  }
   return (
     <>
       <StatRibbon stats={content.stats?.slice(0, 4)} ov={ov} accentColor={accentColor} />
@@ -2020,7 +2064,7 @@ function TableLayout(props) {
                     borderBottom: i < rows.length - 1 ? `1px solid ${accentColor}06` : 'none',
                     fontFamily: j === 0 ? "'Inter', sans-serif" : "'JetBrains Mono', monospace",
                     fontSize: j === 0 ? '13px' : '12px',
-                    color: j === 0 ? (resolvedOv.title?.color || '#F4F5F7') : (resolvedOv.body?.color || '#8B95A3'),
+                    color: j === 0 ? (resolvedOv.title?.color || 'var(--text-primary)') : (resolvedOv.body?.color || 'var(--text-secondary)'),
                     fontWeight: j === 0 ? 500 : 400,
                   }}>{v}</td>
                 ))}
@@ -2046,7 +2090,7 @@ function BullBearLayout(props) {
             <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: accentColor, boxShadow: `0 0 8px ${accentColor}80` }} />BULL CASE
           </div>
           {(content.bullPoints || []).map((p, i) => (
-            <div key={i} style={{ display: 'flex', gap: '8px', marginBottom: '10px', fontFamily: "'Inter', sans-serif", fontSize: '14px', color: '#B0BAC8', lineHeight: 1.45 }}>
+            <div key={i} style={{ display: 'flex', gap: '8px', marginBottom: '10px', fontFamily: "'Inter', sans-serif", fontSize: '14px', color: 'var(--text-status)', lineHeight: 1.45 }}>
               <span style={{ color: accentColor, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", fontSize: '12px', flexShrink: 0 }}>{String(i + 1).padStart(2, '0')}</span>
               <span>{p}</span>
             </div>
@@ -2057,7 +2101,7 @@ function BullBearLayout(props) {
             <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#FF5A5A', boxShadow: '0 0 8px rgba(255,90,90,0.6)' }} />BEAR CASE
           </div>
           {(content.bearPoints || []).map((p, i) => (
-            <div key={i} style={{ display: 'flex', gap: '8px', marginBottom: '10px', fontFamily: "'Inter', sans-serif", fontSize: '14px', color: '#B0BAC8', lineHeight: 1.45 }}>
+            <div key={i} style={{ display: 'flex', gap: '8px', marginBottom: '10px', fontFamily: "'Inter', sans-serif", fontSize: '14px', color: 'var(--text-status)', lineHeight: 1.45 }}>
               <span style={{ color: '#FF5A5A', fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", fontSize: '12px', flexShrink: 0 }}>{String(i + 1).padStart(2, '0')}</span>
               <span>{p}</span>
             </div>
@@ -2078,6 +2122,12 @@ function GridLayout(props) {
   const { content, ov, accentColor, SectionHead } = props;
   const items = content.gridItems || content.stats || [];
   const cols = items.length <= 4 ? 2 : items.length <= 9 ? 3 : 4;
+  if (content.loadError) {
+    return <DataEmptyState title="Grid failed to load" instructions="Grid items could not be parsed for display." actionLabel="Next step" actionHint="Generate scaffold items, then re-run import." accentColor={accentColor} state="failed" />;
+  }
+  if (!items.length) {
+    return <DataEmptyState title="No grid items yet" instructions="Grid view is empty because no stat or grid item data exists." actionLabel="Next step" actionHint="Generate scaffold cards or import metrics." accentColor={accentColor} />;
+  }
   return (
     <>
       <SectionHead>GRID VIEW</SectionHead>
@@ -2094,7 +2144,7 @@ function GridLayout(props) {
               textShadow: `0 0 16px ${accentColor}25`,
             }}>{item.value || item}</div>
             <div style={{
-              fontFamily: "'JetBrains Mono', monospace", fontSize: '8.5px', color: '#5A6478',
+              fontFamily: "'JetBrains Mono', monospace", fontSize: '8.5px', color: 'var(--text-muted)',
               textTransform: 'uppercase', letterSpacing: '0.08em',
             }}>{item.label || ''}</div>
           </div>
@@ -2107,6 +2157,12 @@ function GridLayout(props) {
 function TimelineLayout(props) {
   const { content, ov, accentColor, SectionHead } = props;
   const events = content.timelineEvents || content.stats || [];
+  if (content.loadError) {
+    return <DataEmptyState title="Timeline failed to load" instructions="Event rows are unavailable or malformed." actionLabel="Next step" actionHint="Re-import events and verify date/value columns." accentColor={accentColor} state="failed" />;
+  }
+  if (!events.length) {
+    return <DataEmptyState title="No timeline events yet" instructions="Timeline templates require at least one event to render." actionLabel="Next step" actionHint="Import data or add events manually." accentColor={accentColor} />;
+  }
   return (
     <>
       <SectionHead>TIMELINE</SectionHead>
@@ -2124,7 +2180,7 @@ function TimelineLayout(props) {
             <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', color: accentColor, marginBottom: '5px', letterSpacing: '0.08em' }}>
               {ev.date || ev.label || `EVENT ${i + 1}`}
             </div>
-            <div style={{ fontFamily: "'Inter', sans-serif", fontSize: '14px', color: '#B0BAC8', lineHeight: 1.55 }}>
+            <div style={{ fontFamily: "'Inter', sans-serif", fontSize: '14px', color: 'var(--text-status)', lineHeight: 1.55 }}>
               {ev.text || ev.value || ev}
             </div>
           </div>
@@ -2139,6 +2195,9 @@ function NetworkLayout(props) {
   const { density, spacing } = getLayoutTuning(content);
   // B7: Real network visualization using stats as nodes
   const nodes = content.stats || [];
+  if (content.loadError) {
+    return <DataEmptyState title="Network failed to load" instructions="Node data could not be read for this network map." actionLabel="Next step" actionHint="Re-run import mapping and pick a network template." accentColor={accentColor} state="failed" />;
+  }
   return (
     <>
       <StatRibbon stats={content.stats?.slice(0, 3)} ov={ov} accentColor={accentColor} />
@@ -2182,14 +2241,14 @@ function NetworkLayout(props) {
                   fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', textAlign: 'center', zIndex: 2, minWidth: 60,
                 }}>
                   <div style={{ color: accentColor, fontWeight: 600, fontSize: '12px' }}>{n.value}</div>
-                  <div style={{ color: '#5A6478', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 2 }}>{n.label}</div>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 2 }}>{n.label}</div>
                 </div>
               </div>
             );
           })}
         </div>
       ) : (
-        <div style={{ textAlign: 'center', padding: '28px', borderRadius: '10px', border: `1px dashed ${accentColor}25`, color: '#5A6478', fontFamily: "'JetBrains Mono', monospace", fontSize: '12px' }}>
+        <div style={{ textAlign: 'center', padding: '28px', borderRadius: '10px', border: `1px dashed ${accentColor}25`, color: 'var(--text-muted)', fontFamily: "'JetBrains Mono', monospace", fontSize: '12px' }}>
           Add stats to generate network nodes
         </div>
       )}
@@ -2215,14 +2274,14 @@ function EditorialLayout(props) {
           padding: '16px 20px', margin: '12px 0', borderLeft: `3px solid ${accentColor}80`,
           background: `${accentColor}06`, borderRadius: '0 8px 8px 0',
           fontFamily: "'Inter', sans-serif", fontSize: '14px', fontStyle: 'italic',
-          color: '#B0BAC8', lineHeight: 1.6,
+          color: 'var(--text-status)', lineHeight: 1.6,
         }}>
           &ldquo;{sections[0].slice(0, 120)}&hellip;&rdquo;
         </div>
       )}
       <SectionHead>BENEATH THE FOLD</SectionHead>
       {sections.slice(1, 3).map((p, i) => (
-        <p key={i} style={{ marginBottom: '14px', fontFamily: "'Inter', sans-serif", fontSize: `${resolvedOv.body?.fontSize || 14}px`, color: '#B0BAC8', lineHeight: 1.75 }}>{p}</p>
+        <p key={i} style={{ marginBottom: '14px', fontFamily: "'Inter', sans-serif", fontSize: `${resolvedOv.body?.fontSize || 14}px`, color: 'var(--text-status)', lineHeight: 1.75 }}>{p}</p>
       ))}
       <BigNumber content={content} ov={ov} accentColor={accentColor} />
     </>
