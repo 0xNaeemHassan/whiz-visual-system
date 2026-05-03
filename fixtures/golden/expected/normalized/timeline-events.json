@@ -1,0 +1,20 @@
+[
+  {
+    "date": "05/01/26",
+    "isoDate": "2026-05-01",
+    "label": "Launch",
+    "sub": "Mainnet"
+  },
+  {
+    "date": "05/02/26",
+    "isoDate": "2026-05-02",
+    "label": "Patch",
+    "sub": "Hotfix"
+  },
+  {
+    "date": "bad date",
+    "isoDate": "",
+    "label": "Unknown",
+    "sub": "TBD"
+  }
+]

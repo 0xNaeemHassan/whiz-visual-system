@@ -1,0 +1,19 @@
+{
+  "tiers": [
+    {
+      "name": "high-risk",
+      "minimumCoverage": 85,
+      "patterns": ["src/domain/", "src/utils/", "src/state/"]
+    },
+    {
+      "name": "medium-risk",
+      "minimumCoverage": 75,
+      "patterns": ["src/components/whizframe/", "src/i18n/", "src/router/"]
+    },
+    {
+      "name": "low-risk-ui-cosmetics",
+      "minimumCoverage": 60,
+      "patterns": ["src/components/", "src/pages/", "src/index.css"]
+    }
+  ]
+}
