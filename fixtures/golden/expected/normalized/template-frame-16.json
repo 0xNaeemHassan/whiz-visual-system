@@ -1,0 +1,21 @@
+{
+  "frameId": 16,
+  "topicTag": "RANKINGS",
+  "title": "TOP 10 PROTOCOLS BY TVL",
+  "deck": "The biggest protocols by total value locked this week.",
+  "tableHeaders": [
+    "PROTOCOL",
+    "ASSET",
+    "APY",
+    "RISK",
+    "GRADE"
+  ],
+  "firstRow": {
+    "col1": "Aave",
+    "col2": "USDC",
+    "col3": "5.2%",
+    "col4": "Low",
+    "col5": "A+"
+  },
+  "hasRequiredKeys": true
+}
