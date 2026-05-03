@@ -1,7 +1,7 @@
 /** @typedef {import('../types/editor.js').FrameDefinition} FrameDefinition */
 // All 50 frames data
 /** @type {FrameDefinition[]} */
-export const FRAMES = [
+const BASE_FRAMES = [
   // TIER A — Weekly Recaps (1-7)
   { id: 1, tier: 'A', tierName: 'Weekly Recaps', name: 'The Ticker Tape', desc: 'Full-width scrolling-style header listing every event of the week as ticker symbols. Below, 6-9 mini cards in a 3×3 grid expanding each tag.', tags: ['weekly', 'recap', 'events'], layout: 'grid' },
   { id: 2, tier: 'A', tierName: 'Weekly Recaps', name: 'The Order Book', desc: 'Two columns BIDS (bullish) and ASKS (bearish) side-by-side. Center spread shows the week\'s headline story.', tags: ['weekly', 'analysis', 'comparison'], layout: 'bull-bear' },
@@ -22,22 +22,22 @@ export const FRAMES = [
   { id: 15, tier: 'B', tierName: 'Project Deep-Dives', name: 'The Audit Sheet', desc: 'Project graded across 8 axes (Team, Tokenomics, Product, TVL, Audit Status, Community, Catalysts, Risk) with letter grades.', tags: ['deep-dive', 'audit', 'grades'], layout: 'scorecard' },
 
   // TIER C — Comparative Tables (16-22)
-  { id: 16, tier: 'C', tierName: 'Comparative Tables', name: 'The Leaderboard', desc: 'Top 10 ranked, gold/silver/bronze treatment for top 3, single-line stats. Built for screenshot-and-share virality.', tags: ['comparison', 'ranking', 'table'], layout: 'table' },
+  { id: 16, tier: 'C', tierName: 'Comparative Tables', name: 'The Leaderboard', defaultSort: { column: 'TVL', direction: 'desc', mode: 'numeric' }, desc: 'Top 10 ranked, gold/silver/bronze treatment for top 3, single-line stats. Built for screenshot-and-share virality.', tags: ['comparison', 'ranking', 'table'], layout: 'table' },
   { id: 17, tier: 'C', tierName: 'Comparative Tables', name: 'The Winners & Losers', desc: 'Two stacked tables: WINNERS up top, LOSERS beneath, mirrored layout. Same metric, different sides.', tags: ['comparison', 'winners', 'losers'], layout: 'table' },
   { id: 18, tier: 'C', tierName: 'Comparative Tables', name: 'The Matrix', desc: '2×2 quadrant chart with axis labels. Plot 12-20 protocols by 2 dimensions (e.g., Yield × Risk).', tags: ['comparison', 'matrix', 'chart'], layout: 'matrix' },
   { id: 19, tier: 'C', tierName: 'Comparative Tables', name: 'The Spec Sheet', desc: 'Side-by-side feature comparison, 4-6 protocols across the top, 8-12 features down the side. Checkmarks and differentiators.', tags: ['comparison', 'features', 'specs'], layout: 'table' },
-  { id: 20, tier: 'C', tierName: 'Comparative Tables', name: 'The Yield Tape', desc: 'Pure data table, monospace throughout, designed to look exactly like a Bloomberg yield curve readout. APRs ranked.', tags: ['comparison', 'yield', 'apy'], layout: 'table' },
+  { id: 20, tier: 'C', tierName: 'Comparative Tables', name: 'The Yield Tape', defaultSort: { column: 'APY', direction: 'desc', mode: 'numeric' }, desc: 'Pure data table, monospace throughout, designed to look exactly like a Bloomberg yield curve readout. APRs ranked.', tags: ['comparison', 'yield', 'apy'], layout: 'table' },
   { id: 21, tier: 'C', tierName: 'Comparative Tables', name: 'The Tier List', desc: 'S/A/B/C/D rows of project logos, each tier color-coded. Bottom strip explains criteria. Goes viral every time.', tags: ['comparison', 'tier-list', 'viral'], layout: 'tier-list' },
   { id: 22, tier: 'C', tierName: 'Comparative Tables', name: 'The Head-to-Head', desc: 'Just 2 protocols, deeply compared across 10 dimensions, with a final VERDICT callout at the bottom.', tags: ['comparison', 'head-to-head', 'versus'], layout: 'bull-bear' },
 
   // TIER D — Risk & Mechanism Explainers (23-29)
-  { id: 23, tier: 'D', tierName: 'Risk & Explainers', name: 'The Threat Model', desc: '4 quadrants of risk types (Smart Contract / Economic / Governance / Operational) with severity dots.', tags: ['risk', 'security', 'explainer'], layout: 'threat-model' },
-  { id: 24, tier: 'D', tierName: 'Risk & Explainers', name: 'The Failure Tree', desc: 'Top: headline outcome (Depeg). Branches downward into cascading causes. Fault-tree analysis from engineering.', tags: ['risk', 'stablecoin', 'tree'], layout: 'failure-tree' },
-  { id: 25, tier: 'D', tierName: 'Risk & Explainers', name: 'The Postmortem', desc: 'Editorial deep-dive: WHAT HAPPENED / ROOT CAUSE / TIMELINE / RECOVERY / LESSONS. For hacks and exploits.', tags: ['risk', 'hack', 'postmortem'], layout: 'postmortem' },
-  { id: 26, tier: 'D', tierName: 'Risk & Explainers', name: 'The Mental Model', desc: 'A single concept explained with a labeled illustration center-stage and 3 numbered "reads" beneath.', tags: ['explainer', 'education', 'concept'], layout: 'mental-model' },
-  { id: 27, tier: 'D', tierName: 'Risk & Explainers', name: 'The Trust Stack', desc: 'Vertical stack of layers (User → Frontend → Contract → Custodian → Chain), each labeled with trust assumption.', tags: ['risk', 'decentralization', 'layers'], layout: 'trust-stack' },
-  { id: 28, tier: 'D', tierName: 'Risk & Explainers', name: 'The Black Box Opened', desc: 'Left: what users see (marketing claim). Right: what\'s actually happening underneath. Side-by-side reveal.', tags: ['risk', 'transparency', 'reveal'], layout: 'bull-bear' },
-  { id: 29, tier: 'D', tierName: 'Risk & Explainers', name: 'The Risk Heatmap', desc: 'Grid of 20-30 protocols, color-graded cells from green to red across 5 risk dimensions.', tags: ['risk', 'heatmap', 'comparison'], layout: 'heatmap' },
+  { id: 23, tier: 'D', tierName: 'Risk & Explainers', name: 'The Threat Model', desc: '4 quadrants of risk types (Smart Contract / Economic / Governance / Operational) with severity dots.', tags: ['risk', 'security', 'explainer'], layout: 'threat-model', defaultAccentPolicy: { themeId: 'liquidation-red' } },
+  { id: 24, tier: 'D', tierName: 'Risk & Explainers', name: 'The Failure Tree', desc: 'Top: headline outcome (Depeg). Branches downward into cascading causes. Fault-tree analysis from engineering.', tags: ['risk', 'stablecoin', 'tree'], layout: 'failure-tree', defaultAccentPolicy: { themeId: 'liquidation-red' } },
+  { id: 25, tier: 'D', tierName: 'Risk & Explainers', name: 'The Postmortem', desc: 'Editorial deep-dive: WHAT HAPPENED / ROOT CAUSE / TIMELINE / RECOVERY / LESSONS. For hacks and exploits.', tags: ['risk', 'hack', 'postmortem'], layout: 'postmortem', defaultAccentPolicy: { themeId: 'liquidation-red' } },
+  { id: 26, tier: 'D', tierName: 'Risk & Explainers', name: 'The Mental Model', desc: 'A single concept explained with a labeled illustration center-stage and 3 numbered "reads" beneath.', tags: ['explainer', 'education', 'concept'], layout: 'mental-model', defaultAccentPolicy: { themeId: 'liquidation-red' } },
+  { id: 27, tier: 'D', tierName: 'Risk & Explainers', name: 'The Trust Stack', desc: 'Vertical stack of layers (User → Frontend → Contract → Custodian → Chain), each labeled with trust assumption.', tags: ['risk', 'decentralization', 'layers'], layout: 'trust-stack', defaultAccentPolicy: { themeId: 'liquidation-red' } },
+  { id: 28, tier: 'D', tierName: 'Risk & Explainers', name: 'The Black Box Opened', desc: 'Left: what users see (marketing claim). Right: what\'s actually happening underneath. Side-by-side reveal.', tags: ['risk', 'transparency', 'reveal'], layout: 'bull-bear', defaultAccentPolicy: { themeId: 'liquidation-red' } },
+  { id: 29, tier: 'D', tierName: 'Risk & Explainers', name: 'The Risk Heatmap', desc: 'Grid of 20-30 protocols, color-graded cells from green to red across 5 risk dimensions.', tags: ['risk', 'heatmap', 'comparison'], layout: 'heatmap', defaultAccentPolicy: { themeId: 'liquidation-red' } },
 
   // TIER E — Ecosystem Maps (30-35)
   { id: 30, tier: 'E', tierName: 'Ecosystem Maps', name: 'The Constellation', desc: 'Logos plotted on a dark "starfield" background, grouped by category with thin connecting lines.', tags: ['ecosystem', 'map', 'network'], layout: 'constellation' },
@@ -48,12 +48,12 @@ export const FRAMES = [
   { id: 35, tier: 'E', tierName: 'Ecosystem Maps', name: 'The Trade Routes', desc: 'World-map style with crypto flows drawn as arcs between hubs (stablecoin flows, bridge volumes). High effort, high reward.', tags: ['ecosystem', 'flows', 'global'], layout: 'trade-routes' },
 
   // TIER F — Yield & Data Trackers (36-41)
-  { id: 36, tier: 'F', tierName: 'Yield & Data', name: 'The Yield Tape (Fresh)', desc: 'Identical to #20 but with FRESH ▸ {DATE} stamp top-right marking it as the latest weekly snapshot.', tags: ['yield', 'weekly', 'apy'], layout: 'table' },
+  { id: 36, tier: 'F', tierName: 'Yield & Data', name: 'The Yield Tape (Fresh)', defaultSort: { column: 'APY', direction: 'desc', mode: 'numeric' }, desc: 'Identical to #20 but with FRESH ▸ {DATE} stamp top-right marking it as the latest weekly snapshot.', tags: ['yield', 'weekly', 'apy'], layout: 'table' },
   { id: 37, tier: 'F', tierName: 'Yield & Data', name: 'The Sortable Grid', desc: 'Card-grid (3×3 or 4×3) of opportunities, each card showing protocol, APR, chain, asset, and a risk-dot indicator.', tags: ['yield', 'grid', 'opportunities'], layout: 'grid' },
   { id: 38, tier: 'F', tierName: 'Yield & Data', name: 'The Bracket', desc: 'Tournament-style bracket of 8/16 yield strategies. Round 1 → Round 2 → WHIZ\'S PICK final.', tags: ['yield', 'bracket', 'tournament'], layout: 'bracket' },
   { id: 39, tier: 'F', tierName: 'Yield & Data', name: 'The Curve', desc: 'A real chart (yield curve, TVL line, fee chart) takes up 60% of canvas, with annotation callouts at inflection points.', tags: ['yield', 'chart', 'analysis'], layout: 'curve' },
   { id: 40, tier: 'F', tierName: 'Yield & Data', name: 'The Flow Diagram', desc: '"$1,000 USDC starts here →" with the path traced through swaps, deposits, harvests, ending with final yield.', tags: ['yield', 'flow', 'actionable'], layout: 'flow' },
-  { id: 41, tier: 'F', tierName: 'Yield & Data', name: 'The Risk-Adjusted Top 10', desc: 'Leaderboard ranked by Sharpe-style risk-adjusted return, not raw APY. Differentiates from every other yield list.', tags: ['yield', 'ranking', 'risk-adjusted'], layout: 'scorecard' },
+  { id: 41, tier: 'F', tierName: 'Yield & Data', name: 'The Risk-Adjusted Top 10', defaultSort: { column: 'WHIZ GRADE', direction: 'desc', mode: 'text' }, desc: 'Leaderboard ranked by Sharpe-style risk-adjusted return, not raw APY. Differentiates from every other yield list.', tags: ['yield', 'ranking', 'risk-adjusted'], layout: 'scorecard' },
 
   // TIER G — Macro & Thesis (42-46)
   { id: 42, tier: 'G', tierName: 'Macro & Thesis', name: 'The Thesis Page', desc: 'Magazine cover-style. Massive headline, full-bleed background illustration, deck line, byline. One long essay-style column.', tags: ['macro', 'thesis', 'editorial'], layout: 'thesis' },
@@ -68,6 +68,21 @@ export const FRAMES = [
   { id: 49, tier: 'H', tierName: 'Specialty', name: 'The Receipt', desc: 'Looks like a printed paper receipt. Lists "what you paid" (gas, fees, slippage) for a specific user journey. Mono throughout.', tags: ['specialty', 'creative', 'shareable'], layout: 'receipt' },
   { id: 50, tier: 'H', tierName: 'Specialty', name: 'The Cover Story', desc: 'Once a quarter. Magazine-cover treatment: full-bleed hero illustration, single massive headline, VOL.III ISSUE badge.', tags: ['specialty', 'quarterly', 'flagship'], layout: 'cover-story' },
 ];
+
+const FRAME_RELATION_META = Object.freeze({
+  36: { structureClass: 'variant', variantOf: 20, archetypeId: 20 },
+});
+
+export const FRAMES = BASE_FRAMES.map((frame) => {
+  const relationMeta = FRAME_RELATION_META[frame.id] || {};
+  const variantOf = relationMeta.variantOf ?? null;
+  return {
+    ...frame,
+    archetypeId: relationMeta.archetypeId ?? (variantOf ?? frame.id),
+    variantOf,
+    structureClass: relationMeta.structureClass ?? 'structural',
+  };
+});
 
 export const TIER_NAMES = {
   A: 'Weekly Recaps', B: 'Project Deep-Dives', C: 'Comparative Tables',
