@@ -16,8 +16,13 @@ function parseGradientStops(stopString) {
     .map((stop) => stop.split(/\s+/)[0]);
 }
 
+function getRenderProfile(sceneModel) {
+  return sceneModel?.exportProfiling || {};
+}
+
 function paintBackground(ctx, sceneModel, contract, width, height) {
   const gradientValue = sceneModel.background?.gradient;
+  const simplifyGradients = Boolean(getRenderProfile(sceneModel)?.simplifyGradients);
   if (gradientValue && /^linear-gradient\(/i.test(gradientValue)) {
     const gradientBody = gradientValue.slice(16, -1);
     const parts = gradientBody.split(/,(?![^()]*\))/).map((part) => part.trim());
@@ -26,6 +31,7 @@ function paintBackground(ctx, sceneModel, contract, width, height) {
     const colors = parseGradientStops(rawStops.join(','));
 
     if (colors.length >= 2) {
+      const simplifiedColors = simplifyGradients ? [colors[0], colors[colors.length - 1]] : colors;
       const angle = hasAngle ? Number.parseFloat(parts[0]) : 180;
       const radians = ((angle - 90) * Math.PI) / 180;
       const cx = width / 2;
@@ -36,8 +42,8 @@ function paintBackground(ctx, sceneModel, contract, width, height) {
       const x1 = cx + Math.cos(radians) * dist;
       const y1 = cy + Math.sin(radians) * dist;
       const gradient = ctx.createLinearGradient(x0, y0, x1, y1);
-      const denom = Math.max(colors.length - 1, 1);
-      colors.forEach((color, index) => gradient.addColorStop(index / denom, color));
+      const denom = Math.max(simplifiedColors.length - 1, 1);
+      simplifiedColors.forEach((color, index) => gradient.addColorStop(index / denom, color));
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, width, height);
       return;
@@ -106,15 +112,21 @@ export async function renderSceneToCanvas(sceneModel, contract) {
   if (!ctx) throw new Error('Canvas rendering unavailable');
   ctx.scale(scale, scale);
 
+  const renderProfile = getRenderProfile(sceneModel);
+  const disabledLayers = new Set(renderProfile?.disabledLayers || []);
   paintBackground(ctx, sceneModel, contract, width, height);
 
-  ctx.fillStyle = sceneModel.palette.accent;
-  ctx.fillRect(0, 0, 4, height);
+  if (!disabledLayers.has('decorative.accentBar')) {
+    ctx.fillStyle = sceneModel.palette.accent;
+    ctx.fillRect(0, 0, 4, height);
+  }
 
-  ctx.fillStyle = sceneModel.palette.textSecondary;
-  ctx.font = '600 10px "JetBrains Mono", monospace';
-  const localizedIssueNum = new Intl.NumberFormat(sceneModel.locale || 'en-US', { minimumIntegerDigits: 3, useGrouping: false }).format(Number(sceneModel.content.issueNum) || 0);
-  ctx.fillText(`#${localizedIssueNum} · ${sceneModel.content.topicTag}`, 24, 32);
+  if (!disabledLayers.has('decorative.topicTag')) {
+    ctx.fillStyle = sceneModel.palette.textSecondary;
+    ctx.font = '600 10px "JetBrains Mono", monospace';
+    const localizedIssueNum = new Intl.NumberFormat(sceneModel.locale || 'en-US', { minimumIntegerDigits: 3, useGrouping: false }).format(Number(sceneModel.content.issueNum) || 0);
+    ctx.fillText(`#${localizedIssueNum} · ${sceneModel.content.topicTag}`, 24, 32);
+  }
 
   const citationBoundText = sceneModel.citations?.boundText || {};
 
@@ -133,7 +145,9 @@ export async function renderSceneToCanvas(sceneModel, contract) {
   ctx.fillStyle = sceneModel.palette.accent;
   ctx.font = '500 12px "JetBrains Mono", monospace';
   ctx.fillText(sceneModel.content.handle, 44, height - 30);
-  paintCitationStrip(ctx, sceneModel, contract, width, height);
+  if (!disabledLayers.has('decorative.citationStrip')) {
+    paintCitationStrip(ctx, sceneModel, contract, width, height);
+  }
 
   return canvas;
 }

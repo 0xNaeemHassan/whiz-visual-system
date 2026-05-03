@@ -5,6 +5,13 @@ export async function exportFrame({ contractInput, sceneModel, sceneRenderer, do
   const exportMetadata = {
     preflight: preflightResult,
     citationMode: contract.citationMode || 'off',
+    layoutCost: sceneModel?.exportProfiling?.complexity || null,
+    degradations: {
+      disabledLayers: sceneModel?.exportProfiling?.disabledLayers || [],
+      reduceEffectComplexity: Boolean(sceneModel?.exportProfiling?.reduceEffectComplexity),
+      simplifyGradients: Boolean(sceneModel?.exportProfiling?.simplifyGradients),
+      maxImageDrawSize: sceneModel?.exportProfiling?.maxImageDrawSize || null,
+    },
     exportedAt: new Date().toISOString(),
   };
   try {
