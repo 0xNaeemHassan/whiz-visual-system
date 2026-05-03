@@ -1,9 +1,12 @@
 import { resolveRiskAccent } from '../riskAccentPolicy';
+import { resolveApprovedFontPairing, warnFontSubstitutions } from '../fontPolicy';
 import { buildCitationModel } from './citationModel';
 
-export function createSceneModel({ frameId, theme, content, overrides, aspectRatio, bgGradient, locale = 'en-US' }) {
+export function createSceneModel({ frameId, theme, content, overrides, aspectRatio, bgGradient, locale = 'en-US', fontPairing }) {
   const accentResolution = resolveRiskAccent({ frameId, theme, overrides });
   const citationMode = content?.exportCitationMode || content?.citationMode || 'off';
+  const fontResolution = resolveApprovedFontPairing(fontPairing);
+  warnFontSubstitutions(fontResolution.substitutions);
   return {
     frameId,
     dimensions: { width: aspectRatio.w, height: aspectRatio.h },
@@ -21,6 +24,7 @@ export function createSceneModel({ frameId, theme, content, overrides, aspectRat
       titleSize: overrides?.title?.fontSize || 52,
       deckSize: overrides?.deck?.fontSize || 18,
       bodySize: overrides?.body?.fontSize || 15,
+      fontFamilies: fontResolution.fonts,
     },
     locale,
     content: {
@@ -32,5 +36,8 @@ export function createSceneModel({ frameId, theme, content, overrides, aspectRat
       handle: content?.handle || '',
     },
     citations: buildCitationModel(content, citationMode, { strictMode: Boolean(content?.strictMode) }),
+    warnings: {
+      fontSubstitutions: fontResolution.substitutions,
+    },
   };
 }
