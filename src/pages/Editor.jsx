@@ -1,6 +1,6 @@
 import { TICKER_CONTRACT, normalizeTickerSpeed } from '../domain/tickerContract';
 import { createTemplateForLayout, checkTemplateLayoutCompatibility, getFrameTemplate } from '../data/templates.js';
-import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
 import { FRAMES } from '../data/frames.js';
 import { applyDefaultSort, applyDefaultSortWithMetadata, validateDefaultSort } from '../domain/tableSort.js';
 import { THEMES } from '../data/themes.js';
@@ -20,6 +20,7 @@ import { nearestTypeScale, getComplianceIssues, getBrandScore, getEditorValidati
 import { normalizeContentTaxonomy } from '../utils/contentNormalization';
 import { validateEditorState } from '../utils/editorStateValidation';
 import { buildMutationDispatcher } from './EditorMutations.js';
+import { createEditorSelectors, measureSelectorPhase, STATIC_MEDIA_STATE, updateSliceImmutable } from '../state/editorStore.js';
 import { normalizeDateInput, normalizeTimelineEvents } from '../domain/services/dateNormalizationService';
 import { detectRowSeriesDeltas, inferMetricType } from '../domain/services/rowDeltaDetector';
 import { SemanticChip, AccessibleIconButton, LabeledField, IconButton } from '../components/primitives';
@@ -423,14 +424,17 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const lastContentRef = useRef(content);
   const[mobileTab,setMobileTab]=useState('preview');const[aspectRatio,setAspectRatio]=useState(RATIOS[0]);
   const[showActionOverflow,setShowActionOverflow]=useState(false);
-  const [_savedMedia, persistMedia] = useLocalStorage('whiz-media',{uploadedImages:{logo:null,hero:null,badge:null},bgGradient:null,patternOverlay:null});
+  const [_savedMedia, persistMedia] = useLocalStorage('whiz-media', STATIC_MEDIA_STATE);
   const { state: mediaState, set: setMediaState, reset: resetMediaState, commit: commitMedia } = useUndoRedo(_savedMedia);
-  const uploadedImages = mediaState.uploadedImages;
-  const bgGradient = mediaState.bgGradient;
-  const patternOverlay = mediaState.patternOverlay;
+  const selectorStart = useMemo(() => performance.now(), [mediaState]);
+  const editorSelectors = useMemo(() => createEditorSelectors(), []);
+  const { uploadedImages, bgGradient, patternOverlay } = editorSelectors.selectMediaSlices(mediaState);
+  useEffect(() => {
+    measureSelectorPhase('editor.media-selector', selectorStart, { hasGradient: Boolean(bgGradient), hasPattern: Boolean(patternOverlay) });
+  }, [selectorStart, bgGradient, patternOverlay]);
   useEffect(()=>{persistMedia(mediaState);},[mediaState,persistMedia]);
-  const setBgGradient = (value) => setMediaState(prev => ({...prev, bgGradient: value}), { immediate: true });
-  const setPatternOverlay = (value) => setMediaState(prev => ({...prev, patternOverlay: value}), { immediate: true });
+  const setBgGradient = (value) => setMediaState((prev) => updateSliceImmutable(prev, 'bgGradient', value), { immediate: true });
+  const setPatternOverlay = (value) => setMediaState((prev) => updateSliceImmutable(prev, 'patternOverlay', value), { immediate: true });
 
   const[saveSearch,setSaveSearch]=useState('');
   const [confirmState, setConfirmState] = useState(null);
@@ -480,10 +484,14 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const [rowDeltaFlags, setRowDeltaFlags] = useState([]);
   useEffect(() => {
     const scan = detectRowSeriesDeltas(content.tableRows || [], { metricType: inferMetricType(content.tableRows?.[0]?.col3) });
-    setRowDeltaFlags((prev) => scan.flags.map((flag) => {
-      const prior = prev.find((p) => p.rowIndex === flag.rowIndex);
-      return prior ? { ...flag, acknowledged: Boolean(prior.acknowledged) } : flag;
-    }));
+    setRowDeltaFlags((prev) => {
+      const next = scan.flags.map((flag) => {
+        const prior = prev.find((p) => p.rowIndex === flag.rowIndex);
+        return prior ? { ...flag, acknowledged: Boolean(prior.acknowledged) } : flag;
+      });
+      if (next.length === prev.length && next.every((entry, idx) => JSON.stringify(entry) === JSON.stringify(prev[idx]))) return prev;
+      return next;
+    });
   }, [content.tableRows]);
   useDialogFocus({ isOpen: showSaveModal, containerRef: saveModalRef, initialFocusRef: saveNameInputRef });
   const focusableSelector = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -1502,7 +1510,8 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
               <button className="btn btn-secondary btn-sm" style={{fontSize:9,padding:'2px 8px'}} disabled={isSectionLocked('timeline')} onClick={()=>updateContent('timelineEvents',[...(content.timelineEvents||[]),{date:'',label:'',sub:'',provenance:createDefaultProvenance()}])}>+ Event</button>
             </div>
             {(content.timelineEvents||[]).map((ev,i)=>(
-              <div key={i} style={{display:'grid',gridTemplateColumns:'80px 1fr 1fr auto auto auto',gap:4,marginBottom:4,alignItems:'center'}}>
+              <React.Fragment key={i}>
+              <div style={{display:'grid',gridTemplateColumns:'80px 1fr 1fr auto auto auto',gap:4,marginBottom:4,alignItems:'center'}}>
                 <input disabled={isSectionLocked('timeline')} value={ev.date||''} placeholder="Date" style={{fontSize:10,padding:'4px 6px'}} onChange={e=>{const raw=e.target.value;const normalized=normalizeDateInput(raw);const a=[...(content.timelineEvents||[])];a[i]={...a[i],date:normalized.valid?normalized.displayDate:raw};updateContent('timelineEvents',a);if(raw&&!normalized.valid){showToast(`Invalid timeline date. ${normalized.suggestions.join(' ')}`,'warning');}}}/>
                 <input disabled={isSectionLocked('timeline')} value={ev.label||''} placeholder="Event" style={{fontSize:10,padding:'4px 6px'}} onChange={e=>{const a=[...(content.timelineEvents||[])];a[i]={...a[i],label:e.target.value};updateContent('timelineEvents',a);}}/>
                 <input disabled={isSectionLocked('timeline')} value={ev.sub||''} placeholder="Note" style={{fontSize:10,padding:'4px 6px'}} onChange={e=>{const a=[...(content.timelineEvents||[])];a[i]={...a[i],sub:e.target.value};updateContent('timelineEvents',a);}}/>
@@ -1510,7 +1519,8 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
                 <SemanticChip tone={getConfidenceMeta(ev?.provenance).tone}>{getConfidenceMeta(ev?.provenance).icon} {getConfidenceMeta(ev?.provenance).label}</SemanticChip>
                 <button className="btn btn-danger btn-sm" style={{padding:'0 6px',height:28}} disabled={isSectionLocked('timeline')} onClick={()=>updateContent('timelineEvents',(content.timelineEvents||[]).filter((_,r)=>r!==i))}>✕</button>
               </div>
-              <ProvenanceEditor disabled={isSectionLocked('timeline')} value={ev?.provenance} collapsed={false} onToggle={()=>{}} onChange={(provenance)=>{const a=[...(content.timelineEvents||[])];a[i]={...a[i],provenance:normalizeProvenance(provenance)};updateContent('timelineEvents',a);}}/>
+              <ProvenanceEditor key={`prov-${i}`} disabled={isSectionLocked('timeline')} value={ev?.provenance} collapsed={false} onToggle={()=>{}} onChange={(provenance)=>{const a=[...(content.timelineEvents||[])];a[i]={...a[i],provenance:normalizeProvenance(provenance)};updateContent('timelineEvents',a);}}/>
+              </React.Fragment>
             ))}
             {(content.timelineEvents||[]).length===0&&<div style={{fontFamily:'var(--font-m)',fontSize:10,color:'var(--dim)',padding:'8px 0'}}>No events yet — click + Event to add</div>}
           </div>
