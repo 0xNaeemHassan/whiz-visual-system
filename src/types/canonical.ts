@@ -50,6 +50,8 @@ export type ExportContract = {
   citationMode?: 'off' | 'compact' | 'full';
   version: string;
   locale: string;
+  presetId?: string;
+  effectsPolicy?: 'strict' | 'balanced' | 'full';
 };
 
 export type PluginManifest = {

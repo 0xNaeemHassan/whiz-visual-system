@@ -6,6 +6,33 @@ export const PERF_THRESHOLDS = {
   3: { initialRenderMs: 180, interactionLatencyMs: 45, exportMs: 1700, memoryMb: 340, layoutShift: 0.18 },
 };
 
+export const EXPORT_LAYOUT_COST_THRESHOLDS = {
+  1: { medium: 12, high: 20, critical: 28 },
+  2: { medium: 18, high: 28, critical: 40 },
+  3: { medium: 24, high: 36, critical: 50 },
+};
+
+function resolveLayoutThresholds(tier) {
+  return EXPORT_LAYOUT_COST_THRESHOLDS[tier] || EXPORT_LAYOUT_COST_THRESHOLDS[2];
+}
+
+export function getLayoutCostSeverity(score, { tier = 2 } = {}) {
+  const thresholds = resolveLayoutThresholds(tier);
+  if (score >= thresholds.critical) return 'critical';
+  if (score >= thresholds.high) return 'high';
+  if (score >= thresholds.medium) return 'medium';
+  return 'low';
+}
+
+export function getMaxImageDrawSize({ tier = 2, severity = 'low' } = {}) {
+  const limits = {
+    1: { low: 1600, medium: 1300, high: 1100, critical: 900 },
+    2: { low: 2000, medium: 1700, high: 1400, critical: 1200 },
+    3: { low: 2400, medium: 2100, high: 1800, critical: 1500 },
+  };
+  return limits[tier]?.[severity] || limits[2][severity] || limits[2].low;
+}
+
 const getMemoryMb = () => {
   const bytes = globalThis.performance?.memory?.usedJSHeapSize;
   return typeof bytes === 'number' ? +(bytes / (1024 * 1024)).toFixed(1) : null;

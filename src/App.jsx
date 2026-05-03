@@ -8,6 +8,9 @@ import { MOTION_PREFERENCE, useMotionPreference } from './hooks/useMotionPrefere
 import { DEFAULT_THEME } from './data/themes';
 import { UIEventProvider, useUIEventContext } from './state/UIEventContext';
 import { useIntl } from './i18n/IntlProvider';
+import { validateChannelProfileRegistry } from './domain/export/channelProfiles';
+
+validateChannelProfileRegistry();
 
 // K4: Code splitting — lazy load pages
 const Dashboard  = lazy(() => import('./pages/Dashboard'));
