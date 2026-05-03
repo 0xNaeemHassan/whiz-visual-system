@@ -33,6 +33,12 @@ const getPolicyForField = (policy = {}, fieldKey = '') => {
   const defaults = { strategy: 'ellipsis', maxLines: null, priority: 2 };
   return { ...defaults, ...(policy?.global || {}), ...(policy?.fields?.[fieldKey] || {}) };
 };
+const isSurfaceEnabled = (policy = {}, surfaceKey = '') => {
+  if (!surfaceKey) return true;
+  if (!policy?.surfaceBehavior || typeof policy.surfaceBehavior !== 'object') return true;
+  if (!(surfaceKey in policy.surfaceBehavior)) return true;
+  return Boolean(policy.surfaceBehavior[surfaceKey]);
+};
 
 const compressText = ({ text = '', budget, style = {}, baseSize, policy = {}, fieldKey = '' }) => {
   const actions = [];
@@ -98,14 +104,20 @@ export function applyOverflowPolicy({ family = 'core', aspectRatio, content = {}
   const title = compressText({ text: content.title, budget: budget.title, style: ov.title, baseSize: ov.title?.fontSize || baseTitleSize, policy, fieldKey: 'title' });
   const deck = compressText({ text: content.deck, budget: budget.deck, style: ov.deck, baseSize: ov.deck?.fontSize || 18, policy, fieldKey: 'deck' });
   const body = compressText({ text: content.body, budget: budget.body, style: ov.body, baseSize: ov.body?.fontSize || 16, policy, fieldKey: 'body' });
-  const normalizedStats = (content.stats || []).map((stat) => normalizeStat(stat, ov));
-  const normalizedHeaders = normalizeRow(content.tableHeaders || [], ov);
-  const normalizedRows = (content.tableRows || []).map((row) => normalizeRow(row, ov));
+  const normalizedStats = isSurfaceEnabled(policy, 'stats')
+    ? (content.stats || []).map((stat) => normalizeStat(stat, ov))
+    : (content.stats || []).map((stat) => ({ label: { text: stat.label || '', style: ov.statsLabel || {}, actions: [] }, value: { text: stat.value || '', style: ov.statsValue || {}, actions: [] } }));
+  const normalizedHeaders = isSurfaceEnabled(policy, 'tableHeaders') ? normalizeRow(content.tableHeaders || [], ov) : (content.tableHeaders || []).map((cell) => ({ text: String(cell ?? ''), style: ov.tableCell || {}, actions: [] }));
+  const normalizedRows = isSurfaceEnabled(policy, 'tableRows') ? (content.tableRows || []).map((row) => normalizeRow(row, ov)) : (content.tableRows || []).map((row) => row.map((cell) => ({ text: String(cell ?? ''), style: ov.tableCell || {}, actions: [] })));
   const footerStreamSource = (content.footerStreamText || '').trim()
     || (content.footerFields || []).join(' ▸ ')
     || '';
-  const footerStream = compressText({ text: footerStreamSource, budget: PRIMITIVE_BUDGETS.footerStream, style: ov.footerStream, baseSize: ov.footerStream?.fontSize || 10 });
-  const normalizedChips = normalizeChips(content.topicTag || '', content.chips || content.tags || [], ov);
+  const footerStream = isSurfaceEnabled(policy, 'footerStream')
+    ? compressText({ text: footerStreamSource, budget: PRIMITIVE_BUDGETS.footerStream, style: ov.footerStream, baseSize: ov.footerStream?.fontSize || 10 })
+    : { text: footerStreamSource, style: ov.footerStream || {}, actions: [] };
+  const normalizedChips = isSurfaceEnabled(policy, 'chips')
+    ? normalizeChips(content.topicTag || '', content.chips || content.tags || [], ov)
+    : (content.chips || content.tags || (content.topicTag || '').split(/\s+/).filter(Boolean)).map((chip) => ({ text: String(chip || ''), style: ov.tag || {}, actions: [] }));
 
   return {
     content: {

@@ -61,6 +61,21 @@ const LOCKED_NEUTRALS = ['#8b95a3', '#f4f5f7', '#d0d6de'];
 const DEFAULT_EFFECTS = { glow: true, noise: true, intenseAccent: false };
 
 const PROVENANCE_CONFIDENCE_OPTIONS = ['low', 'medium', 'high'];
+const TRUNCATION_STRATEGIES = ['ellipsis', 'clamp', 'wrap'];
+const TRUNCATION_FIELDS = ['title', 'deck', 'body'];
+const TRUNCATION_SURFACES = ['stats', 'tableHeaders', 'tableRows', 'chips', 'footerStream'];
+const DEFAULT_TRUNCATION_POLICY = {
+  global: { strategy: 'ellipsis', maxLines: 3, priority: 2 },
+  priorityOrder: [...TRUNCATION_FIELDS],
+  surfaceBehavior: {
+    stats: true,
+    tableHeaders: true,
+    tableRows: true,
+    chips: true,
+    footerStream: true,
+  },
+  strictModeSafe: false,
+};
 
 const createDefaultProvenance = () => ({
   source: '',
@@ -886,6 +901,73 @@ Apply these auto-corrections?`);
       </div>
 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}><div className="form-group" style={{marginBottom:0}}><label className="form-label">@X</label><input value={content.socialX||''} onChange={e=>updateContent('socialX',e.target.value)}/></div><div className="form-group" style={{marginBottom:0}}><label className="form-label">@Sub</label><input value={content.socialSub||''} onChange={e=>updateContent('socialSub',e.target.value)}/></div></div></div>
           <div className="editor-section"><div className="editor-section-title">Editorial</div><div className="form-group"><label className="form-label">Title</label><textarea id="field-title" value={content.title} onChange={e=>updateContent('title',e.target.value)} rows={2}/><div className={`char-count ${content.title.length>60?'warn':''} ${content.title.length>80?'over':''}`}>{content.title.length}/60</div>{renderFieldCompliance('field-title')}</div><div className="form-group"><label className="form-label">Deck</label><textarea value={content.deck} onChange={e=>updateContent('deck',e.target.value)} rows={2}/><div className={`char-count ${content.deck.length>120?'warn':''}`}>{content.deck.length}/120</div></div><div className="form-group"><label className="form-label">Body</label><textarea value={content.body} onChange={e=>updateContent('body',e.target.value)} rows={4}/><div className={`char-count ${content.body.length>400?'warn':''}`}>{content.body.length}/400</div></div></div>
+          <div className="editor-section">
+            <div className="editor-section-title">Truncation &amp; Overflow Policy</div>
+            {(() => {
+              const normalizedPolicy = normalizeTruncationPolicy(content?.truncationPolicy);
+              const policyPreview = applyOverflowPolicy({ family: selectedFrame?.tier > 2 ? 'extended' : 'core', aspectRatio, content, ov: overrides, policy: normalizedPolicy });
+              const updatePolicy = (nextPolicy) => updateContent('truncationPolicy', normalizeTruncationPolicy(nextPolicy), true);
+              const impactedFields = Object.entries(policyPreview?.actions || {}).flatMap(([field, actions]) => {
+                if (Array.isArray(actions) && actions.some((entry) => ['ellipsis', 'clamp-lines'].includes(entry))) return [field];
+                if (Array.isArray(actions) && actions.some((entry) => Array.isArray(entry) ? entry.some((a) => ['ellipsis', 'clamp-lines'].includes(a)) : false)) return [field];
+                if (Array.isArray(actions) && actions.some((entry) => Array.isArray(entry?.label) && entry.label.some((a) => ['ellipsis', 'clamp-lines'].includes(a)) || Array.isArray(entry?.value) && entry.value.some((a) => ['ellipsis', 'clamp-lines'].includes(a)))) return [field];
+                return [];
+              });
+              return (
+                <>
+                  <div className="form-group">
+                    <label className="form-label">Global Strategy</label>
+                    <select className="form-control" value={normalizedPolicy.global.strategy} onChange={e=>updatePolicy({ ...normalizedPolicy, global: { ...normalizedPolicy.global, strategy: e.target.value } })}>
+                      {TRUNCATION_STRATEGIES.map((strategy) => <option key={strategy} value={strategy}>{strategy}</option>)}
+                    </select>
+                  </div>
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+                    <div className="form-group" style={{marginBottom:0}}>
+                      <label className="form-label">Global Priority</label>
+                      <input type="number" min={1} max={5} value={normalizedPolicy.global.priority} onChange={e=>updatePolicy({ ...normalizedPolicy, global: { ...normalizedPolicy.global, priority: Number(e.target.value) || 2 } })} />
+                    </div>
+                    <div className="form-group" style={{marginBottom:0}}>
+                      <label className="form-label">Max Lines</label>
+                      <input type="number" min={1} max={8} value={normalizedPolicy.global.maxLines} onChange={e=>updatePolicy({ ...normalizedPolicy, global: { ...normalizedPolicy.global, maxLines: Number(e.target.value) || 3 } })} />
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Priority Field Order</label>
+                    <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                      {(normalizedPolicy.priorityOrder || TRUNCATION_FIELDS).map((field, idx) => <div key={`${field}-${idx}`} style={{display:'inline-flex',gap:4}}>
+                        <button className="btn btn-ghost btn-sm" onClick={() => {
+                          const next = [...(normalizedPolicy.priorityOrder || TRUNCATION_FIELDS)];
+                          if (idx > 0) [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+                          updatePolicy({ ...normalizedPolicy, priorityOrder: next });
+                        }}>↑ {idx + 1}. {field}</button>
+                        <button className="btn btn-ghost btn-sm" onClick={() => {
+                          const next = [...(normalizedPolicy.priorityOrder || TRUNCATION_FIELDS)];
+                          if (idx < next.length - 1) [next[idx + 1], next[idx]] = [next[idx], next[idx + 1]];
+                          updatePolicy({ ...normalizedPolicy, priorityOrder: next });
+                        }}>↓</button>
+                      </div>)}
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Per-Surface Behavior</label>
+                    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6}}>
+                      {TRUNCATION_SURFACES.map((surface) => <label key={surface} style={{display:'flex',justifyContent:'space-between',fontSize:11}}><span>{surface}</span><input type="checkbox" checked={Boolean(normalizedPolicy.surfaceBehavior?.[surface])} onChange={e=>updatePolicy({ ...normalizedPolicy, surfaceBehavior: { ...normalizedPolicy.surfaceBehavior, [surface]: e.target.checked } })} /></label>)}
+                    </div>
+                  </div>
+                  <div style={{display:'flex',gap:6,marginBottom:8}}>
+                    <button className="btn btn-secondary btn-sm" onClick={()=>updatePolicy(DEFAULT_TRUNCATION_POLICY)}>Reset to Default</button>
+                    <button className="btn btn-secondary btn-sm" onClick={()=>updatePolicy({ ...DEFAULT_TRUNCATION_POLICY, global: { strategy: 'clamp', maxLines: 2, priority: 1 }, strictModeSafe: true })}>Strict-Mode Safe Preset</button>
+                  </div>
+                  <div style={{fontSize:10,color:'var(--dim)',display:'grid',gap:4}}>
+                    {TRUNCATION_FIELDS.map((field) => <div key={field}><strong style={{color:'var(--muted)'}}>{field}:</strong> before “{String(content?.[field] || '').slice(0, 48)}” → after “{String(policyPreview?.content?.[field] || '').slice(0, 48)}”</div>)}
+                  </div>
+                  <div style={{marginTop:8,padding:'8px 10px',border:'1px solid var(--border)',borderRadius:8,fontSize:10,color:'var(--muted)'}}>
+                    Impact summary: {impactedFields.length ? `Clamped/truncated: ${impactedFields.join(', ')}` : 'No clamp/truncation actions triggered.'}
+                  </div>
+                </>
+              );
+            })()}
+          </div>
           <div className="editor-section">
             <div className="editor-section-title">Deep-Dive Scaffold</div>
             <div className="form-group"><label className="form-label">Thesis</label><textarea value={content.thesis||''} onChange={e=>updateContent('thesis',e.target.value)} rows={2} placeholder="What is the core investment/research claim?"/></div>
