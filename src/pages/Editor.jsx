@@ -414,7 +414,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const saveNameInputRef = useRef(null);
   const [pendingLoadSave, setPendingLoadSave] = useState(null);
   const [pendingSaveDiff, setPendingSaveDiff] = useState(null);
-  const[frameSearch,setFrameSearch]=useState('');const frameListRef=useRef(null);const[exporting,setExporting]=useState(false);const[preflightResult,setPreflightResult]=useState(null);const[preflightWarningAck,setPreflightWarningAck]=useState(false);const[activityLog,setActivityLog]=useState([]);const[trustPreflightModal,setTrustPreflightModal]=useState(null);
+  const[frameSearch,setFrameSearch]=useState('');const[layoutShiftSnapshot,setLayoutShiftSnapshot]=useState({ totalShift: 0, byContainer: {}, actions: {} });const[layoutShiftWarnings,setLayoutShiftWarnings]=useState([]);const layoutShiftObserverRef=useRef(null);const frameListRef=useRef(null);const[exporting,setExporting]=useState(false);const[preflightResult,setPreflightResult]=useState(null);const[preflightWarningAck,setPreflightWarningAck]=useState(false);const[activityLog,setActivityLog]=useState([]);const[trustPreflightModal,setTrustPreflightModal]=useState(null);
   const[showGrid,setShowGrid]=useState(false);const[editMode,setEditMode]=useState(false);
   const[selectedEl,setSelectedEl]=useState(null);const[rightTab,setRightTab]=useState('content');
   const [showHistoryDrawer, setShowHistoryDrawer] = useState(false);
@@ -707,6 +707,21 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   }), [activeRole]);
 
   const track = useMemo(() => createTelemetry({ frameId, layout: selectedFrame?.layout }), [frameId, selectedFrame?.layout]);
+  useEffect(() => {
+    const containers = [document.querySelector('.editor-left'), document.querySelector('.editor-right'), document.querySelector('.frame-wrap')].filter(Boolean);
+    const observer = createLayoutShiftObserver({
+      containers,
+      report: (snapshot) => {
+        setLayoutShiftSnapshot(snapshot);
+        const diagnostics = reportLayoutShiftDiagnostics(snapshot, { tier: selectedFrame?.tier || 2 });
+        setLayoutShiftWarnings(diagnostics.warnings);
+      },
+    });
+    layoutShiftObserverRef.current = observer;
+    observer.start();
+    if (document?.fonts?.ready) document.fonts.ready.then(() => observer.markAction(observer.actionKeys.fontLoad, () => {}));
+    return () => observer.stop();
+  }, [selectedFrame?.tier]);
   useEffect(() => {
     const layoutBase = createTemplateForLayout(selectedFrame.layout);
     const frameTemplate = getFrameTemplate(frameId, layoutBase);
@@ -1028,7 +1043,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     setWhizEffects(prev => ({ ...prev, [effectKey]: nextValue }));
   };
   useEffect(()=>{if(!isActive)return;const t=setTimeout(()=>{try{localStorage.setItem('whiz-autosave',JSON.stringify({frameId,theme,content,overrides,aspectRatio,bgGradient,patternOverlay,savedAt:Date.now()}));}catch(e){}},3000);return()=>clearTimeout(t);},[isActive,content,overrides,frameId,theme,aspectRatio,bgGradient,patternOverlay]);
-  const applyTheme=t=>{setTheme(t);setActiveTheme(t);};
+  const applyTheme=t=>layoutShiftObserverRef.current?.markAction('themeSwitch',()=>{setTheme(t);setActiveTheme(t);});
   const applyTemplate=t=>{
     const layoutBase = createTemplateForLayout(selectedFrame.layout);
     const merged = { ...layoutBase, ...t.content };
@@ -1229,11 +1244,15 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
         <strong>{validationIssueCount===0?'Ready to ship':'Validation needed'}</strong>
         <span>{primaryValidationIssue ? primaryValidationIssue : 'No blocking issues detected.'}</span>
       </div>
+      <div className="mobile-validation-chip" style={{marginTop:6}}>
+        <strong>Layout Shift · {layoutShiftSnapshot.totalShift.toFixed(4)}</strong>
+        <span>{layoutShiftWarnings[0] || 'Within CLS budget for current tier.'}</span>
+      </div>
       {!isExpertMode && <div className="editor-section" style={{marginBottom:8}}><div className="editor-section-title">Guided Sequence</div><div style={{fontSize:10,color:'var(--muted)',marginBottom:8}}>Follow these steps in order. Advanced controls stay collapsed until you reach their phase.</div><div style={{display:'grid',gridTemplateColumns:'repeat(5,minmax(0,1fr))',gap:6}}>{noviceSteps.map((step,idx)=><button key={step.id} className={`btn btn-ghost btn-sm ${noviceStep===step.id?'active':''}`} onClick={()=>setNoviceStep(step.id)} title={step.why} style={{display:'flex',flexDirection:'column',alignItems:'flex-start',gap:2,padding:'6px 8px'}}><span style={{fontFamily:'var(--font-m)',fontSize:9,color:'var(--dim)'}}>{idx+1}</span><span>{step.label}</span></button>)}</div><div style={{fontSize:10,color:'var(--dim)',marginTop:6}}>{noviceSteps.find((step)=>step.id===noviceStep)?.hint}</div></div>}
       {/* LEFT */}
       <div className={`editor-left ${mobileTab==='frame'?'mob-active':''}`}>
         <div className="editor-panel-header"><span>Frame &amp; Theme</span><span style={{color:'var(--theme-accent)',fontWeight:700}}>#{String(frameId).padStart(2,'0')}</span></div>
-        <div className="editor-section"><div className="editor-section-title">Template</div><input className="frame-search-mini" placeholder="Search frames..." onChange={e=>setFrameSearch(e.target.value)} value={frameSearch}/><div style={{display:'flex',flexDirection:'column',gap:4,maxHeight:260,overflowY:'auto'}}>{filteredFrames.map(f=>(<div key={f.id} onClick={()=>setFrameId(f.id)} style={{padding:'7px 10px',borderRadius:'var(--r)',cursor:'pointer',background:frameId===f.id?`color-mix(in srgb,${theme.accent} 12%,transparent)`:'transparent',border:`1px solid ${frameId===f.id?theme.accent:'transparent'}`,transition:'all 0.15s'}}><div style={{display:'flex',alignItems:'center',gap:6}}><span style={{fontFamily:'var(--font-m)',fontSize:9,color:'var(--dim)',width:22}}>{String(f.id).padStart(2,'0')}</span><SemanticChip kind="category" value={`tier-${f.tier}`} style={{fontSize:8,padding:'1px 5px'}}>T{f.tier}</SemanticChip><span style={{fontSize:12,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{f.name}</span><SemanticChip kind="category" value={f.layout} style={{fontSize:8,padding:'1px 5px'}}>{f.layout}</SemanticChip></div></div>))}</div></div>
+        <div className="editor-section"><div className="editor-section-title">Template</div><input className="frame-search-mini" placeholder="Search frames..." onChange={e=>setFrameSearch(e.target.value)} value={frameSearch}/><div style={{display:'flex',flexDirection:'column',gap:4,maxHeight:260,overflowY:'auto'}}>{filteredFrames.map(f=>(<div key={f.id} onClick={()=>layoutShiftObserverRef.current?.markAction('layoutSwitch',()=>setFrameId(f.id))} style={{padding:'7px 10px',borderRadius:'var(--r)',cursor:'pointer',background:frameId===f.id?`color-mix(in srgb,${theme.accent} 12%,transparent)`:'transparent',border:`1px solid ${frameId===f.id?theme.accent:'transparent'}`,transition:'all 0.15s'}}><div style={{display:'flex',alignItems:'center',gap:6}}><span style={{fontFamily:'var(--font-m)',fontSize:9,color:'var(--dim)',width:22}}>{String(f.id).padStart(2,'0')}</span><SemanticChip kind="category" value={`tier-${f.tier}`} style={{fontSize:8,padding:'1px 5px'}}>T{f.tier}</SemanticChip><span style={{fontSize:12,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{f.name}</span><SemanticChip kind="category" value={f.layout} style={{fontSize:8,padding:'1px 5px'}}>{f.layout}</SemanticChip></div></div>))}</div></div>
         <div className="editor-section"><div className="editor-section-title">Color Theme</div><div className="theme-grid">{THEMES.map(t=>(<div key={t.id} className={`theme-btn ${theme.id===t.id?'active':''}`} style={{borderColor:theme.id===t.id?t.accent:'var(--border)'}} onClick={()=>applyTheme(t)}><span className="theme-dot" style={{background:t.accent}}/><span className="theme-name" style={{color:theme.id===t.id?t.accent:'var(--muted)'}}>{t.name}</span></div>))}</div></div>
         <div className="editor-section accessibility-settings">
           <div className="editor-section-title">Accessibility</div>
@@ -1518,15 +1537,17 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
               <button className="btn btn-secondary btn-sm" style={{fontSize:9,padding:'2px 8px'}} disabled={isSectionLocked('timeline')} onClick={()=>updateContent('timelineEvents',[...(content.timelineEvents||[]),{date:'',label:'',sub:'',provenance:createDefaultProvenance()}])}>+ Event</button>
             </div>
             {(content.timelineEvents||[]).map((ev,i)=>(
-              <div key={i} style={{display:'grid',gridTemplateColumns:'80px 1fr 1fr auto auto auto',gap:4,marginBottom:4,alignItems:'center'}}>
-                <input disabled={isSectionLocked('timeline')} value={ev.date||''} placeholder="Date" style={{fontSize:10,padding:'4px 6px'}} onChange={e=>{const raw=e.target.value;const normalized=normalizeDateInput(raw);const a=[...(content.timelineEvents||[])];a[i]={...a[i],date:normalized.valid?normalized.displayDate:raw};updateContent('timelineEvents',a);if(raw&&!normalized.valid){showToast(`Invalid timeline date. ${normalized.suggestions.join(' ')}`,'warning');}}}/>
-                <input disabled={isSectionLocked('timeline')} value={ev.label||''} placeholder="Event" style={{fontSize:10,padding:'4px 6px'}} onChange={e=>{const a=[...(content.timelineEvents||[])];a[i]={...a[i],label:e.target.value};updateContent('timelineEvents',a);}}/>
-                <input disabled={isSectionLocked('timeline')} value={ev.sub||''} placeholder="Note" style={{fontSize:10,padding:'4px 6px'}} onChange={e=>{const a=[...(content.timelineEvents||[])];a[i]={...a[i],sub:e.target.value};updateContent('timelineEvents',a);}}/>
-                <SemanticChip tone={isPublishReadyProvenance(ev?.provenance)?'positive':'warning'}>{isPublishReadyProvenance(ev?.provenance)?'Complete':'Missing'}</SemanticChip>
-                <SemanticChip tone={getConfidenceMeta(ev?.provenance).tone}>{getConfidenceMeta(ev?.provenance).icon} {getConfidenceMeta(ev?.provenance).label}</SemanticChip>
-                <button className="btn btn-danger btn-sm" style={{padding:'0 6px',height:28}} disabled={isSectionLocked('timeline')} onClick={()=>updateContent('timelineEvents',(content.timelineEvents||[]).filter((_,r)=>r!==i))}>✕</button>
+              <div key={i}>
+                <div style={{display:'grid',gridTemplateColumns:'80px 1fr 1fr auto auto auto',gap:4,marginBottom:4,alignItems:'center'}}>
+                  <input disabled={isSectionLocked('timeline')} value={ev.date||''} placeholder="Date" style={{fontSize:10,padding:'4px 6px'}} onChange={e=>{const raw=e.target.value;const normalized=normalizeDateInput(raw);const a=[...(content.timelineEvents||[])];a[i]={...a[i],date:normalized.valid?normalized.displayDate:raw};updateContent('timelineEvents',a);if(raw&&!normalized.valid){showToast(`Invalid timeline date. ${normalized.suggestions.join(' ')}`,'warning');}}}/>
+                  <input disabled={isSectionLocked('timeline')} value={ev.label||''} placeholder="Event" style={{fontSize:10,padding:'4px 6px'}} onChange={e=>{const a=[...(content.timelineEvents||[])];a[i]={...a[i],label:e.target.value};updateContent('timelineEvents',a);}}/>
+                  <input disabled={isSectionLocked('timeline')} value={ev.sub||''} placeholder="Note" style={{fontSize:10,padding:'4px 6px'}} onChange={e=>{const a=[...(content.timelineEvents||[])];a[i]={...a[i],sub:e.target.value};updateContent('timelineEvents',a);}}/>
+                  <SemanticChip tone={isPublishReadyProvenance(ev?.provenance)?'positive':'warning'}>{isPublishReadyProvenance(ev?.provenance)?'Complete':'Missing'}</SemanticChip>
+                  <SemanticChip tone={getConfidenceMeta(ev?.provenance).tone}>{getConfidenceMeta(ev?.provenance).icon} {getConfidenceMeta(ev?.provenance).label}</SemanticChip>
+                  <button className="btn btn-danger btn-sm" style={{padding:'0 6px',height:28}} disabled={isSectionLocked('timeline')} onClick={()=>updateContent('timelineEvents',(content.timelineEvents||[]).filter((_,r)=>r!==i))}>✕</button>
+                </div>
+                <ProvenanceEditor disabled={isSectionLocked('timeline')} value={ev?.provenance} collapsed={false} onToggle={()=>{}} onChange={(provenance)=>{const a=[...(content.timelineEvents||[])];a[i]={...a[i],provenance:normalizeProvenance(provenance)};updateContent('timelineEvents',a);}}/>
               </div>
-              <ProvenanceEditor disabled={isSectionLocked('timeline')} value={ev?.provenance} collapsed={false} onToggle={()=>{}} onChange={(provenance)=>{const a=[...(content.timelineEvents||[])];a[i]={...a[i],provenance:normalizeProvenance(provenance)};updateContent('timelineEvents',a);}}/>
             ))}
             {(content.timelineEvents||[]).length===0&&<div style={{fontFamily:'var(--font-m)',fontSize:10,color:'var(--dim)',padding:'8px 0'}}>No events yet — click + Event to add</div>}
           </div>

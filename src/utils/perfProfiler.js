@@ -1,9 +1,9 @@
 const DEV = typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.DEV;
 
 export const PERF_THRESHOLDS = {
-  1: { initialRenderMs: 100, interactionLatencyMs: 24, exportMs: 800, memoryMb: 180 },
-  2: { initialRenderMs: 140, interactionLatencyMs: 32, exportMs: 1200, memoryMb: 260 },
-  3: { initialRenderMs: 180, interactionLatencyMs: 45, exportMs: 1700, memoryMb: 340 },
+  1: { initialRenderMs: 100, interactionLatencyMs: 24, exportMs: 800, memoryMb: 180, layoutShift: 0.08 },
+  2: { initialRenderMs: 140, interactionLatencyMs: 32, exportMs: 1200, memoryMb: 260, layoutShift: 0.12 },
+  3: { initialRenderMs: 180, interactionLatencyMs: 45, exportMs: 1700, memoryMb: 340, layoutShift: 0.18 },
 };
 
 export const EXPORT_LAYOUT_COST_THRESHOLDS = {
