@@ -31,6 +31,7 @@ export function normalizeEditorImport(raw = {}) {
 
 export function normalizePlannerIssue(raw = {}) {
   const issue = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  const outcomes = issue.outcomes && typeof issue.outcomes === 'object' && !Array.isArray(issue.outcomes) ? issue.outcomes : {};
   return {
     ...issue,
     metricSource: String(issue.metricSource || '').trim(),

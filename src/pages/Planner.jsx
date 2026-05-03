@@ -520,6 +520,9 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
   const arcModel = useMemo(() => buildNarrativeArcModel(issues), [issues]);
   const nextArcSuggestion = useMemo(() => suggestNextArcStep(issues), [issues]);
 
+  const outcomeWindows = useMemo(() => aggregateOutcomeWindows(issues), [issues]);
+  const recommendationDeltas = useMemo(() => computeRecommendationDeltas(issues), [issues]);
+
   // F10: Open in Editor with frame/theme pre-loaded
 
   const frameSuggestions = useMemo(() => rankFrameCandidates({
