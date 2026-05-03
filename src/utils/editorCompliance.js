@@ -1,6 +1,7 @@
 import { TICKER_CONTRACT } from '../domain/tickerContract.js';
 import { SPINE_DESIGN_TOKENS } from '../domain/spineDesignTokens.js';
 import { FOOTER_FIELD_ORDER, REQUIRED_FOOTER_FIELDS, resolveFooterData } from '../domain/frameSchema.js';
+import { validateNarrativeIntent } from '../domain/services/narrativeIntentService.js';
 
 export const TYPE_SCALE = [10, 12, 14, 18, 24, 36, 56, 84];
 export const SPACING_TOKENS = Object.freeze({
@@ -308,6 +309,16 @@ export function getComplianceIssues({ overrides, content }) {
   }
 
   return issues;
+}
+
+
+export function getEditorValidationReport({ overrides, content }) {
+  const complianceIssues = getComplianceIssues({ overrides, content });
+  const narrativeIntent = validateNarrativeIntent(content);
+  return {
+    warnings: [...complianceIssues, ...narrativeIntent.warnings],
+    errors: [...narrativeIntent.errors],
+  };
 }
 
 export function getBrandScore(input) {

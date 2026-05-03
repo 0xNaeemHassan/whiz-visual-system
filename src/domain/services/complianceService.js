@@ -1,5 +1,5 @@
 import {
-  nearestTypeScale, getComplianceIssues, getBrandScore, SPACING_TOKENS, TABLE_STANDARD_TOKENS,
+  nearestTypeScale, getComplianceIssues, getBrandScore, getEditorValidationReport, SPACING_TOKENS, TABLE_STANDARD_TOKENS,
 } from '../../utils/editorCompliance';
 
 export function computeCompliance({ overrides, content }) {
@@ -27,4 +27,8 @@ export function strictPolishOverrides(prev) {
       fontSizePx: TABLE_STANDARD_TOKENS.bodyFontSizePx,
     },
   };
+}
+
+export function computeEditorValidation({ overrides, content }) {
+  return getEditorValidationReport({ overrides, content });
 }

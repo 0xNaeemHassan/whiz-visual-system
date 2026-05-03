@@ -1,5 +1,6 @@
 import { FRAME_CONTENT_SCHEMA, EDITOR_STATE_SCHEMA } from './mappings';
 import { normalizeContentTaxonomy } from '../../utils/contentNormalization';
+import { normalizeDateInput, normalizeTimelineEvents } from '../services/dateNormalizationService';
 
 function toString(v, fallback = '') { return v == null ? fallback : String(v); }
 function toNumber(v, fallback = 0) { const n = Number(v); return Number.isFinite(n) ? n : fallback; }
@@ -16,7 +17,7 @@ function coerce(type, value) {
     case 'statArray': return Array.isArray(value) ? value.map((s) => ({ label: toString(s?.label), value: toString(s?.value) })) : [];
     case 'tableRows': return Array.isArray(value) ? value.map((row) => toObject(row, {})) : [];
     case 'gridItems': return Array.isArray(value) ? value.map((it) => ({ title: toString(it?.title), value: toString(it?.value), sub: toString(it?.sub) })) : [];
-    case 'timelineEvents': return Array.isArray(value) ? value.map((it) => ({ date: toString(it?.date), label: toString(it?.label), sub: toString(it?.sub) })) : [];
+    case 'timelineEvents': return normalizeTimelineEvents(value);
     default: return value;
   }
 }
@@ -34,6 +35,8 @@ function normalizeBySchema(raw, schema) {
 
 export function normalizeFrameContent(raw, defaults = {}) {
   const merged = { ...defaults, ...normalizeBySchema(raw, FRAME_CONTENT_SCHEMA) };
+  const normalizedDate = normalizeDateInput(merged.date);
+  if (normalizedDate.valid) merged.date = normalizedDate.displayDate;
   return normalizeContentTaxonomy(merged).content;
 }
 
