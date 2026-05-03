@@ -6,12 +6,14 @@ import { TICKER_CONTRACT, normalizeTickerSpeed } from '../../domain/tickerContra
 import { SPINE_DESIGN_TOKENS } from '../../domain/spineDesignTokens';
 import { FrameFooter } from './FrameFooter';
 import SemanticChip from '../SemanticChip';
+import { resolveRiskAccent } from '../../domain/riskAccentPolicy';
 
 export function FrameShell({ frameRef, frame, theme, content, editMode, selectedEl, onSelectEl, styleOverrides, showGrid, aspectRatio, uploadedImages, bgGradient, patternOverlay, strictWhizMode = false, whizEffects = { glow: true, noise: true, intenseAccent: false } }) {
   const ov = styleOverrides || {};
   const sel = (key, e) => { if (editMode) { e?.stopPropagation(); onSelectEl?.(selectedEl === key ? null : key); } };
   const ec = (key) => editMode ? `wf-editable${selectedEl === key ? ' wf-sel' : ''}` : '';
-  const accentColor = ov.accent?.color || theme.accent;
+  const accentResolution = resolveRiskAccent({ frameId: frame?.id, theme, overrides: ov });
+  const accentColor = accentResolution.accent;
   const noiseEnabled = !strictWhizMode && whizEffects?.noise !== false;
   const glowEnabled = !strictWhizMode && whizEffects?.glow !== false;
   const intenseAccentEnabled = !strictWhizMode && whizEffects?.intenseAccent === true;
