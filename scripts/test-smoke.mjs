@@ -102,3 +102,25 @@ assert.deepEqual(editedIssue.metricProvenance, [{ source: 'glassnode', method: '
 
 console.log('Smoke tests passed');
 import './test-editor-mutations.mjs';
+import { generateExportSummary, validateSummaryCompleteness } from '../src/domain/export/summaryGenerator.js';
+
+const tableSummary = generateExportSummary({
+  frame: { id: 20, layout: 'table' },
+  content: {
+    title: 'Table frame title',
+    thesis: 'This is the thesis',
+    stats: [{ label: 'TVL', value: '$1B', provenance: { date: '2026-05-01' } }],
+    tableRows: [{ col1: 'A', provenance: { date: '2026-04-30' } }],
+  },
+  complianceIssues: ['Missing source'],
+  validationWarnings: [],
+});
+assert.equal(validateSummaryCompleteness(tableSummary), true, 'Table summary should be complete');
+
+const bignumSummary = generateExportSummary({
+  frame: { id: 8, layout: 'bignum' },
+  content: { title: 'Big number', deck: 'Fallback thesis', bigLabel: 'Users', bigNumber: '100K', date: '2026-05-02' },
+  complianceIssues: [],
+  validationWarnings: ['Warning'],
+});
+assert.equal(validateSummaryCompleteness(bignumSummary), true, 'Bignum summary should be complete');
