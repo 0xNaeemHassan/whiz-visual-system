@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "updatedAt": "2026-05-03",
+  "tolerancePercent": 2,
+  "build": {
+    "maxDurationMs": 20000
+  },
+  "bundle": {
+    "maxTotalBytes": 700000,
+    "maxJsBytes": 500000,
+    "maxCssBytes": 150000
+  }
+}
