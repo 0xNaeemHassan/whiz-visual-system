@@ -123,6 +123,9 @@ function ProvenanceEditor({ value, onChange, collapsed, onToggle, disabled }) {
 }
 const ELEMENTS = [{key:'frame',label:'Background',icon:'\u25A1'},{key:'spine',label:'Spine',icon:'|'},{key:'ticker',label:'Ticker',icon:'\u2014'},{key:'title',label:'Title',icon:'T'},{key:'deck',label:'Deck',icon:'D'},{key:'tag',label:'Tag',icon:'#'},{key:'body',label:'Body',icon:'B'},{key:'stats',label:'Stats',icon:'S'},{key:'bignum',label:'Big #',icon:'N'},{key:'footer',label:'Footer',icon:'F'},{key:'accent',label:'Accent',icon:'\u25CF'}];
 const WORKFLOW_PHASES=['draft','review','publish-ready'];
+const REVIEW_STATES = ['draft', 'in_review', 'approved', 'published'];
+const SIGNOFF_CHECKLIST = ['factsVerified', 'styleChecked', 'brandSafe'];
+const createEmptySignoff = () => ({ reviewerName: '', reviewerId: '', timestamp: '', checklist: { factsVerified: false, styleChecked: false, brandSafe: false } });
 function ColorRow({label,value,defaultVal,onChange}){const col=value||defaultVal;return(<div className="prop-color-row"><span className="prop-label-text">{label}</span><div className="prop-color-swatch" style={{background:col,position:'relative'}}><input type="color" value={col} onChange={e=>onChange(e.target.value)} aria-label={`${label} color`} style={{position:'absolute',inset:0,opacity:0,cursor:'pointer',width:'100%',height:'100%'}}/></div><input type="text" className="prop-hex" value={col} onChange={e=>{const v=e.target.value;if(/^#[0-9A-Fa-f]{0,6}$/.test(v)||v==='')onChange(v||null);}}/><button className="btn btn-ghost btn-sm editor-btn-reset" onClick={()=>onChange(null)} title="Reset">\u21BA</button></div>);}
 function SliderRow({label,value,min,max,step,unit,onChange}){return(<div className="editor-panel-row"><div className="editor-panel-row-head"><span className="prop-label-text">{label}</span><span className="size-val">{value}{unit}</span></div><input type="range" min={min} max={max} step={step||1} value={value} onChange={e=>onChange(Number(e.target.value))} aria-label={label}/></div>);}
 function WeightRow({label,value,weights,onChange}){return(<div className="editor-panel-row"><div className="prop-label-text editor-panel-label">{label}</div><div className="ww-grid">{weights.map(w=>(<button key={w} className={`ww-btn ${value===w?'on':''}`} onClick={()=>onChange(w)} style={{fontWeight:w}}>{w}</button>))}</div></div>);}
@@ -315,6 +318,10 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const[whizEffects,setWhizEffects]=useLocalStorage('whiz-effects',DEFAULT_EFFECTS);
   const [workflowPhase,setWorkflowPhase]=useState('draft');
   const [phaseChecklist,setPhaseChecklist]=useState({draftAt:Date.now(),reviewAt:null,publishReadyAt:null,lastTransitionAt:Date.now()});
+  const [collaborationMode, setCollaborationMode] = useLocalStorage('whiz-collaboration-mode', 'collaborative');
+  const [requireSignoffInSolo, setRequireSignoffInSolo] = useLocalStorage('whiz-require-signoff-solo', false);
+  const [reviewState, setReviewState] = useState('draft');
+  const [signoffRecord, setSignoffRecord] = useState(createEmptySignoff());
   const [sectionLocks, setSectionLocks] = useLocalStorage('whiz-section-locks', {});
   const frameRef=useRef(null);const centerRef=useRef(null);
   const { registerHandlers } = useUIEventContext();
@@ -661,9 +668,9 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     });
   }, [isActive, registerHandlers]);
   useEffect(()=>{if(editMode||selectedEl)setRightTab('design');},[editMode,selectedEl]);
-  const buildSave=()=>buildFrameSave({frameId,theme,content,overrides,aspectRatio,bgGradient,patternOverlay,workflowPhase,phaseChecklist,sectionLocks});
+  const buildSave=()=>buildFrameSave({frameId,theme,content:{...content,reviewState},overrides,aspectRatio,bgGradient,patternOverlay,workflowPhase,phaseChecklist,sectionLocks,signoffRecord});
   const doSave=()=>{const n=saveName.trim()||`${content.topicTag} \u2014 ${new Date().toLocaleDateString()}`;setSaves(p=>[...p,{id:`s_${Date.now()}`,title:n,...buildSave()}]);setShowSaveModal(false);setSaveName('');showToast(`Saved "${n}"`);};
-  const loadSave=s=>{setFrameId(s.frameId);setTheme(s.theme);resetContent(s.content);setWorkflowPhase(WORKFLOW_PHASES.includes(s.workflowPhase)?s.workflowPhase:'draft');setPhaseChecklist(s.phaseChecklist||{draftAt:s.savedAt||Date.now(),reviewAt:null,publishReadyAt:null,lastTransitionAt:s.savedAt||Date.now()});if(s.overrides){const validation=validateEditorState({frameId:s.frameId,theme:s.theme,content:s.content||{},overrides:s.overrides},{strictMode:Boolean(strictMode),sanitizeStrictStyle:true});const next=validation.sanitizedOverrides||s.overrides;setOverrides(next);if(strictMode&&validation.codes.includes('STRICT_STYLE_OVERRIDE_BLOCKED')){showToast('Loaded with strict-style sanitization.','warning');}}if(s.sectionLocks&&typeof s.sectionLocks==='object')setSectionLocks(s.sectionLocks);s.aspectRatio&&setAspectRatio(s.aspectRatio);s.bgGradient&&updateMedia(prev=>({...prev,bgGradient:s.bgGradient}));s.patternOverlay&&updateMedia(prev=>({...prev,patternOverlay:s.patternOverlay}));setShowLoadModal(false);setPendingLoadSave(null);setPendingSaveDiff(null);showToast(`Loaded`);};
+  const loadSave=s=>{setFrameId(s.frameId);setTheme(s.theme);resetContent(s.content);setReviewState(REVIEW_STATES.includes(s?.content?.reviewState) ? s.content.reviewState : 'draft');setSignoffRecord(s?.signoffRecord || createEmptySignoff());setWorkflowPhase(WORKFLOW_PHASES.includes(s.workflowPhase)?s.workflowPhase:'draft');setPhaseChecklist(s.phaseChecklist||{draftAt:s.savedAt||Date.now(),reviewAt:null,publishReadyAt:null,lastTransitionAt:s.savedAt||Date.now()});if(s.overrides){const validation=validateEditorState({frameId:s.frameId,theme:s.theme,content:s.content||{},overrides:s.overrides},{strictMode:Boolean(strictMode),sanitizeStrictStyle:true});const next=validation.sanitizedOverrides||s.overrides;setOverrides(next);if(strictMode&&validation.codes.includes('STRICT_STYLE_OVERRIDE_BLOCKED')){showToast('Loaded with strict-style sanitization.','warning');}}if(s.sectionLocks&&typeof s.sectionLocks==='object')setSectionLocks(s.sectionLocks);s.aspectRatio&&setAspectRatio(s.aspectRatio);s.bgGradient&&updateMedia(prev=>({...prev,bgGradient:s.bgGradient}));s.patternOverlay&&updateMedia(prev=>({...prev,patternOverlay:s.patternOverlay}));setShowLoadModal(false);setPendingLoadSave(null);setPendingSaveDiff(null);showToast(`Loaded`);};
   const openSaveDiffModal = (save) => {
     const currentState = { frameId, theme, content, overrides, workflowPhase, sectionLocks };
     const diff = buildSaveDiff({ currentState, saveState: save });
@@ -710,9 +717,9 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
 
   const downloadFile=(name,blob)=>{const u=URL.createObjectURL(blob);const a=document.createElement('a');a.href=u;a.download=name;a.click();URL.revokeObjectURL(u);};
   const buildExportSummary=(normalizedContent)=>generateExportSummary({frame:activeFrame,content:{...content,...normalizedContent},complianceIssues,validationWarnings:editorValidation.warnings});
-  const exportSummarySidecars=(baseName,summary,imageFileName)=>{const payload={...summary,imageFileName};downloadFile(`${baseName}.summary.json`,new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));downloadFile(`${baseName}.summary.txt`,new Blob([buildSummaryText(payload)],{type:'text/plain'}));};
+  const exportSummarySidecars=(baseName,summary,imageFileName)=>{const payload={...summary,imageFileName};downloadFile(`${baseName}.summary.json`,new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));downloadFile(`${baseName}.summary.txt`,new Blob([buildSummaryText(payload)],{type:'text/plain'}));downloadFile(`${baseName}.manifest.signoff.json`,new Blob([JSON.stringify({reviewState,signoffRecord,savedAt:new Date().toISOString()},null,2)],{type:'application/json'}));};
 
-  const ensureActionAllowed=(action)=>{if(action==='publish'&&workflowPhase!=='publish-ready'){showToast('Publish actions require publish-ready phase.','error');return false;}if(action==='export'&&workflowPhase==='draft'){showToast('Export actions require review or publish-ready phase.','error');return false;}if(!stateValidation.valid){showToast(`Blocked by validation: ${stateValidation.codes.join(', ')}`,'error');return false;}if(action==='publish'&&complianceIssues.length){showToast(`Blocked by compliance: ${complianceIssues[0]}`,'error');return false;}return true;};
+  const ensureActionAllowed=(action)=>{if(action==='publish'&&workflowPhase!=='publish-ready'){showToast('Publish actions require publish-ready phase.','error');return false;}if(action==='publish'){const requiresApproval=collaborationMode==='collaborative'||requireSignoffInSolo;if(requiresApproval&&reviewState!=='approved'){showToast('Publish blocked: approval sign-off is required first.','error');return false;}}if(action==='export'&&workflowPhase==='draft'){showToast('Export actions require review or publish-ready phase.','error');return false;}if(!stateValidation.valid){showToast(`Blocked by validation: ${stateValidation.codes.join(', ')}`,'error');return false;}if(action==='publish'&&complianceIssues.length){showToast(`Blocked by compliance: ${complianceIssues[0]}`,'error');return false;}return true;};
 
 
   const validateExportTypography=()=>{const textValidation=validateEditorTextMinimum({overrides,content,minFontSizePx:12});if(!textValidation.valid){const msg=textValidation.violations.map(v=>`${v.region} ${v.fontSize}px`).join(', ');showToast(`Export blocked: minimum text size is 12px (${msg}).`,'error');return false;}return true;};
@@ -1044,7 +1051,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
             </div>
             {strictWhizMode && <div style={{fontSize:10,color:'var(--dim)',marginTop:6}}>Effects are disabled in Strict Whiz Mode.</div>}
           </div>}
-          {(isExpertMode || ['populate', 'validate', 'export'].includes(noviceStep)) && <div className="editor-section"><div className="editor-section-title">Metadata</div><div style={{fontSize:10,color:'var(--muted)',marginBottom:6}}>Why this matters: metadata powers discoverability, auditability, and export contracts.</div><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>{[['Issue #','issueNum'],['Date','date'],['Desk','desk'],['Volume','volume']].map(([l,k])=>(<div key={k} className="form-group" style={{marginBottom:0}}><label className="form-label">{l}</label><input id={`field-${k}`} value={content[k]} onChange={e=>updateContent(k,e.target.value)}/></div>))}</div>{renderFieldCompliance('field-issueNum')}<div className="form-group" style={{marginTop:8}}><label className="form-label">Topic Tag</label><input id="field-topicTag" value={content.topicTag} onChange={e=>{const next=normalizeContentTaxonomy({...content,topicTag:e.target.value});updateContent('topicTag',next.content.topicTag);updateContent('slug',next.content.slug);if(next.compliance.autoCorrected.length)showToast('Topic/slug normalized on input.','info');if(next.compliance.hasInvalid)showToast(next.compliance.invalid.join(' '),'error');}}/>{renderFieldCompliance('field-topicTag')}</div>
+          {(isExpertMode || ['populate', 'validate', 'export'].includes(noviceStep)) && <><div className="editor-section"><div className="editor-section-title">Metadata</div><div style={{fontSize:10,color:'var(--muted)',marginBottom:6}}>Why this matters: metadata powers discoverability, auditability, and export contracts.</div><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>{[['Issue #','issueNum'],['Date','date'],['Desk','desk'],['Volume','volume']].map(([l,k])=>(<div key={k} className="form-group" style={{marginBottom:0}}><label className="form-label">{l}</label><input id={`field-${k}`} value={content[k]} onChange={e=>updateContent(k,e.target.value)}/></div>))}</div>{renderFieldCompliance('field-issueNum')}<div className="form-group" style={{marginTop:8}}><label className="form-label">Topic Tag</label><input id="field-topicTag" value={content.topicTag} onChange={e=>{const next=normalizeContentTaxonomy({...content,topicTag:e.target.value});updateContent('topicTag',next.content.topicTag);updateContent('slug',next.content.slug);if(next.compliance.autoCorrected.length)showToast('Topic/slug normalized on input.','info');if(next.compliance.hasInvalid)showToast(next.compliance.invalid.join(' '),'error');}}/>{renderFieldCompliance('field-topicTag')}</div>
       <div className="form-group">
         <label className="form-label">Ticker Speed (seconds) — {normalizeTickerSpeed(content.tickerSpeed)}s</label>
         <input id="field-tickerSpeed" type="range" min={TICKER_CONTRACT.speed.min} max={TICKER_CONTRACT.speed.max} step={TICKER_CONTRACT.speed.step} value={normalizeTickerSpeed(content.tickerSpeed)}
@@ -1062,6 +1069,41 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
           <option value="SCHEDULED">SCHEDULED</option>
           <option value="EMBARGOED">EMBARGOED</option>
         </select>
+      </div>
+      <div className="form-group">
+        <label className="form-label">Collaboration Mode</label>
+        <select className="form-control" value={collaborationMode} onChange={e=>setCollaborationMode(e.target.value)}>
+          <option value="collaborative">Collaborative (approval required)</option>
+          <option value="solo">Solo</option>
+        </select>
+        {collaborationMode === 'solo' && <label style={{display:'flex',gap:6,alignItems:'center',fontSize:11,color:'var(--muted)',marginTop:4}}><input type="checkbox" checked={Boolean(requireSignoffInSolo)} onChange={e=>setRequireSignoffInSolo(e.target.checked)} /> Require approval in solo mode</label>}
+      </div>
+      <div className="form-group">
+        <label className="form-label">Review State</label>
+        <select className="form-control" value={reviewState} onChange={e=>setReviewState(e.target.value)}>
+          {REVIEW_STATES.map((state)=><option key={state} value={state}>{state}</option>)}
+        </select>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+        <div className="form-group" style={{marginBottom:0}}>
+          <label className="form-label">Approver Name</label>
+          <input value={signoffRecord.reviewerName||''} onChange={e=>setSignoffRecord(prev=>({...prev,reviewerName:e.target.value}))} />
+        </div>
+        <div className="form-group" style={{marginBottom:0}}>
+          <label className="form-label">Approver ID</label>
+          <input value={signoffRecord.reviewerId||''} onChange={e=>setSignoffRecord(prev=>({...prev,reviewerId:e.target.value}))} />
+        </div>
+      </div>
+      <div className="form-group">
+        <label className="form-label">Checklist Sign-off</label>
+        <div style={{display:'grid',gap:4}}>
+          {SIGNOFF_CHECKLIST.map((item)=><label key={item} style={{display:'flex',justifyContent:'space-between',fontSize:11,color:'var(--muted)'}}><span>{item}</span><input type="checkbox" checked={Boolean(signoffRecord?.checklist?.[item])} onChange={e=>setSignoffRecord(prev=>({...prev,checklist:{...(prev.checklist||{}),[item]:e.target.checked}}))} /></label>)}
+        </div>
+        <div style={{display:'flex',gap:6,marginTop:6}}>
+          <button className="btn btn-ghost btn-sm" onClick={()=>{setReviewState('in_review');showToast('Sign-off requested.','info');}}>Request Sign-off</button>
+          <button className="btn btn-secondary btn-sm" onClick={()=>{const ready=SIGNOFF_CHECKLIST.every(key=>Boolean(signoffRecord?.checklist?.[key]));if(!ready||!(signoffRecord.reviewerName||'').trim()||!(signoffRecord.reviewerId||'').trim()){showToast('Fill approver metadata and complete checklist before approval.','warning');return;}setSignoffRecord(prev=>({...prev,timestamp:new Date().toISOString()}));setReviewState('approved');showToast('Sign-off recorded.','success');}}>Record Approval</button>
+        </div>
+        {signoffRecord.timestamp && <div style={{marginTop:4,fontSize:10,color:'var(--dim)'}}>Approved at {new Date(signoffRecord.timestamp).toLocaleString()}</div>}
       </div>
       <div className="form-group">
         <label className="form-label">Source Links</label>
