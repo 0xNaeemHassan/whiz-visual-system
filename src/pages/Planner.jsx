@@ -5,7 +5,8 @@ import { THEMES } from '../data/themes';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { useIntl } from '../i18n/IntlProvider';
 import { normalizePlannerIssue } from '../utils/schemaContracts';
-import { createEngagementOutcomeFeedback, scoreEngagementHeuristic } from '../domain/services/engagementHeuristicService';
+import { computeCadencePolicy, CADENCE_SLOT_STATE } from '../domain/services/cadencePolicyEngine';
+import { DEFAULT_CADENCE_CONFIG } from '../state/editorStore';
 
 const STATUSES = ['draft', 'planned', 'wip', 'done', 'published'];
 const CONFIDENCE = ['low', 'medium', 'high'];
@@ -52,6 +53,8 @@ function useDragDrop(onDrop) {
 
 export default function Planner({ showToast, activeTheme, navigateTo, isActive }) {
   const [issues, setIssues] = useLocalStorage('whiz-issues', []);
+  const [cadenceConfig, setCadenceConfig] = useLocalStorage('whiz-cadence-config', DEFAULT_CADENCE_CONFIG);
+  const [cadenceOverrideLog, setCadenceOverrideLog] = useLocalStorage('whiz-cadence-overrides', []);
   const [view, setView] = useState('table');
   // Fix #20: reset deleteConfirmId on view change
   const setViewSafe = (v) => { setView(v); setDeleteConfirmId(null); };
@@ -97,8 +100,9 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
   const [form, setForm] = useState({
     issueNum: '', topic: '', frameId: '', themeId: '', status: 'draft', priority: 'medium',
     publishDate: '', notes: '', caption: '', sourceLinks: '', confidence: 'medium', series: '',
+    series_id: '', part_number: '', prev_issue: '', next_issue: '', continuity_status: 'healthy',
   });
-  const normalizeIssueNum = (v) => String(v || '').replace(/\D/g, '').slice(-3).padStart(3, '0');
+  const normalizeIssueNum = (v) => normalizeIssueNumber(v);
   const normalizeIssue = (issue) => ({
     ...normalizePlannerIssue(issue),
     issueNum: normalizeIssueNum(issue.issueNum),
@@ -112,10 +116,17 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
     metricValue: issue.metricValue || '',
     metricUnit: issue.metricUnit || '',
     metricProvenance: Array.isArray(issue.metricProvenance) ? issue.metricProvenance : [],
+    series_id: issue.series_id || '',
+    part_number: issue.part_number ?? '',
+    prev_issue: issue.prev_issue || '',
+    next_issue: issue.next_issue || '',
+    continuity_status: issue.continuity_status || 'healthy',
   });
-  const existingIssueNums = new Set(issues.map(i => String(i.issueNum || '').padStart(3, '0')));
+  const existingIssueNums = new Set(issues.map(i => normalizeIssueNum(i.issueNum)));
+  const issueAllocator = useMemo(() => createIssueNumberAllocator(issues), [issues]);
 
-  const { registerHandlers, addActivityEntry } = useUIEventContext();
+  const { registerHandlers } = useUIEventContext();
+  const { t } = useIntl();
 
   // Escape handler routed via UI event context
   useEffect(() => {
@@ -128,7 +139,7 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
     });
   }, [isActive, registerHandlers]);
 
-  const nextNum = issues.length > 0 ? Math.max(...issues.map(i => Number(i.issueNum) || 0)) + 1 : 1;
+  const nextIssueNum = issueAllocator.peekNext();
 
   useEffect(() => {
     try {
@@ -138,7 +149,7 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
       localStorage.removeItem('whiz-planner-issue-draft');
       setEditingIssue(null);
       setForm({
-        issueNum: draft.issueNum || String(nextNum).padStart(3, '0'),
+        issueNum: draft.issueNum || nextIssueNum,
         topic: draft.topic || '',
         frameId: draft.frameId || '',
         themeId: draft.themeId || '',
@@ -157,18 +168,23 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
         metricValue: draft.metricValue || '',
         metricUnit: draft.metricUnit || '',
         metricProvenance: draft.metricProvenance || [],
+        series_id: draft.series_id || '',
+        part_number: draft.part_number ?? '',
+        prev_issue: draft.prev_issue || '',
+        next_issue: draft.next_issue || '',
+        continuity_status: draft.continuity_status || 'healthy',
       });
       setShowModal(true);
       showToast('Loaded draft from Editor duplicate');
     } catch (error) {
       localStorage.removeItem('whiz-planner-issue-draft');
     }
-  }, [nextNum, showToast]);
+  }, [nextIssueNum, showToast]);
 
 
   const openIssueForm = (presetStatus) => {
     setEditingIssue(null);
-    setForm({ issueNum: String(nextNum).padStart(3,'0'), topic: '', frameId: '', themeId: '', status: presetStatus || 'draft', publishDate: '', notes: '', caption: '', sourceLinks: '', priority: 'medium', confidence: 'medium', series: '' });
+    setForm({ issueNum: nextIssueNum, topic: '', frameId: '', themeId: '', status: presetStatus || 'draft', publishDate: '', notes: '', caption: '', sourceLinks: '', priority: 'medium', confidence: 'medium', series: '' });
     setShowModal(true);
   };
 
@@ -176,7 +192,7 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
 
   // F5: Duplicate issue
   const duplicateIssue = (issue) => {
-    const dn = String(nextNum).padStart(3,'0');
+    const dn = issueAllocator.reserveNext();
     setIssues(prev => [...prev, { ...issue, id: `i_${Date.now()}`, issueNum: dn, status: 'draft', createdAt: Date.now(), topic: `${issue.topic} (copy)` }]);
     showToast('Issue duplicated');
   };
@@ -236,6 +252,29 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
   }, [setIssues, showToast]);
 
   const dnd = useDragDrop(handleKanbanDrop);
+
+  const milestoneConfig = { fiscalQuarterOffsetMonths: 0, timezone: 'UTC', triggerWindowHours: 24 };
+  const quarterKey = getQuarterRolloverKey({ now: new Date(), config: milestoneConfig });
+  const milestoneState = loadReminderState();
+  const milestoneReminders = createMilestoneReminderEvents({
+    now: new Date(),
+    config: milestoneConfig,
+    objectives: ['Plan pending quarter objectives in planner timeline.','Mid-quarter checkpoint for objective confidence + velocity.','Pre-close checkpoint before cover story publish.'],
+    coverStoryCheckpoint: 'Finalize Cover Story (Frame 50) narrative and asset checklist.',
+  }).map((reminder) => {
+    const state = milestoneState?.[quarterKey]?.[reminder.id] || {};
+    const snoozedUntil = state.snoozedUntil ? new Date(state.snoozedUntil) : null;
+    const snoozedActive = snoozedUntil && snoozedUntil.getTime() > Date.now();
+    return { ...reminder, acknowledged: Boolean(state.acknowledged), snoozedUntil, snoozedActive };
+  }).filter((reminder) => reminder.pending && !reminder.acknowledged && !reminder.snoozedActive);
+
+  const handleAcknowledgeReminder = (id) => { acknowledgeReminder({ id, quarterKey }); setIssues((prev) => [...prev]); };
+  const handleSnoozeReminder = (id) => {
+    const until = new Date(Date.now() + (48 * 60 * 60 * 1000)).toISOString();
+    snoozeReminder({ id, quarterKey, snoozedUntil: until });
+    setIssues((prev) => [...prev]);
+  };
+
 
   const csvHeaders = ['Issue #', 'Topic', 'Frame #', 'Theme', 'Status', 'Publish Date', 'Notes', 'Caption', 'Source Links', 'Priority', 'Confidence', 'Series', 'Assistant Brief', 'Target Metric', 'Metric Confidence', 'Metric Source', 'Metric Value', 'Metric Unit', 'Metric Provenance'];
   const csvEscape = (value) => `"${String(value ?? '').replace(/"/g,'""')}"`;
@@ -352,7 +391,10 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
         const lines = hasHeader ? allRows.slice(1) : allRows;
         if (lines.length < 1) { showToast('CSV has no data rows', 'error'); return; }
         const imported = lines.map((cols, idx) => mapCSVColsToIssue(cols, idx)).filter(i => i.issueNum || i.topic);
-        setIssues(prev => [...prev, ...imported]);
+        setIssues(prev => {
+          const allocator = createIssueNumberAllocator(prev);
+          return [...prev, ...allocator.reconcile(imported)];
+        });
         showToast(`Imported ${imported.length} issues`);
       } catch (err) { showToast('Failed to parse CSV', 'error'); }
     };
@@ -432,6 +474,14 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
   }, {}), [issues]);
 
   const stats = STATUSES.reduce((acc, s) => { acc[s] = issues.filter(i => i.status === s).length; return acc; }, {});
+  const cadencePolicy = useMemo(() => computeCadencePolicy({ issues, cadenceConfig, now: new Date() }), [issues, cadenceConfig]);
+  const cadenceDebt = cadencePolicy.debt;
+  const registerCadenceOverride = () => {
+    const reason = window.prompt('Override reason for cadence debt?');
+    if (!reason) return;
+    setCadenceOverrideLog((prev) => [...prev, { reason: reason.trim(), timestamp: Date.now() }]);
+    showToast('Cadence override logged', 'warning');
+  };
 
   // F10: Open in Editor with frame/theme pre-loaded
   const openInEditor = (issue) => {
@@ -460,6 +510,26 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
           <div style={{ fontFamily: 'var(--font-d)', fontSize: 24, fontWeight: 700, color: activeTheme.accent, lineHeight: 1 }}>{issues.length}</div>
           <div style={{ fontFamily: 'var(--font-m)', fontSize: 9, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>TOTAL<br/>ISSUES</div>
         </div>
+      </div>
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+          <div style={{ fontSize: 12 }}>Weekly cadence score: <strong>{cadencePolicy.score}%</strong> · Debt: <strong>{cadenceDebt}</strong></div>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <label style={{ fontSize: 11 }}>TZ <input value={cadenceConfig.timezone} onChange={(e) => setCadenceConfig((prev) => ({ ...prev, timezone: e.target.value }))} style={{ width: 110, marginLeft: 4 }} /></label>
+            <label style={{ fontSize: 11 }}>Grace h <input type="number" value={cadenceConfig.graceWindowHours} onChange={(e) => setCadenceConfig((prev) => ({ ...prev, graceWindowHours: Number(e.target.value) || 0 }))} style={{ width: 56, marginLeft: 4 }} /></label>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+          {cadencePolicy.slots.map((slot) => {
+            const meta = slot.state === CADENCE_SLOT_STATE.ON_TRACK ? ['On Track', '#3CE6A6'] : slot.state === CADENCE_SLOT_STATE.AT_RISK ? ['At Risk', '#E5B23A'] : ['Missed', '#FF5A5A'];
+            return <span key={slot.slotKey} style={{ border: `1px solid ${meta[1]}`, borderRadius: 999, padding: '2px 8px', fontSize: 10 }}>{slot.slotKey} · {meta[0]}</span>;
+          })}
+        </div>
+        {cadencePolicy.reminders.length > 0 && (
+          <div style={{ marginTop: 10, fontSize: 11, color: '#E5B23A' }}>
+            {cadencePolicy.reminders.map((reminder) => <div key={`${reminder.slotKey}-${reminder.severity}`}>[{reminder.severity.toUpperCase()}] {reminder.message}</div>)}
+          </div>
+        )}
       </div>
 
 
@@ -512,6 +582,30 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
         )}
       </div>
 
+      <div className="card" style={{ marginBottom: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <strong>Quarter Timeline Reminders</strong>
+          <span style={{ fontSize: 11, color: 'var(--dim)' }}>Quarter key: {quarterKey}</span>
+        </div>
+        {milestoneReminders.length === 0 ? (
+          <div style={{ fontSize: 12, color: 'var(--muted)' }}>No pending quarter objectives/checkpoints in trigger window.</div>
+        ) : (
+          <div style={{ display: 'grid', gap: 8 }}>
+            {milestoneReminders.map((reminder) => (
+              <div key={reminder.id} style={{ border: '1px solid var(--border)', borderRadius: 'var(--r)', padding: 10 }}>
+                <div style={{ fontWeight: 600 }}>{reminder.label}</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)' }}>{reminder.timelineNote}</div>
+                <div style={{ fontSize: 10, color: 'var(--dim)', marginTop: 3 }}>Due {reminder.dueDateKey} ({milestoneConfig.timezone})</div>
+                <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                  <button className="btn btn-secondary btn-sm" onClick={() => handleAcknowledgeReminder(reminder.id)}>Acknowledge</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => handleSnoozeReminder(reminder.id)}>Snooze 48h</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Toolbar */}
       <div className="planner-toolbar">
         <div className="search-wrap" style={{ flex: 1, minWidth: 200 }}>
@@ -533,9 +627,32 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
         <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer' }}>↑ CSV<input type="file" accept=".csv" onChange={importCSV} style={{ display: 'none' }} /></label>
         <button className="btn btn-primary" onClick={() => openIssueForm()}>+ New Issue</button>
       </div>
+      {cadencePolicy.hardWarning && (
+        <div className="card" style={{ marginBottom: 16, borderColor: '#FF5A5A' }}>
+          <div style={{ fontSize: 12, color: '#FF5A5A', marginBottom: 8 }}>Hard warning: cadence debt exists. Publishing is discouraged until debt is resolved or overridden.</div>
+          <button className="btn btn-danger btn-sm" onClick={registerCadenceOverride}>Override with reason</button>
+          <div style={{ marginTop: 6, fontSize: 10, color: 'var(--muted)' }}>Overrides logged: {cadenceOverrideLog.length}</div>
+        </div>
+      )}
 
       {/* Table View */}
-      {view === 'table' && (
+                <div className="panel" style={{ marginBottom: 12 }}>
+            <div className="panel-title">Series Continuity</div>
+            <div style={{ display: 'grid', gap: 8 }}>
+              {continuityReport.length === 0 && <div style={{ fontSize: 12, color: 'var(--muted)' }}>No series chains yet.</div>}
+              {continuityReport.map((entry) => (
+                <div key={entry.seriesId} style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 8 }}>
+                  <div style={{ fontWeight: 600 }}>{entry.seriesId} · {entry.status}</div>
+                  <div style={{ fontSize: 11, color: 'var(--muted)' }}>Missing: {entry.missingParts.join(', ') || 'none'} · Duplicate: {entry.duplicateParts.join(', ') || 'none'}</div>
+                  <div style={{ marginTop: 6, display: 'flex', gap: 6 }}>
+                    <button className="btn btn-ghost btn-sm" onClick={() => applyContinuityFix(entry.seriesId, 'missing')}>Fix missing part</button>
+                    <button className="btn btn-ghost btn-sm" onClick={() => applyContinuityFix(entry.seriesId, 'duplicate')}>Review duplicates</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+{view === 'table' && (
         <div className="card" style={{ padding: 0 }}>
           <div className="data-table-wrap">
           {filtered.length === 0 ? (
@@ -651,6 +768,8 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div className="form-group"><label className="form-label">Confidence</label><select value={form.confidence || 'medium'} onChange={e => setForm(f => ({...f, confidence: e.target.value}))}>{CONFIDENCE.map(s => <option key={s} value={s}>{s.toUpperCase()}</option>)}</select></div>
             <div className="form-group"><label className="form-label">Series</label><input value={form.series || ''} onChange={e => setForm(f => ({...f, series: e.target.value}))} placeholder="Stablecoin Risk Pt. 1" /></div>
+            <div className="form-group"><label className="form-label">Series ID</label><input value={form.series_id || ''} onChange={e => setForm(f => ({...f, series_id: e.target.value}))} /></div>
+            <div className="form-group"><label className="form-label">Part #</label><input value={form.part_number || ''} onChange={e => setForm(f => ({...f, part_number: e.target.value.replace(/\D/g,'')}))} /></div>
           </div>
           <div className="form-group"><label className="form-label">Topic / Headline *</label><input value={form.topic} onChange={e => setForm(f => ({...f, topic: e.target.value}))} placeholder="The End of Mercenary Yield" autoFocus /></div>
           {(() => {
