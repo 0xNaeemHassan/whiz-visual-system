@@ -163,9 +163,21 @@ const TRUST_LEVEL_TONE = Object.freeze({
 const hasBlockingValidationIssues = (stateValidation, editorValidation, complianceIssues = []) => (
   !stateValidation?.valid || (editorValidation?.errors?.length || 0) > 0 || (complianceIssues?.length || 0) > 0
 );
-const computeTrustLevel = ({ workflowPhase, stateValidation, editorValidation, complianceIssues, missingProvenance }) => {
-  if (workflowPhase === 'publish-ready' && !hasBlockingValidationIssues(stateValidation, editorValidation, complianceIssues) && !missingProvenance) return TRUST_LEVELS.VERIFIED;
-  if (workflowPhase === 'review' || hasBlockingValidationIssues(stateValidation, editorValidation, complianceIssues) || missingProvenance) return TRUST_LEVELS.REVIEW_NEEDED;
+const hasCompletedSignoff = (signoffRecord = {}, reviewState = 'draft') => {
+  const checklist = signoffRecord?.checklist || {};
+  const checklistComplete = SIGNOFF_CHECKLIST.every((item) => Boolean(checklist[item]));
+  return reviewState === 'approved'
+    && Boolean((signoffRecord?.reviewerName || '').trim())
+    && Boolean((signoffRecord?.reviewerId || '').trim())
+    && Boolean(signoffRecord?.timestamp)
+    && checklistComplete;
+};
+
+const computeTrustLevel = ({ workflowPhase, stateValidation, editorValidation, complianceIssues, missingProvenance, hasFreshnessWarnings, hasSignoff }) => {
+  const verifyGatePassed = !hasBlockingValidationIssues(stateValidation, editorValidation, complianceIssues);
+  const provenanceReady = !missingProvenance && !hasFreshnessWarnings;
+  if (workflowPhase === 'publish-ready' && verifyGatePassed && hasSignoff && provenanceReady) return TRUST_LEVELS.VERIFIED;
+  if (workflowPhase === 'review' || !verifyGatePassed || !hasSignoff || !provenanceReady) return TRUST_LEVELS.REVIEW_NEEDED;
   return TRUST_LEVELS.DRAFT;
 };
 
@@ -931,7 +943,9 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
     editorValidation,
     complianceIssues,
     missingProvenance: missingStatProvenance || missingTableProvenance,
-  }), [workflowPhase, stateValidation, editorValidation, complianceIssues, missingStatProvenance, missingTableProvenance]);
+    hasFreshnessWarnings,
+    hasSignoff: signoffComplete,
+  }), [workflowPhase, stateValidation, editorValidation, complianceIssues, missingStatProvenance, missingTableProvenance, hasFreshnessWarnings, signoffComplete]);
   const trustTone = TRUST_LEVEL_TONE[trustLevel] || TRUST_LEVEL_TONE[TRUST_LEVELS.DRAFT];
   const ledgerValidation = useMemo(() => validateEvidenceLedger(content?.evidenceLedger, content?.issueNum), [content?.evidenceLedger, content?.issueNum]);
   const canTransitionTo=(phase)=> (phaseCriteria[phase]||[]).every((c)=>c.done);
@@ -1161,6 +1175,9 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   return(
     <div className="editor-wrap" ref={editorRootRef}>
       <div className="editor-action-bar">
+        <div style={{display:'flex',alignItems:'center',padding:'4px 8px',borderRadius:8,background:trustTone.bg,border:`1px solid ${trustTone.border}`,color:trustTone.fg,fontFamily:'var(--font-m)',fontSize:10,letterSpacing:'0.06em',textTransform:'uppercase'}}>
+          Trust · {trustLevel}
+        </div>
         <div className="editor-action-group">
           <div style={{display:'flex',alignItems:'center',gap:6,paddingRight:8,marginRight:8,borderRight:'1px solid var(--border)'}}>
             <span style={{fontFamily:'var(--font-m)',fontSize:10,color:'var(--dim)'}}>Mode</span>
@@ -1221,6 +1238,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
             fontPairing={activeFontPairing}/></div>
         <div className="zoom-bar"><IconButton className="zoom-btn" label="Zoom out" onClick={()=>setZoom(z=>Math.max(0.1,+(z-0.05).toFixed(2)))}>−</IconButton><span className="zoom-pct">{Math.round(zoom*100)}%</span><IconButton className="zoom-btn" label="Zoom in" onClick={()=>setZoom(z=>Math.min(1,+(z+0.05).toFixed(2)))}>+</IconButton><IconButton className="zoom-btn" label="Fit frame to viewport" onClick={updateZoom} style={{fontSize:10}}>⊡</IconButton><div style={{width:1,height:16,background:'var(--border)'}}/><IconButton className={`zoom-btn ${showGrid?'active':''}`} label={showGrid ? 'Hide grid overlay' : 'Show grid overlay'} onClick={()=>setShowGrid(g=>!g)} style={{color:showGrid?'var(--theme-accent)':undefined}}>▦</IconButton><IconButton className={`zoom-btn ${editMode?'active':''}`} label={editMode ? 'Disable edit mode' : 'Enable edit mode'} onClick={()=>{setEditMode(m=>!m);editMode&&setSelectedEl(null);}} style={{color:editMode?'var(--theme-accent)':undefined}}>✎</IconButton><div style={{width:1,height:16,background:'var(--border)'}}/><IconButton className="zoom-btn" label="Undo" onClick={()=>handleUndo(mobileTab==='preview'?'mobile':'desktop')} disabled={!canUndo} style={{opacity:canUndo?1:0.3}}>↶</IconButton><IconButton className="zoom-btn" label="Redo" onClick={()=>handleRedo(mobileTab==='preview'?'mobile':'desktop')} disabled={!canRedo} style={{opacity:canRedo?1:0.3}}>↷</IconButton></div>
         <div style={{position:'absolute',top:10,left:10,fontFamily:'var(--font-m)',fontSize:9,color:'var(--dim)',background:'rgba(0,0,0,0.6)',padding:'4px 8px',borderRadius:'var(--r)',backdropFilter:'blur(4px)'}}>{String(frameId).padStart(2,'0')} — {selectedFrame.name} · {aspectRatio.w}×{aspectRatio.h}</div>
+        <div style={{position:'absolute',top:34,left:10,fontFamily:'var(--font-m)',fontSize:9,color:trustTone.fg,background:trustTone.bg,padding:'4px 8px',borderRadius:'var(--r)',border:`1px solid ${trustTone.border}`,backdropFilter:'blur(4px)'}}>Trust: {trustLevel}</div>
         <div style={{position:'absolute',top:12,right:12,display:'flex',gap:6,background:'var(--glass)',padding:'6px 10px',borderRadius:'var(--r)',border:'1px solid var(--glass-border)',backdropFilter:'blur(12px)'}}><button className="btn btn-ghost btn-sm" onClick={exportJSON} style={{fontSize:'var(--font-min-body)'}}>JSON</button><button className="btn btn-ghost btn-sm" onClick={exportManifest} style={{fontSize:'var(--font-min-body)'}}>Manifest</button><button className="btn btn-secondary btn-sm" onClick={launchCorrectionFlow} style={{fontSize:'var(--font-min-body)'}}>Correction</button><button className="btn btn-secondary btn-sm" onClick={exportHTML} style={{fontSize:'var(--font-min-body)'}}>HTML</button><button className="btn btn-secondary btn-sm" onClick={applyStrictPolish} style={{fontSize:'var(--font-min-body)'}}>Polish</button><button className="btn btn-primary btn-sm" data-format="png" onClick={exportPNG} disabled={exporting} style={{fontSize:'var(--font-min-body)'}}>{exporting?'⟳':'↓'} PNG</button></div>
         <div style={{position:'absolute',top:52,right:12,fontFamily:'var(--font-m)',fontSize:10,color:readinessSummary.ready?'#8EF0B0':'#FFB3B3',background:readinessSummary.ready?'rgba(11,36,20,.9)':'rgba(42,10,10,.9)',padding:'6px 8px',borderRadius:6,border:`1px solid ${readinessSummary.ready?'#2BAE6666':'#FF5A5A66'}`,maxWidth:320}}>Readiness: {readinessSummary.ready?'Ready to publish':`${readinessSummary.failed}/${readinessSummary.total} checks failing`} {readinessSummary.blocking>0?`· ${readinessSummary.blocking} blocking`:''}</div>
         {editMode&&<div style={{position:'absolute',bottom:52,left:'50%',transform:'translateX(-50%)',fontFamily:'var(--font-m)',fontSize:9,color:'var(--theme-accent)',background:'rgba(0,0,0,0.75)',padding:'4px 10px',borderRadius:20,whiteSpace:'nowrap'}}>{selectedEl?`Selected: ${selectedEl}`:'Click any element'}</div>}
