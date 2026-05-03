@@ -5,6 +5,8 @@ import { THEMES } from '../data/themes';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { useIntl } from '../i18n/IntlProvider';
 import { normalizePlannerIssue } from '../utils/schemaContracts';
+import { createMilestoneReminderEvents, getQuarterRolloverKey } from '../domain/services/milestoneScheduler';
+import { acknowledgeReminder, loadReminderState, snoozeReminder } from '../storage/milestoneReminderStorage';
 
 const STATUSES = ['draft', 'planned', 'wip', 'done', 'published'];
 const CONFIDENCE = ['low', 'medium', 'high'];
@@ -223,6 +225,29 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
   }, [setIssues, showToast]);
 
   const dnd = useDragDrop(handleKanbanDrop);
+
+  const milestoneConfig = { fiscalQuarterOffsetMonths: 0, timezone: 'UTC', triggerWindowHours: 24 };
+  const quarterKey = getQuarterRolloverKey({ now: new Date(), config: milestoneConfig });
+  const milestoneState = loadReminderState();
+  const milestoneReminders = createMilestoneReminderEvents({
+    now: new Date(),
+    config: milestoneConfig,
+    objectives: ['Plan pending quarter objectives in planner timeline.','Mid-quarter checkpoint for objective confidence + velocity.','Pre-close checkpoint before cover story publish.'],
+    coverStoryCheckpoint: 'Finalize Cover Story (Frame 50) narrative and asset checklist.',
+  }).map((reminder) => {
+    const state = milestoneState?.[quarterKey]?.[reminder.id] || {};
+    const snoozedUntil = state.snoozedUntil ? new Date(state.snoozedUntil) : null;
+    const snoozedActive = snoozedUntil && snoozedUntil.getTime() > Date.now();
+    return { ...reminder, acknowledged: Boolean(state.acknowledged), snoozedUntil, snoozedActive };
+  }).filter((reminder) => reminder.pending && !reminder.acknowledged && !reminder.snoozedActive);
+
+  const handleAcknowledgeReminder = (id) => { acknowledgeReminder({ id, quarterKey }); setIssues((prev) => [...prev]); };
+  const handleSnoozeReminder = (id) => {
+    const until = new Date(Date.now() + (48 * 60 * 60 * 1000)).toISOString();
+    snoozeReminder({ id, quarterKey, snoozedUntil: until });
+    setIssues((prev) => [...prev]);
+  };
+
 
   const csvHeaders = ['Issue #', 'Topic', 'Frame #', 'Theme', 'Status', 'Publish Date', 'Notes', 'Caption', 'Source Links', 'Priority', 'Confidence', 'Series', 'Assistant Brief', 'Target Metric', 'Metric Confidence', 'Metric Source', 'Metric Value', 'Metric Unit', 'Metric Provenance'];
   const csvEscape = (value) => `"${String(value ?? '').replace(/"/g,'""')}"`;
@@ -491,6 +516,30 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
                 </div>
               );
             })}
+          </div>
+        )}
+      </div>
+
+      <div className="card" style={{ marginBottom: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <strong>Quarter Timeline Reminders</strong>
+          <span style={{ fontSize: 11, color: 'var(--dim)' }}>Quarter key: {quarterKey}</span>
+        </div>
+        {milestoneReminders.length === 0 ? (
+          <div style={{ fontSize: 12, color: 'var(--muted)' }}>No pending quarter objectives/checkpoints in trigger window.</div>
+        ) : (
+          <div style={{ display: 'grid', gap: 8 }}>
+            {milestoneReminders.map((reminder) => (
+              <div key={reminder.id} style={{ border: '1px solid var(--border)', borderRadius: 'var(--r)', padding: 10 }}>
+                <div style={{ fontWeight: 600 }}>{reminder.label}</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)' }}>{reminder.timelineNote}</div>
+                <div style={{ fontSize: 10, color: 'var(--dim)', marginTop: 3 }}>Due {reminder.dueDateKey} ({milestoneConfig.timezone})</div>
+                <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                  <button className="btn btn-secondary btn-sm" onClick={() => handleAcknowledgeReminder(reminder.id)}>Acknowledge</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => handleSnoozeReminder(reminder.id)}>Snooze 48h</button>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
