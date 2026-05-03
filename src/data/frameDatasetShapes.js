@@ -75,6 +75,23 @@ export const LAYOUT_DATASET_SHAPES = {
   },
 };
 
+
+const DEFAULT_CRITICAL_FIELD_RULES = Object.freeze({
+  bigNumber: { enabled: true },
+  stats: { enabled: true },
+  table: { enabled: true },
+  timeline: { enabled: true },
+});
+
+export const LAYOUT_CRITICAL_FIELD_REGISTRY = {
+  default: DEFAULT_CRITICAL_FIELD_RULES,
+  table: { ...DEFAULT_CRITICAL_FIELD_RULES, timeline: { enabled: false } },
+  timeline: { ...DEFAULT_CRITICAL_FIELD_RULES, table: { enabled: false } },
+};
+
+export function getCriticalFieldRegistry(layout) {
+  return LAYOUT_CRITICAL_FIELD_REGISTRY[layout] || LAYOUT_CRITICAL_FIELD_REGISTRY.default;
+}
 export function getLayoutDatasetShape(layout) {
   return LAYOUT_DATASET_SHAPES[layout] || EMPTY_SCHEMA;
 }
