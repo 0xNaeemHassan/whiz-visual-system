@@ -40,13 +40,15 @@ export default function TopBar({ title, page, onHamburger, showToast, activeThem
           {({'dashboard':'Dashboard','editor':'Editor','library':'Frame Library','planner':'Planner','themes':'Themes','typography':'Typography','docs':'Docs'})[page] || page}
         </div>}
       </div>
-      <div className="topbar-actions">
-        <div
+      <div className="topbar-actions touch-group">
+        <button
+          type="button"
+          className="touch-target-compact-wrap"
           style={{
             display: 'flex', alignItems: 'center', gap: 7,
             padding: '6px 12px', background: 'var(--bg-3)',
             borderRadius: 'var(--r)', border: '1px solid var(--border)',
-            cursor: 'pointer', transition: 'all var(--t)',
+            transition: 'all var(--t)',
           }}
           onClick={() => navigateTo('themes')}
           title="Open theme settings"
@@ -61,9 +63,9 @@ export default function TopBar({ title, page, onHamburger, showToast, activeThem
           <span style={{ fontFamily: 'var(--font-m)', fontSize: 10, color: 'var(--muted)' }}>
             {activeTheme.name}
           </span>
-        </div>
-        <button className="btn btn-primary btn-sm" onClick={() => navigateTo('editor')}>
-          \u2726 New Frame
+        </button>
+        <button className="btn btn-primary btn-sm touch-target" onClick={() => navigateTo('editor')}>
+          ✦ New Frame
         </button>
         <button className="btn btn-secondary btn-sm" onClick={toggleLog} aria-expanded={showLog} aria-controls="activity-log-panel">
           Activity {unreadCount > 0 ? `(${unreadCount})` : ''}
