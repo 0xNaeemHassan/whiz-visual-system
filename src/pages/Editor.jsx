@@ -20,7 +20,7 @@ import { normalizeContentTaxonomy } from '../utils/contentNormalization';
 import { validateEditorState } from '../utils/editorStateValidation';
 import { buildMutationDispatcher } from './EditorMutations.js';
 import { normalizeDateInput, normalizeTimelineEvents } from '../domain/services/dateNormalizationService';
-import { SemanticChip } from '../components/primitives';
+import { SemanticChip, AccessibleIconButton, LabeledField } from '../components/primitives';
 import { getFramePitfalls } from '../data/framePitfalls';
 import { createEditorCommandRegistry, filterCommands, matchesShortcut } from '../domain/editorCommands';
 import { buildSaveDiff } from '../utils/saveDiff';
@@ -114,11 +114,11 @@ function ProvenanceEditor({ value, onChange, collapsed, onToggle, disabled }) {
   return (<div style={{margin:'4px 0 8px 20px'}}>
     <button className="btn btn-ghost btn-sm" type="button" onClick={onToggle} style={{marginBottom:6,padding:'2px 8px'}}>{collapsed ? '▸ Provenance' : '▾ Provenance'}</button>
     {!collapsed && <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6}}>
-      <input disabled={disabled} value={provenance.source} placeholder="Source" style={{fontSize:10}} onChange={e=>update('source',e.target.value)} />
-      <input disabled={disabled} type="date" value={provenance.date} style={{fontSize:10}} onChange={e=>update('date',e.target.value)} />
-      <select disabled={disabled} value={provenance.confidence} style={{fontSize:10}} onChange={e=>update('confidence',e.target.value)}>{PROVENANCE_CONFIDENCE_OPTIONS.map((option)=><option key={option} value={option}>{option}</option>)}</select>
-      <input disabled={disabled} value={provenance.links} placeholder="Links (comma-separated)" style={{fontSize:10}} onChange={e=>update('links',e.target.value)} />
-      <textarea disabled={disabled} value={provenance.notes} placeholder="Notes" rows={2} style={{fontSize:10,gridColumn:'1 / -1'}} onChange={e=>update('notes',e.target.value)} />
+      <LabeledField label="Source" id="provenance-source" className="form-group" labelClassName="form-label" style={{marginBottom:0}}><input disabled={disabled} value={provenance.source} style={{fontSize:10}} onChange={e=>update('source',e.target.value)} /></LabeledField>
+      <LabeledField label="Date" id="provenance-date" className="form-group" labelClassName="form-label" style={{marginBottom:0}}><input disabled={disabled} type="date" value={provenance.date} style={{fontSize:10}} onChange={e=>update('date',e.target.value)} /></LabeledField>
+      <LabeledField label="Confidence" id="provenance-confidence" className="form-group" labelClassName="form-label" style={{marginBottom:0}}><select disabled={disabled} value={provenance.confidence} style={{fontSize:10}} onChange={e=>update('confidence',e.target.value)}>{PROVENANCE_CONFIDENCE_OPTIONS.map((option)=><option key={option} value={option}>{option}</option>)}</select></LabeledField>
+      <LabeledField label="Links" id="provenance-links" className="form-group" labelClassName="form-label" style={{marginBottom:0}}><input disabled={disabled} value={provenance.links} style={{fontSize:10}} onChange={e=>update('links',e.target.value)} /></LabeledField>
+      <LabeledField label="Notes" id="provenance-notes" className="form-group" labelClassName="form-label" style={{gridColumn:'1 / -1',marginBottom:0}}><textarea disabled={disabled} value={provenance.notes} rows={2} style={{fontSize:10}} onChange={e=>update('notes',e.target.value)} /></LabeledField>
     </div>}
   </div>);
 }

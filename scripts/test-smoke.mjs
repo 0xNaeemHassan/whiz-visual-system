@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { FRAME_TEMPLATES, CONTENT_TEMPLATES, getFrameTemplate } from '../src/data/templates.js';
 import { REQUIRED_CONTENT_KEYS, hasRequiredContentShape } from '../src/domain/editorDefaults.js';
 import { FRAMES } from '../src/data/frames.js';
@@ -102,3 +103,26 @@ assert.deepEqual(editedIssue.metricProvenance, [{ source: 'glassnode', method: '
 
 console.log('Smoke tests passed');
 import './test-editor-mutations.mjs';
+
+const a11yFiles = [
+  'src/components/primitives.jsx',
+  'src/components/TopBar.jsx',
+  'src/components/Sidebar.jsx',
+  'src/pages/Editor.jsx',
+];
+
+for (const file of a11yFiles) {
+  const source = fs.readFileSync(file, 'utf8');
+  const iconOnlyButtons = [...source.matchAll(/<button\b[^>]*>(?:\s*<svg[\s\S]*?<\/svg>\s*|\s*[✕↺]\s*)<\/button>/g)];
+  iconOnlyButtons.forEach(([snippet], idx) => {
+    const hasLabel = /aria-label\s*=/.test(snippet);
+    assert.ok(hasLabel, `${file} icon-only button #${idx + 1} must include aria-label`);
+  });
+
+  const controls = [...source.matchAll(/<(input|select|textarea)\b[^>]*>/g)];
+  controls.forEach(([snippet, tag], idx) => {
+    if (/type\s*=\s*"hidden"/.test(snippet) || /type\s*=\s*"file"/.test(snippet)) return;
+    const hasProgrammaticLabel = /\bid\s*=/.test(snippet) || /aria-label\s*=/.test(snippet) || /aria-labelledby\s*=/.test(snippet);
+    assert.ok(hasProgrammaticLabel, `${file} ${tag} control #${idx + 1} must include id/aria-label/aria-labelledby`);
+  });
+}
