@@ -2445,3 +2445,91 @@ input[type="range"]::-moz-range-thumb {
   .mobile-action-cluster{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0 12px}
   .mobile-qa-checklist label{display:flex;gap:8px;align-items:center;padding:8px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;font-size:12px}
 }
+
+/* Accessibility text scaling + editor overflow guards */
+:root {
+  --ui-font-scale: 1;
+  --ui-line-height-scale: 1;
+  --ui-letter-spacing: 0em;
+  --ui-readable-font: var(--font-b);
+}
+
+html[data-large-text-mode='true'] {
+  --ui-font-scale: 1.12;
+  --ui-line-height-scale: 1.14;
+  --ui-letter-spacing: 0.01em;
+}
+
+html[data-dyslexia-friendly-mode='true'] {
+  --ui-readable-font: 'Atkinson Hyperlegible', 'Lexend', 'Arial', var(--font-fallback);
+  --ui-letter-spacing: 0.03em;
+}
+
+body {
+  font-family: var(--ui-readable-font);
+  letter-spacing: var(--ui-letter-spacing);
+  line-height: calc(1.55 * var(--ui-line-height-scale));
+}
+
+input, textarea, select, button, .btn,
+.sidebar-label, .editor-section-title, .save-item-name, .save-item-meta {
+  font-size: calc(1em * var(--ui-font-scale));
+  line-height: calc(1.35 * var(--ui-line-height-scale));
+}
+
+.sidebar {
+  min-width: clamp(240px, 20vw, 320px);
+}
+.sidebar-brand-mark {
+  font-family: var(--font-d);
+  font-size: clamp(1rem, calc(1rem * var(--ui-font-scale)), 1.35rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.sidebar-brand-sub {
+  font-family: var(--font-m);
+  font-size: clamp(0.55rem, calc(0.55rem * var(--ui-font-scale)), 0.78rem);
+  color: var(--dim);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+.sidebar-item {
+  min-height: calc(38px * var(--ui-font-scale));
+  align-items: flex-start;
+}
+.sidebar-label {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.editor-left, .editor-right {
+  min-width: 0;
+}
+.editor-section {
+  overflow: visible;
+}
+.accessibility-settings .editor-toggle-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  color: var(--muted);
+  flex-wrap: wrap;
+}
+.accessibility-settings .editor-toggle-row input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+.editor-overflow-note {
+  font-size: calc(10px * var(--ui-font-scale));
+  color: var(--dim-accessible);
+  line-height: calc(1.5 * var(--ui-line-height-scale));
+}
+.saves-list, .save-item-info, .template-item-desc {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+

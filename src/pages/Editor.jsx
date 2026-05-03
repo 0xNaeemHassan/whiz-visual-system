@@ -293,6 +293,8 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const[loadTagFilter,setLoadTagFilter]=useState('');const[loadFolderFilter,setLoadFolderFilter]=useState('');const[loadFrameFilter,setLoadFrameFilter]=useState('');
   const[loadDateFrom,setLoadDateFrom]=useState('');const[loadDateTo,setLoadDateTo]=useState('');
   const[strictMode,setStrictMode]=useLocalStorage('whiz-strict-mode',true);
+  const [largeTextMode, setLargeTextMode] = useLocalStorage('whiz-large-text-mode', false);
+  const [dyslexiaFriendlyMode, setDyslexiaFriendlyMode] = useLocalStorage('whiz-dyslexia-friendly-mode', false);
   const[showCommandPalette,setShowCommandPalette]=useState(false);
   const[paletteQuery,setPaletteQuery]=useState('');
   const[whizEffects,setWhizEffects]=useLocalStorage('whiz-effects',DEFAULT_EFFECTS);
@@ -305,6 +307,14 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const [showTableImportModal, setShowTableImportModal] = useState(false);
   const [tableImportText, setTableImportText] = useState('');
   const [tableImportReport, setTableImportReport] = useState(null);
+
+  useEffect(() => {
+    document.documentElement.dataset.largeTextMode = largeTextMode ? 'true' : 'false';
+  }, [largeTextMode]);
+
+  useEffect(() => {
+    document.documentElement.dataset.dyslexiaFriendlyMode = dyslexiaFriendlyMode ? 'true' : 'false';
+  }, [dyslexiaFriendlyMode]);
 
   // NOTE: editingFrame is now {frameId, serial, issue}; compare serial to detect re-opens
   useEffect(()=>{
@@ -844,6 +854,18 @@ Apply these auto-corrections?`);
         <div className="editor-panel-header"><span>Frame &amp; Theme</span><span style={{color:'var(--theme-accent)',fontWeight:700}}>#{String(frameId).padStart(2,'0')}</span></div>
         <div className="editor-section"><div className="editor-section-title">Template</div><input className="frame-search-mini" placeholder="Search frames..." onChange={e=>setFrameSearch(e.target.value)} value={frameSearch}/><div style={{display:'flex',flexDirection:'column',gap:4,maxHeight:260,overflowY:'auto'}}>{filteredFrames.map(f=>(<div key={f.id} onClick={()=>setFrameId(f.id)} style={{padding:'7px 10px',borderRadius:'var(--r)',cursor:'pointer',background:frameId===f.id?`color-mix(in srgb,${theme.accent} 12%,transparent)`:'transparent',border:`1px solid ${frameId===f.id?theme.accent:'transparent'}`,transition:'all 0.15s'}}><div style={{display:'flex',alignItems:'center',gap:6}}><span style={{fontFamily:'var(--font-m)',fontSize:9,color:'var(--dim)',width:22}}>{String(f.id).padStart(2,'0')}</span><SemanticChip kind="category" value={`tier-${f.tier}`} style={{fontSize:8,padding:'1px 5px'}}>T{f.tier}</SemanticChip><span style={{fontSize:12,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{f.name}</span><SemanticChip kind="category" value={f.layout} style={{fontSize:8,padding:'1px 5px'}}>{f.layout}</SemanticChip></div></div>))}</div></div>
         <div className="editor-section"><div className="editor-section-title">Color Theme</div><div className="theme-grid">{THEMES.map(t=>(<div key={t.id} className={`theme-btn ${theme.id===t.id?'active':''}`} style={{borderColor:theme.id===t.id?t.accent:'var(--border)'}} onClick={()=>applyTheme(t)}><span className="theme-dot" style={{background:t.accent}}/><span className="theme-name" style={{color:theme.id===t.id?t.accent:'var(--muted)'}}>{t.name}</span></div>))}</div></div>
+        <div className="editor-section accessibility-settings">
+          <div className="editor-section-title">Accessibility</div>
+          <label className="editor-toggle-row">
+            <span>Large text mode</span>
+            <input type="checkbox" checked={!!largeTextMode} onChange={e=>setLargeTextMode(e.target.checked)} />
+          </label>
+          <label className="editor-toggle-row">
+            <span>Dyslexia-friendly mode</span>
+            <input type="checkbox" checked={!!dyslexiaFriendlyMode} onChange={e=>setDyslexiaFriendlyMode(e.target.checked)} />
+          </label>
+          <div className="editor-overflow-note">Check long lists/paragraphs for clipping after enabling text scaling.</div>
+        </div>
         <div className="editor-section" style={{flex:1}}><div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}><span className="editor-section-title" style={{marginBottom:0}}>Saves ({saves.length})</span><button className="btn btn-primary btn-sm" onClick={()=>setShowSaveModal(true)}>Save</button></div>{saves.length===0?<div style={{fontSize:11,color:'var(--dim)',textAlign:'center',padding:'16px 0'}}>No saves yet</div>:<div className="saves-list">{saves.slice().reverse().map(s=>(<div key={s.id} className="save-item" onClick={()=>loadSave(s)}><div style={{width:24,height:24,borderRadius:4,background:s.theme?.base||'var(--bg-3)',border:`2px solid ${s.theme?.accent||'var(--border)'}`,flexShrink:0}}/><div className="save-item-info"><div className="save-item-name">{s.title}</div><div className="save-item-meta">#{s.frameId} · {new Date(s.savedAt).toLocaleDateString()}</div></div><button className="btn btn-ghost btn-sm" onClick={e=>{e.stopPropagation();setShowDeleteConfirm(s.id);}}>✕</button></div>))}</div>}</div>
       </div>
       {/* CENTER */}

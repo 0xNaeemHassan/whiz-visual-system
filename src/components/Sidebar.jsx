@@ -14,9 +14,9 @@ export default function Sidebar({ page, onNav, open, theme }) {
     <aside className={`sidebar ${open ? 'open' : ''}`} role="navigation" aria-label="Main navigation">
       <div className="sidebar-brand">
         <div className="sidebar-logo">
-          <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 18, fontWeight: 700, color: theme.accent, letterSpacing: '-0.02em' }}>WHIZ</span>
+          <span className="sidebar-brand-mark" style={{ color: theme.accent }}>WHIZ</span>
         </div>
-        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, color: 'var(--dim)', letterSpacing: '0.12em', textTransform: 'uppercase', marginTop: 2 }}>DEFI DESK</div>
+        <div className="sidebar-brand-sub">DEFI DESK</div>
       </div>
       <nav className="sidebar-nav">
         {NAV_ITEMS.map(item => (
@@ -28,7 +28,7 @@ export default function Sidebar({ page, onNav, open, theme }) {
             aria-current={page === item.id ? 'page' : undefined}
           >
             <span className="sidebar-icon" aria-hidden="true">{item.icon}</span>
-            <span className="sidebar-label">{item.label}</span>
+            <span className="sidebar-label" title={item.label}>{item.label}</span>
           </button>
         ))}
       </nav>
