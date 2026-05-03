@@ -20,3 +20,7 @@ For each migration note, include:
 - impact,
 - required action,
 - safe fallback (if any).
+
+## Quality Governance
+
+Test gate classification, promotion policy, and escalation workflow are documented in `docs/test-governance.md`.

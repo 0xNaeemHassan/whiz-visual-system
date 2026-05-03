@@ -7,6 +7,7 @@ All notable project changes should be documented here.
 ### Changed
 - Replaced fix-marker style CSS comments with concise code-intent section comments in `src/index.css`.
 - Added contribution guidance in `README.md` for change logging and migration notes.
+- Added `docs/test-governance.md` defining mandatory pre-merge gates, diagnostic checks, promotion criteria, flaky-test SLAs, and recurring regression escalation paths.
 
 ### Migration Notes
 - No migration required.
