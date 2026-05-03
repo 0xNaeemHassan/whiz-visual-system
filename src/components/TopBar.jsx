@@ -1,13 +1,14 @@
+import { AccessibleIconButton } from './primitives';
 export default function TopBar({ title, page, onHamburger, showToast, activeTheme, navigateTo }) {
   return (
     <div className="topbar">
-      <button className="hamburger" onClick={onHamburger} aria-label="Toggle menu">
+      <AccessibleIconButton className="hamburger" onClick={onHamburger} label="Open navigation menu">
         <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
           <line x1="3" y1="6" x2="17" y2="6"/>
           <line x1="3" y1="10" x2="14" y2="10"/>
           <line x1="3" y1="14" x2="17" y2="14"/>
         </svg>
-      </button>
+      </AccessibleIconButton>
       <div>
         <div className="topbar-title">{title}</div>
         {page && <div className="topbar-sub" style={{ fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', opacity: 0.6, fontFamily: 'var(--font-m)' }}>
@@ -23,7 +24,9 @@ export default function TopBar({ title, page, onHamburger, showToast, activeThem
             cursor: 'pointer', transition: 'all var(--t)',
           }}
           onClick={() => navigateTo('themes')}
-          title="Switch theme"
+          title="Open theme settings"
+          aria-label="Open theme settings"
+          role="button"
         >
           <span style={{
             width: 9, height: 9, borderRadius: '50%',
