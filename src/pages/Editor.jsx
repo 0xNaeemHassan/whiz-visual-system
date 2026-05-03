@@ -822,6 +822,14 @@ Apply these auto-corrections?`);
   }, []);
 
   const filteredFrames=useMemo(()=>{if(!frameSearch)return FRAMES;const q=frameSearch.toLowerCase();return FRAMES.filter(f=>f.name.toLowerCase().includes(q)||f.tags.some(t=>t.includes(q))||f.layout.includes(q));},[frameSearch]);
+  const isExpertMode = editorMode === 'expert';
+  const noviceSteps = [
+    { id: 'outline', label: 'Outline', hint: 'Define your core message first.', why: 'A clear outline prevents scope drift and weak framing.' },
+    { id: 'populate', label: 'Populate', hint: 'Fill in key fields and supporting evidence.', why: 'Data-backed content improves trust and publish readiness.' },
+    { id: 'polish', label: 'Polish', hint: 'Tune design, spacing, and legibility.', why: 'Visual hierarchy directly impacts comprehension speed.' },
+    { id: 'validate', label: 'Validate', hint: 'Run checks and resolve warnings.', why: 'Validation catches issues that can block publishing later.' },
+    { id: 'export', label: 'Export', hint: 'Ship final assets and metadata.', why: 'Reliable exports keep downstream workflows consistent.' },
+  ];
   const runValidationCheck = useCallback(() => {
     if (editorValidation.errors.length) return showToast(`Validation errors: ${editorValidation.errors.join(' | ')}`, 'error');
     if (editorValidation.warnings.length) return showToast(`Validation warnings: ${editorValidation.warnings.join(' | ')}`, 'warning');
@@ -874,6 +882,11 @@ Apply these auto-corrections?`);
     <div className="editor-wrap" ref={editorRootRef}>
       <div className="editor-action-bar">
         <div className="editor-action-group">
+          <div style={{display:'flex',alignItems:'center',gap:6,paddingRight:8,marginRight:8,borderRight:'1px solid var(--border)'}}>
+            <span style={{fontFamily:'var(--font-m)',fontSize:10,color:'var(--dim)'}}>Mode</span>
+            <button className={`btn btn-ghost btn-sm ${!isExpertMode?'active':''}`} onClick={()=>setEditorMode('novice')} title="Guided workflow with progressive disclosure">Novice</button>
+            <button className={`btn btn-ghost btn-sm ${isExpertMode?'active':''}`} onClick={()=>setEditorMode('expert')} title="Full direct access with shortcut-centric flow">Expert</button>
+          </div>
           <button className="btn btn-primary btn-sm" onClick={()=>{setShowSaveModal(true);trackActionBar('save','primary',mobileTab==='preview'?'mobile':'desktop');}}>Save</button>
           <button className="btn btn-ghost btn-sm" onClick={()=>{setSaveSearch('');setShowLoadModal(true);trackActionBar('load','primary',mobileTab==='preview'?'mobile':'desktop');}}>Load</button>
           <button className="btn btn-ghost btn-sm" onClick={()=>{handleUndo(mobileTab==='preview'?'mobile':'desktop');}} disabled={!canUndo}>Undo</button>
@@ -954,9 +967,9 @@ Apply these auto-corrections?`);
           </>):(<>
           <div className="editor-panel-header"><span>Content</span><div style={{display:'flex',gap:6}}><button className="btn btn-ghost btn-sm" onClick={()=>setShowHistoryDrawer(v=>!v)}>{showHistoryDrawer?'Hide':'History'}</button><button className="btn btn-ghost btn-sm" onClick={()=>resetContent(DEFAULT_CONTENT)}>Reset</button></div></div>
           {showHistoryDrawer&&<div className="editor-section"><div className="editor-section-title">History ({contentHistory.length})</div><div style={{fontSize:10,color:'var(--dim)',marginBottom:8}}>Newest last · cursor #{contentCursor+1}</div><div style={{maxHeight:360,overflowY:'auto',border:'1px solid var(--border)',borderRadius:8}} onScroll={e=>setHistoryScrollTop(e.currentTarget.scrollTop)}><div style={{paddingTop:virtualTopPad,paddingBottom:virtualBottomPad}}>{virtualRows.map((entry,idx)=>{const absoluteIndex=contentHistory.length-historyCap.length+virtualStart+idx;const isActive=absoluteIndex===contentCursor;return <button key={entry.id} onClick={()=>jumpToContentSnapshot(absoluteIndex)} style={{display:'block',width:'100%',textAlign:'left',padding:'8px 10px',border:'none',borderBottom:'1px solid var(--border)',background:isActive?'color-mix(in srgb,var(--theme-accent) 14%,transparent)':'transparent',cursor:'pointer'}}><div style={{display:'flex',justifyContent:'space-between',gap:8,fontSize:11}}><strong style={{color:isActive?'var(--theme-accent)':'var(--text)'}}>{entry.label||'Snapshot'}</strong><span style={{color:'var(--dim)',fontFamily:'var(--font-m)'}}>{new Date(entry.timestamp).toLocaleTimeString()}</span></div><div style={{fontSize:10,color:'var(--dim)',marginTop:4}}>Δ {entry.changedKeys?.length||0} keys{entry.changedKeys?.length?`: ${entry.changedKeys.slice(0,5).join(', ')}`:''}</div></button>;})}</div></div></div>}
-          <div className="editor-section"><div className="editor-section-title">Quick Start</div><div className="template-list">{CONTENT_TEMPLATES.map(t=>(<div key={t.id} className="template-item" onClick={()=>applyTemplate(t)}><div className="template-item-name">{t.name}</div><div className="template-item-desc">{t.desc}</div></div>))}</div></div>
+          {(isExpertMode || ['outline', 'populate'].includes(noviceStep)) && <div className="editor-section"><div className="editor-section-title">Quick Start</div><div style={{fontSize:10,color:'var(--muted)',marginBottom:6}}>Why this matters: starting from a proven scaffold reduces structural errors.</div><div className="template-list">{CONTENT_TEMPLATES.map(t=>(<div key={t.id} className="template-item" onClick={()=>applyTemplate(t)}><div className="template-item-name">{t.name}</div><div className="template-item-desc">{t.desc}</div></div>))}</div></div>}
           <div className="editor-section"><div className="editor-section-title">Aspect Ratio</div><AspectRatioSelector value={aspectRatio.id} onChange={r=>{setAspectRatio(r);showToast(`${r.w}×${r.h}`);}}/></div>
-          <div className="editor-section">
+          {(isExpertMode || ['outline', 'polish'].includes(noviceStep)) && <div className="editor-section">
             <div className="editor-section-title">Layout Controls</div>
             <div className="form-group">
               <label className="form-label">Density — {(Number(content.layoutDensity ?? 0.6)).toFixed(2)}</label>
@@ -970,9 +983,9 @@ Apply these auto-corrections?`);
                 onChange={e=>updateContent('layoutSpacing',Number(e.target.value))}
                 style={{width:'100%',accentColor:'var(--accent)'}} />
             </div>
-          </div>
-          <div className="editor-section"><div className="editor-section-title">Pattern</div>{strictWhizMode?<div style={{fontSize:10,color:'var(--dim)',marginBottom:6}}>Strict Whiz Mode hides non-essential pattern styling.</div>:<PatternSelector value={patternOverlay?.id||null} onChange={p=>updateMedia(prev=>({...prev,patternOverlay:p}))}/>}</div>
-          <div className="editor-section"><div className="editor-section-title">Effects</div>
+          </div>}
+          {(isExpertMode || noviceStep==='polish') && <div className="editor-section"><div className="editor-section-title">Pattern</div><div style={{fontSize:10,color:'var(--muted)',marginBottom:6}}>Why this matters: subtle texture can improve depth cues without hurting readability.</div>{strictWhizMode?<div style={{fontSize:10,color:'var(--dim)',marginBottom:6}}>Strict Whiz Mode hides non-essential pattern styling.</div>:<PatternSelector value={patternOverlay?.id||null} onChange={p=>updateMedia(prev=>({...prev,patternOverlay:p}))}/>}</div>}
+          {(isExpertMode || noviceStep==='polish') && <div className="editor-section"><div className="editor-section-title">Effects</div>
             <div style={{display:'grid',gap:6}}>
               {[
                 ['glow', 'Glow'],
@@ -986,8 +999,8 @@ Apply these auto-corrections?`);
               ))}
             </div>
             {strictWhizMode && <div style={{fontSize:10,color:'var(--dim)',marginTop:6}}>Effects are disabled in Strict Whiz Mode.</div>}
-          </div>
-          <div className="editor-section"><div className="editor-section-title">Metadata</div><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>{[['Issue #','issueNum'],['Date','date'],['Desk','desk'],['Volume','volume']].map(([l,k])=>(<div key={k} className="form-group" style={{marginBottom:0}}><label className="form-label">{l}</label><input id={`field-${k}`} value={content[k]} onChange={e=>updateContent(k,e.target.value)}/></div>))}</div>{renderFieldCompliance('field-issueNum')}<div className="form-group" style={{marginTop:8}}><label className="form-label">Topic Tag</label><input id="field-topicTag" value={content.topicTag} onChange={e=>{const next=normalizeContentTaxonomy({...content,topicTag:e.target.value});updateContent('topicTag',next.content.topicTag);updateContent('slug',next.content.slug);if(next.compliance.autoCorrected.length)showToast('Topic/slug normalized on input.','info');if(next.compliance.hasInvalid)showToast(next.compliance.invalid.join(' '),'error');}}/>{renderFieldCompliance('field-topicTag')}</div>
+          </div>}
+          {(isExpertMode || ['populate', 'validate', 'export'].includes(noviceStep)) && <div className="editor-section"><div className="editor-section-title">Metadata</div><div style={{fontSize:10,color:'var(--muted)',marginBottom:6}}>Why this matters: metadata powers discoverability, auditability, and export contracts.</div><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>{[['Issue #','issueNum'],['Date','date'],['Desk','desk'],['Volume','volume']].map(([l,k])=>(<div key={k} className="form-group" style={{marginBottom:0}}><label className="form-label">{l}</label><input id={`field-${k}`} value={content[k]} onChange={e=>updateContent(k,e.target.value)}/></div>))}</div>{renderFieldCompliance('field-issueNum')}<div className="form-group" style={{marginTop:8}}><label className="form-label">Topic Tag</label><input id="field-topicTag" value={content.topicTag} onChange={e=>{const next=normalizeContentTaxonomy({...content,topicTag:e.target.value});updateContent('topicTag',next.content.topicTag);updateContent('slug',next.content.slug);if(next.compliance.autoCorrected.length)showToast('Topic/slug normalized on input.','info');if(next.compliance.hasInvalid)showToast(next.compliance.invalid.join(' '),'error');}}/>{renderFieldCompliance('field-topicTag')}</div>
       <div className="form-group">
         <label className="form-label">Ticker Speed (seconds) — {normalizeTickerSpeed(content.tickerSpeed)}s</label>
         <input id="field-tickerSpeed" type="range" min={TICKER_CONTRACT.speed.min} max={TICKER_CONTRACT.speed.max} step={TICKER_CONTRACT.speed.step} value={normalizeTickerSpeed(content.tickerSpeed)}
