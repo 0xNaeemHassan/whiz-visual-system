@@ -3,9 +3,9 @@ import { FRAME_GUIDANCE_BY_ID } from '../../data/frameGuidance';
 import { getLayoutDatasetShape } from '../../data/frameDatasetShapes';
 
 const DATASET_LAYOUT_MAP = Object.freeze({
-  table: new Set(['table', 'scorecard', 'tier-list']),
+  table: new Set(['table', 'scorecard', 'tier-list', 'compare']),
   timeline: new Set(['timeline', 'long-bet']),
-  split: new Set(['bull-bear']),
+  split: new Set(['bull-bear', 'threat-model']),
   grid: new Set(['grid', 'quote']),
   stats: new Set(['stats', 'pitch-deck']),
 });

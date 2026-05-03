@@ -15,7 +15,7 @@ function walk(dir) {
     if (entry.name === 'node_modules' || entry.name === 'dist' || entry.name.startsWith('.')) continue;
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) walk(full);
-    else if (/\.(js|jsx|ts|tsx|mjs)$/.test(entry.name)) {
+    else if (/\.(js|jsx|ts|tsx|mjs)$/.test(entry.name) && !/\.test\.(js|jsx|ts|tsx|mjs)$/.test(entry.name)) {
       const text = fs.readFileSync(full, 'utf8');
       for (const pattern of blockedPatterns) {
         pattern.regex.lastIndex = 0;

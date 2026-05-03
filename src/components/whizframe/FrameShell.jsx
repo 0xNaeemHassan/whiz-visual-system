@@ -1184,7 +1184,7 @@ function ThreatModelLayout(props) {
             {(q.items.length > 0 ? q.items : [{ col1: 'Reentrancy', col2: 'Flash loan attack', col3: '4' }, { col1: 'Oracle manipulation', col2: 'Price feed exploit', col3: '3' }]).slice(0, 3).map((item, i) => (
               <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                 <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 'var(--font-min-body)', color: 'var(--text-secondary)', lineHeight: 1.3 }}>{item.col1}</div>
-                <SeverityDots level={item.col3 || item.col4 || '3'} />
+                <SeverityBadge level={item.col3 || item.col4 || '3'} />
               </div>
             ))}
           </div>

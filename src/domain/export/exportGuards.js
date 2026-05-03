@@ -7,5 +7,5 @@ export function shouldBlockStrictExportForUnsnapshottedEdits({
   if (!guardEnabled) return false;
   if (!strictMode) return false;
   if (action !== 'export' && action !== 'publish') return false;
-  return !Boolean(isSnapshotLockCurrent);
+  return !isSnapshotLockCurrent;
 }

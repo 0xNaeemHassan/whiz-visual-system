@@ -1,3 +1,4 @@
+import { getRegisteredLayouts } from '../plugins';
 /** @typedef {import('../types/editor.js').FrameDefinition} FrameDefinition */
 // All 50 frames data
 /** @type {FrameDefinition[]} */
