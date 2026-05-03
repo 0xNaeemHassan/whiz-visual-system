@@ -287,6 +287,22 @@ const createInvalidRowsCsv = (invalidRows = []) => {
   });
   return lines.join('\n');
 };
+const stableStringify = (value) => {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map((entry) => stableStringify(entry)).join(',')}]`;
+  const keys = Object.keys(value).sort();
+  return `{${keys.map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(',')}}`;
+};
+const hashString = (input = '') => {
+  let hash = 2166136261;
+  const str = String(input);
+  for (let i = 0; i < str.length; i += 1) {
+    hash ^= str.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `fnv1a:${(hash >>> 0).toString(16).padStart(8, '0')}`;
+};
+const hashValue = (value) => hashString(stableStringify(value));
 function DesignPanel({selectedEl,setSelectedEl,overrides,setOverrides,theme,bgGradient,setBgGradient,showToast,resetOverrides,setPatternOverlay,strictMode}){
   const currentOverrides = overrides;
   const setOverrideValue = (key, value) => setOverrides((previousOverrides) => ({ ...previousOverrides, [key]: value }));
@@ -386,6 +402,8 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const [showHistoryDrawer, setShowHistoryDrawer] = useState(false);
   const [showAuditHistory, setShowAuditHistory] = useState(false);
   const [auditTrail, setAuditTrail] = useLocalStorage('whiz-audit-trail', []);
+  const [auditActor, setAuditActor] = useLocalStorage('whiz-audit-actor', 'local-editor');
+  const [auditActionFilter, setAuditActionFilter] = useState('all');
   const [historyScrollTop, setHistoryScrollTop] = useState(0);
   const lastContentRef = useRef(content);
   const[mobileTab,setMobileTab]=useState('preview');const[aspectRatio,setAspectRatio]=useState(RATIOS[0]);
@@ -817,7 +835,33 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   }, [isActive, registerHandlers]);
   useEffect(()=>{if(editMode||selectedEl)setRightTab('design');},[editMode,selectedEl]);
   const buildSave=()=>buildFrameSave({frameId,theme,content:{...content,reviewState},overrides,aspectRatio,bgGradient,patternOverlay,workflowPhase,phaseChecklist,sectionLocks,signoffRecord});
-  const doSave=()=>{const n=saveName.trim()||`${content.topicTag} \u2014 ${new Date().toLocaleDateString()}`;setSaves(p=>[...p,{id:`s_${Date.now()}`,title:n,...buildSave()}]);setShowSaveModal(false);setSaveName('');showToast(`Saved "${n}"`);};
+  const appendAuditEvent = useCallback((event = {}) => {
+    const entry = {
+      id: `audit_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      timestamp: new Date().toISOString(),
+      actor: auditActor || 'local-editor',
+      action: 'edit',
+      section: 'content',
+      fieldPath: '',
+      oldValueHash: '',
+      newValueHash: '',
+      context: {},
+      ...event,
+    };
+    setAuditTrail((prev) => [...prev.slice(-499), entry]);
+    return entry;
+  }, [auditActor, setAuditTrail]);
+  const buildAuditChecksum = useCallback(async (events = auditTrail) => {
+    const payload = stableStringify(events);
+    if (window?.crypto?.subtle && window?.TextEncoder) {
+      const bytes = new TextEncoder().encode(payload);
+      const digest = await window.crypto.subtle.digest('SHA-256', bytes);
+      const hex = Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
+      return `sha256:${hex}`;
+    }
+    return hashString(payload);
+  }, [auditTrail]);
+  const doSave=()=>{const snapshot=buildSave();const n=saveName.trim()||`${content.topicTag} \u2014 ${new Date().toLocaleDateString()}`;setSaves(p=>[...p,{id:`s_${Date.now()}`,title:n,...snapshot,auditTrailSnapshot:[...auditTrail]}]);appendAuditEvent({action:'save',section:'editor',fieldPath:'save',oldValueHash:'n/a',newValueHash:hashValue(snapshot),context:{saveName:n,saveCount:saves.length+1}});setShowSaveModal(false);setSaveName('');showToast(`Saved "${n}"`);};
   const loadSave=s=>{setFrameId(s.frameId);setTheme(s.theme);resetContent(s.content);setReviewState(REVIEW_STATES.includes(s?.content?.reviewState) ? s.content.reviewState : 'draft');setSignoffRecord(s?.signoffRecord || createEmptySignoff());setWorkflowPhase(WORKFLOW_PHASES.includes(s.workflowPhase)?s.workflowPhase:'draft');setPhaseChecklist(s.phaseChecklist||{draftAt:s.savedAt||Date.now(),reviewAt:null,publishReadyAt:null,lastTransitionAt:s.savedAt||Date.now()});if(s.overrides){const validation=validateEditorState({frameId:s.frameId,theme:s.theme,content:s.content||{},overrides:s.overrides},{strictMode:Boolean(strictMode),sanitizeStrictStyle:true});const next=validation.sanitizedOverrides||s.overrides;setOverrides(next);if(strictMode&&validation.codes.includes('STRICT_STYLE_OVERRIDE_BLOCKED')){showToast('Loaded with strict-style sanitization.','warning');}}if(s.sectionLocks&&typeof s.sectionLocks==='object')setSectionLocks(s.sectionLocks);s.aspectRatio&&setAspectRatio(s.aspectRatio);s.bgGradient&&updateMedia(prev=>({...prev,bgGradient:s.bgGradient}));s.patternOverlay&&updateMedia(prev=>({...prev,patternOverlay:s.patternOverlay}));setShowLoadModal(false);setPendingLoadSave(null);setPendingSaveDiff(null);showToast(`Loaded`);};
   const openSaveDiffModal = (save) => {
     const currentState = { frameId, theme, content, overrides, workflowPhase, sectionLocks };
@@ -1187,10 +1231,10 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
               Correction status: {correctionCount>0?`${correctionCount} recorded`:'No corrections'}
             </div>
           </div>
-          </>):(<>
+          </>):<>
           <div className="editor-panel-header"><span>Content</span><div style={{display:'flex',gap:6}}><button className="btn btn-ghost btn-sm" onClick={()=>setShowHistoryDrawer(v=>!v)}>{showHistoryDrawer?'Hide':'History'}</button><button className="btn btn-ghost btn-sm" onClick={()=>setShowAuditHistory(v=>!v)}>{showAuditHistory?'Hide':'Audit'}</button><button className="btn btn-ghost btn-sm" onClick={()=>resetContent(DEFAULT_CONTENT)}>Reset</button></div></div>
           {(isExpertMode || noviceStep==='validate') && showHistoryDrawer&&<div className="editor-section"><div className="editor-section-title">History ({contentHistory.length})</div><div style={{fontSize:10,color:'var(--dim)',marginBottom:8}}>Newest last · cursor #{contentCursor+1}</div><div style={{maxHeight:360,overflowY:'auto',border:'1px solid var(--border)',borderRadius:8}} onScroll={e=>setHistoryScrollTop(e.currentTarget.scrollTop)}><div style={{paddingTop:virtualTopPad,paddingBottom:virtualBottomPad}}>{virtualRows.map((entry,idx)=>{const absoluteIndex=contentHistory.length-historyCap.length+virtualStart+idx;const isActive=absoluteIndex===contentCursor;return <button key={entry.id} onClick={()=>jumpToContentSnapshot(absoluteIndex)} style={{display:'block',width:'100%',textAlign:'left',padding:'8px 10px',border:'none',borderBottom:'1px solid var(--border)',background:isActive?'color-mix(in srgb,var(--theme-accent) 14%,transparent)':'transparent',cursor:'pointer'}}><div style={{display:'flex',justifyContent:'space-between',gap:8,fontSize:11}}><strong style={{color:isActive?'var(--theme-accent)':'var(--text)'}}>{entry.label||'Snapshot'}</strong><span style={{color:'var(--dim)',fontFamily:'var(--font-m)'}}>{new Date(entry.timestamp).toLocaleTimeString()}</span></div><div style={{fontSize:10,color:'var(--dim)',marginTop:4}}>Δ {entry.changedKeys?.length||0} keys{entry.changedKeys?.length?`: ${entry.changedKeys.slice(0,5).join(', ')}`:''}</div></button>;})}</div></div></div>}
-          {showAuditHistory && <div className="editor-section"><div className="editor-section-title">Audit Trail ({auditTrail.length})</div><div style={{maxHeight:220,overflowY:'auto',border:'1px solid var(--border)',borderRadius:8,padding:8}}>{auditTrail.slice(-40).reverse().map((event)=><div key={event.id} style={{fontSize:10,padding:'6px 0',borderBottom:'1px solid var(--border)'}}><div style={{display:'flex',justifyContent:'space-between',gap:8}}><strong>{event.section}</strong><span style={{color:'var(--dim)'}}>{new Date(event.timestamp).toLocaleTimeString()}</span></div><div style={{color:'var(--dim)'}}>{event.action} · {event.fieldPath}</div><div style={{fontFamily:'var(--font-m)',color:'var(--muted)'}}>{event.oldValueHash} → {event.newValueHash}</div></div>)}</div></div>}
+          {showAuditHistory && <div className="editor-section"><div className="editor-section-title">Audit Trail ({auditTrail.length})</div><div style={{display:'grid',gridTemplateColumns:'1fr 1fr auto',gap:6,marginBottom:8}}><input value={auditActor} onChange={(e)=>setAuditActor(e.target.value)} placeholder="Actor"/><select value={auditActionFilter} onChange={(e)=>setAuditActionFilter(e.target.value)}><option value="all">All actions</option><option value="edit">Edits</option><option value="override">Overrides</option><option value="save">Saves</option><option value="export">Exports</option><option value="publish">Publish</option></select><button className="btn btn-ghost btn-sm" onClick={async()=>{const checksum=await buildAuditChecksum();const payload={actor:auditActor,exportedAt:new Date().toISOString(),checksum,events:auditTrail};downloadFile(`audit-trail-${new Date().toISOString().slice(0,10)}.json`,new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));showToast('Audit trail exported');}}>Export trail</button></div><div style={{maxHeight:220,overflowY:'auto',border:'1px solid var(--border)',borderRadius:8,padding:8}}>{auditTrail.filter((event)=>auditActionFilter==='all'||event.action===auditActionFilter).slice(-60).reverse().map((event)=><div key={event.id} style={{fontSize:10,padding:'6px 0',borderBottom:'1px solid var(--border)'}}><div style={{display:'flex',justifyContent:'space-between',gap:8}}><strong>{event.actor} · {event.section}</strong><span style={{color:'var(--dim)'}}>{new Date(event.timestamp).toLocaleString()}</span></div><div style={{color:'var(--dim)'}}>{event.action} · {event.fieldPath}</div><div style={{fontFamily:'var(--font-m)',color:'var(--muted)'}}>{event.oldValueHash} → {event.newValueHash}</div>{event.context && <div style={{fontFamily:'var(--font-m)',color:'var(--dim)'}}>{JSON.stringify(event.context)}</div>}</div>)}</div></div>}
           {(isExpertMode || ['outline', 'populate'].includes(noviceStep)) && <div className="editor-section"><div className="editor-section-title">Quick Start</div><div style={{fontSize:10,color:'var(--muted)',marginBottom:6}}>Why this matters: starting from a proven scaffold reduces structural errors.</div><div className="template-list">{CONTENT_TEMPLATES.map(t=>(<div key={t.id} className="template-item" onClick={()=>applyTemplate(t)}><div className="template-item-name">{t.name}</div><div className="template-item-desc">{t.desc}</div></div>))}</div></div>}
           <div className="editor-section"><div className="editor-section-title">Aspect Ratio</div><AspectRatioSelector value={aspectRatio.id} onChange={r=>{setAspectRatio(r);showToast(`${r.w}×${r.h}`);}}/></div>
           {(isExpertMode || ['outline', 'polish'].includes(noviceStep)) && <div className="editor-section">
