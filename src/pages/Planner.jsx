@@ -5,9 +5,11 @@ import { THEMES } from '../data/themes';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { useIntl } from '../i18n/IntlProvider';
 import { normalizePlannerIssue } from '../utils/schemaContracts';
+import { attachVerificationPlan, evaluateVerificationStatus, canPublishIssue, buildOverrideAuditLog } from '../domain/plannerVerificationPolicy';
 
 const STATUSES = ['draft', 'planned', 'wip', 'done', 'published'];
 const CONFIDENCE = ['low', 'medium', 'high'];
+const CLAIM_TYPES = ['fast_metrics', 'slower_indicators', 'evergreen_context'];
 const KANBAN_COLS = [
   { id: 'draft', label: 'DRAFT', color: '#8B95A3' },
   { id: 'planned', label: 'PLANNED', color: '#6FA8FF' },
@@ -95,7 +97,7 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
   const [editingIssue, setEditingIssue] = useState(null);
   const [form, setForm] = useState({
     issueNum: '', topic: '', frameId: '', themeId: '', status: 'draft', priority: 'medium',
-    publishDate: '', notes: '', caption: '', sourceLinks: '', confidence: 'medium', series: '',
+    publishDate: '', notes: '', caption: '', sourceLinks: '', confidence: 'medium', series: '', claimType: 'slower_indicators', verificationOverrideReason: '',
   });
   const normalizeIssueNum = (v) => String(v || '').replace(/\D/g, '').slice(-3).padStart(3, '0');
   const normalizeIssue = (issue) => ({
@@ -111,6 +113,10 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
     metricValue: issue.metricValue || '',
     metricUnit: issue.metricUnit || '',
     metricProvenance: Array.isArray(issue.metricProvenance) ? issue.metricProvenance : [],
+    claimType: CLAIM_TYPES.includes(issue.claimType) ? issue.claimType : 'slower_indicators',
+    verification: issue.verification || {},
+    verificationPolicy: issue.verificationPolicy || null,
+    overrideAuditLog: Array.isArray(issue.overrideAuditLog) ? issue.overrideAuditLog : [],
   });
   const existingIssueNums = new Set(issues.map(i => String(i.issueNum || '').padStart(3, '0')));
 
@@ -167,7 +173,7 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
 
   const openIssueForm = (presetStatus) => {
     setEditingIssue(null);
-    setForm({ issueNum: String(nextNum).padStart(3,'0'), topic: '', frameId: '', themeId: '', status: presetStatus || 'draft', publishDate: '', notes: '', caption: '', sourceLinks: '', priority: 'medium', confidence: 'medium', series: '' });
+    setForm({ issueNum: String(nextNum).padStart(3,'0'), topic: '', frameId: '', themeId: '', status: presetStatus || 'draft', publishDate: '', notes: '', caption: '', sourceLinks: '', priority: 'medium', confidence: 'medium', series: '', claimType: 'slower_indicators', verificationOverrideReason: '' });
     setShowModal(true);
   };
 
@@ -193,11 +199,20 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
       const today = new Date(); today.setHours(0,0,0,0);
       if (d < today) showToast('Publish date is in the past', 'warning');
     }
+
+    const plannedIssue = attachVerificationPlan({ ...form, verification: form.verification || {} });
+    const verificationStatus = evaluateVerificationStatus(plannedIssue);
+    if (verificationStatus.reminders.includes('verification_due_soon')) showToast('Verification deadline is approaching', 'warning');
+    if (verificationStatus.reminders.includes('verification_escalation')) showToast('Verification escalation triggered', 'warning');
+
+    const publishGate = canPublishIssue(plannedIssue);
+    if (form.status === 'published' && !publishGate.allowed) { showToast(publishGate.reason, 'error'); return; }
+
     if (editingIssue) {
-      setIssues(prev => prev.map(i => i.id === editingIssue ? { ...i, ...form, issueNum: normalizedIssueNum } : i));
+      setIssues(prev => prev.map(i => i.id === editingIssue ? (() => { const merged = { ...i, ...plannedIssue, issueNum: normalizedIssueNum }; if (publishGate.overrideLogged) { const log = buildOverrideAuditLog({ issueId: i.id, reason: form.verificationOverrideReason, actor: 'planner-user' }); return { ...merged, overrideAuditLog: [...(i.overrideAuditLog || []), log] }; } return merged; })() : i));
       showToast('Issue updated');
     } else {
-      setIssues(prev => [...prev, { ...form, issueNum: normalizedIssueNum, id: `i_${Date.now()}`, createdAt: Date.now() }]);
+      setIssues(prev => [...prev, (() => { const created = { ...plannedIssue, issueNum: normalizedIssueNum, id: `i_${Date.now()}`, createdAt: Date.now() }; if (publishGate.overrideLogged) { const log = buildOverrideAuditLog({ issueId: created.id, reason: form.verificationOverrideReason, actor: 'planner-user' }); return { ...created, overrideAuditLog: [log] }; } return created; })()]);
       showToast(`Issue #${normalizedIssueNum} created`);
     }
     setShowModal(false);
@@ -629,6 +644,7 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div className="form-group"><label className="form-label">Confidence</label><select value={form.confidence || 'medium'} onChange={e => setForm(f => ({...f, confidence: e.target.value}))}>{CONFIDENCE.map(s => <option key={s} value={s}>{s.toUpperCase()}</option>)}</select></div>
+            <div className="form-group"><label className="form-label">Claim Type</label><select value={form.claimType || 'slower_indicators'} onChange={e => setForm(f => ({...f, claimType: e.target.value}))}>{CLAIM_TYPES.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
             <div className="form-group"><label className="form-label">Series</label><input value={form.series || ''} onChange={e => setForm(f => ({...f, series: e.target.value}))} placeholder="Stablecoin Risk Pt. 1" /></div>
           </div>
           <div className="form-group"><label className="form-label">Topic / Headline *</label><input value={form.topic} onChange={e => setForm(f => ({...f, topic: e.target.value}))} placeholder="The End of Mercenary Yield" autoFocus /></div>
@@ -655,6 +671,7 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
           {/* F7: Source links with URL hints */}
           <div className="form-group"><label className="form-label">Source Links (one per line)</label><textarea value={form.sourceLinks} onChange={e => setForm(f => ({...f, sourceLinks: e.target.value}))} rows={2} placeholder="https://defillama.com/protocol/...&#10;https://dune.com/..." />{form.sourceLinks && <div style={{ marginTop: 4 }}>{form.sourceLinks.split('\n').filter(Boolean).map((link, i) => {const isUrl = /^https?:\/\//.test(link.trim()); return (<div key={i} style={{ fontSize: 10, fontFamily: 'var(--font-m)', color: isUrl ? 'var(--muted)' : '#FF5A5A', display: 'flex', alignItems: 'center', gap: 4 }}><span>{isUrl ? '✓' : '⚠'}</span><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{link.trim()}</span></div>);})}</div>}</div>
           <div className="form-group"><label className="form-label">Notes</label><textarea value={form.notes} onChange={e => setForm(f => ({...f, notes: e.target.value}))} rows={2} placeholder="Research notes, key stats, angle ideas..." /></div>
+          <div className="form-group"><label className="form-label">Override Reason (if publishing expired critical verification)</label><input value={form.verificationOverrideReason || ''} onChange={e => setForm(f => ({...f, verificationOverrideReason: e.target.value}))} placeholder="Required when override is needed" /></div>
           <div className="modal-footer">
             {editingIssue && <button className="btn btn-danger" onClick={() => { deleteIssue(editingIssue); setShowModal(false); }}>Delete</button>}
             {editingIssue && <button className="btn btn-secondary" onClick={() => { duplicateIssue(issues.find(i=>i.id===editingIssue)); setShowModal(false); }}>Duplicate</button>}
