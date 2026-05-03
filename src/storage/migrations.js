@@ -1,3 +1,5 @@
+import { repairDuplicateIssueNumbers } from './issueNumberAllocator';
+
 const STORAGE_SCHEMA_VERSION = 1;
 
 const ENVELOPED_KEYS = new Set([
@@ -37,9 +39,10 @@ function migrateAnyToEnvelope(rawValue) {
 function migrateLegacySaveRecord(save) {
   if (!isObject(save)) return save;
   const { status: legacyStatus, ...rest } = save;
-  const tags = Array.isArray(save.tags)
+  const legacyTags = Array.isArray(save.tags)
     ? save.tags.filter((tag) => typeof tag === 'string').map((tag) => tag.trim()).filter(Boolean)
     : [];
+  const tags = normalizeCanonicalTagList(legacyTags).valid;
   const folder = typeof save.folder === 'string' ? save.folder : '';
   const status = typeof legacyStatus === 'string' && legacyStatus.trim() ? legacyStatus.trim() : undefined;
   return {
@@ -59,11 +62,26 @@ function migrateLegacySaves(rawValue) {
   };
 }
 
+function migratePlannerIssues(rawValue) {
+  const enveloped = migrateAnyToEnvelope(rawValue);
+  if (!Array.isArray(enveloped.data)) return enveloped;
+  const repaired = repairDuplicateIssueNumbers(enveloped.data);
+  return {
+    ...enveloped,
+    data: repaired.items,
+    metadata: {
+      ...(isObject(enveloped.metadata) ? enveloped.metadata : {}),
+      ...(isObject(repaired.metadata) ? repaired.metadata : {}),
+    },
+  };
+}
+
 const MIGRATIONS = {
   'whiz-autosave': [migrateAnyToEnvelope],
   'whiz-theme': [migrateAnyToEnvelope],
   // Applies to legacy or ad-hoc snapshot keys too.
   'whiz-saves': [migrateLegacySaves],
+  'whiz-issues': [migratePlannerIssues],
 };
 
 function getMigrationChain(key) {

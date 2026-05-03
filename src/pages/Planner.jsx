@@ -5,10 +5,12 @@ import { THEMES } from '../data/themes';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { useIntl } from '../i18n/IntlProvider';
 import { normalizePlannerIssue } from '../utils/schemaContracts';
-import { evaluateCapacity, suggestRebalance } from '../domain/services/plannerCapacityService';
+import { computeCadencePolicy, CADENCE_SLOT_STATE } from '../domain/services/cadencePolicyEngine';
+import { DEFAULT_CADENCE_CONFIG } from '../state/editorStore';
 
 const STATUSES = ['draft', 'planned', 'wip', 'done', 'published'];
 const CONFIDENCE = ['low', 'medium', 'high'];
+const CLAIM_TYPES = ['fast_metrics', 'slower_indicators', 'evergreen_context'];
 const KANBAN_COLS = [
   { id: 'draft', label: 'DRAFT', color: '#8B95A3' },
   { id: 'planned', label: 'PLANNED', color: '#6FA8FF' },
@@ -52,6 +54,8 @@ function useDragDrop(onDrop) {
 
 export default function Planner({ showToast, activeTheme, navigateTo, isActive }) {
   const [issues, setIssues] = useLocalStorage('whiz-issues', []);
+  const [cadenceConfig, setCadenceConfig] = useLocalStorage('whiz-cadence-config', DEFAULT_CADENCE_CONFIG);
+  const [cadenceOverrideLog, setCadenceOverrideLog] = useLocalStorage('whiz-cadence-overrides', []);
   const [view, setView] = useState('table');
   // Fix #20: reset deleteConfirmId on view change
   const setViewSafe = (v) => { setView(v); setDeleteConfirmId(null); };
@@ -88,37 +92,33 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
     };
   });
   const maxMonthly = Math.max(1, ...monthlyActivity.map(m => m.count));
+  const historicalFramePerformance = useMemo(() => {
+    const byFrameId = {};
+    issues.forEach((issue) => {
+      if (!issue.frameId) return;
+      const key = String(issue.frameId);
+      const statusBonus = issue.status === 'published' ? 0.12 : issue.status === 'done' ? 0.06 : issue.status === 'wip' ? 0.02 : -0.01;
+      const confidenceBonus = issue.confidence === 'high' ? 0.06 : issue.confidence === 'low' ? -0.04 : 0;
+      byFrameId[key] = (byFrameId[key] || 0) + statusBonus + confidenceBonus;
+    });
+    Object.keys(byFrameId).forEach((id) => {
+      byFrameId[id] = Math.max(-0.3, Math.min(0.3, byFrameId[id]));
+    });
+    return { byFrameId };
+  }, [issues]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [seriesFocusFilter, setSeriesFocusFilter] = useState(null);
+  const [rankingWeights, setRankingWeights] = useLocalStorage('whiz-planner-ranking-weights', DEFAULT_RANKING_WEIGHTS);
   const [showModal, setShowModal] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [editingIssue, setEditingIssue] = useState(null);
   const [form, setForm] = useState({
     issueNum: '', topic: '', frameId: '', themeId: '', status: 'draft', priority: 'medium',
-    publishDate: '', notes: '', caption: '', sourceLinks: '', confidence: 'medium', series: '', ownerId: '', reviewerId: '', complexityPoints: 3,
+    publishDate: '', notes: '', caption: '', sourceLinks: '', confidence: 'medium', series: '',
+    series_id: '', part_number: '', prev_issue: '', next_issue: '', continuity_status: 'healthy',
   });
-
-  const [capacityModel] = useLocalStorage('whiz-planner-capacity', {
-    creators: [
-      { id: 'alex', weeklySlots: 5, complexityBudget: 18, plannedPTO: [] },
-      { id: 'sam', weeklySlots: 5, complexityBudget: 18, plannedPTO: [] },
-    ],
-    reviewers: [
-      { id: 'riley', weeklySlots: 8, complexityBudget: 24, plannedPTO: [] },
-    ],
-  });
-  const capacitySignals = useMemo(() => evaluateCapacity({ issues, model: capacityModel }), [issues, capacityModel]);
-  const rebalanceSuggestions = useMemo(() => suggestRebalance({ issues, model: capacityModel }), [issues, capacityModel]);
-  const applyRebalance = () => {
-    if (!rebalanceSuggestions.length) return;
-    setIssues((prev) => prev.map((issue) => {
-      const move = rebalanceSuggestions.find((entry) => entry.issueId === issue.id);
-      return move ? { ...issue, ownerId: move.to } : issue;
-    }));
-    showToast(`Applied ${rebalanceSuggestions.length} rebalance suggestion(s).`);
-  };
-  const normalizeIssueNum = (v) => String(v || '').replace(/\D/g, '').slice(-3).padStart(3, '0');
+  const normalizeIssueNum = (v) => normalizeIssueNumber(v);
   const normalizeIssue = (issue) => ({
     ...normalizePlannerIssue(issue),
     issueNum: normalizeIssueNum(issue.issueNum),
@@ -126,16 +126,37 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
     confidence: CONFIDENCE.includes(issue.confidence) ? issue.confidence : 'medium',
     series: issue.series || '',
     assistantBrief: issue.assistantBrief || '',
+    recommendationIntent: issue.recommendationIntent || 'recap',
+    recommendationDataShape: issue.recommendationDataShape || 'table',
+    recommendationUrgency: issue.recommendationUrgency || 'medium',
+    recommendationFeedback: Array.isArray(issue.recommendationFeedback) ? issue.recommendationFeedback : [],
     targetMetric: issue.targetMetric || '',
     metricConfidence: issue.metricConfidence || '',
     metricSource: issue.metricSource || '',
     metricValue: issue.metricValue || '',
     metricUnit: issue.metricUnit || '',
     metricProvenance: Array.isArray(issue.metricProvenance) ? issue.metricProvenance : [],
+    series_id: issue.series_id || '',
+    part_number: issue.part_number ?? '',
+    prev_issue: issue.prev_issue || '',
+    next_issue: issue.next_issue || '',
+    continuity_status: issue.continuity_status || 'healthy',
   });
-  const existingIssueNums = new Set(issues.map(i => String(i.issueNum || '').padStart(3, '0')));
+  const existingIssueNums = new Set(issues.map(i => normalizeIssueNum(i.issueNum)));
+  const issueAllocator = useMemo(() => createIssueNumberAllocator(issues), [issues]);
+
+
+  const milestoneProgress = useMemo(() => computeMilestoneProgress({ issues, frames: FRAMES }), [issues]);
+  const [firedMilestones, setFiredMilestones] = useLocalStorage('whiz-milestone-events', []);
+  useEffect(() => {
+    const { events, firedMilestones: updated } = computeMilestoneUnlockEvents({ progress: milestoneProgress, alreadyFired: firedMilestones });
+    if (events.length === 0) return;
+    events.forEach((evt) => showToast(`Milestone unlocked: ${evt.label}`));
+    setFiredMilestones(updated);
+  }, [milestoneProgress, firedMilestones, setFiredMilestones, showToast]);
 
   const { registerHandlers } = useUIEventContext();
+  const { t } = useIntl();
 
   // Escape handler routed via UI event context
   useEffect(() => {
@@ -148,7 +169,7 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
     });
   }, [isActive, registerHandlers]);
 
-  const nextNum = issues.length > 0 ? Math.max(...issues.map(i => Number(i.issueNum) || 0)) + 1 : 1;
+  const nextIssueNum = issueAllocator.peekNext();
 
   useEffect(() => {
     try {
@@ -158,7 +179,7 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
       localStorage.removeItem('whiz-planner-issue-draft');
       setEditingIssue(null);
       setForm({
-        issueNum: draft.issueNum || String(nextNum).padStart(3, '0'),
+        issueNum: draft.issueNum || nextIssueNum,
         topic: draft.topic || '',
         frameId: draft.frameId || '',
         themeId: draft.themeId || '',
@@ -171,32 +192,41 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
         confidence: draft.confidence || 'medium',
         series: draft.series || '',
         assistantBrief: draft.assistantBrief || '',
+        recommendationIntent: draft.recommendationIntent || 'recap',
+        recommendationDataShape: draft.recommendationDataShape || 'table',
+        recommendationUrgency: draft.recommendationUrgency || 'medium',
+        recommendationFeedback: draft.recommendationFeedback || [],
         targetMetric: draft.targetMetric || '',
         metricConfidence: draft.metricConfidence || '',
         metricSource: draft.metricSource || '',
         metricValue: draft.metricValue || '',
         metricUnit: draft.metricUnit || '',
         metricProvenance: draft.metricProvenance || [],
+        series_id: draft.series_id || '',
+        part_number: draft.part_number ?? '',
+        prev_issue: draft.prev_issue || '',
+        next_issue: draft.next_issue || '',
+        continuity_status: draft.continuity_status || 'healthy',
       });
       setShowModal(true);
       showToast('Loaded draft from Editor duplicate');
     } catch (error) {
       localStorage.removeItem('whiz-planner-issue-draft');
     }
-  }, [nextNum, showToast]);
+  }, [nextIssueNum, showToast]);
 
 
   const openIssueForm = (presetStatus) => {
     setEditingIssue(null);
-    setForm({ issueNum: String(nextNum).padStart(3,'0'), topic: '', frameId: '', themeId: '', status: presetStatus || 'draft', publishDate: '', notes: '', caption: '', sourceLinks: '', priority: 'medium', confidence: 'medium', series: '', ownerId: '', reviewerId: '', complexityPoints: 3 });
+    setForm({ issueNum: nextIssueNum, topic: '', frameId: '', themeId: '', status: presetStatus || 'draft', publishDate: '', notes: '', caption: '', sourceLinks: '', priority: 'medium', confidence: 'medium', series: '' });
     setShowModal(true);
   };
 
-  const openEdit = (issue) => { setEditingIssue(issue.id); setForm({ confidence: 'medium', series: '', ...normalizeIssue(issue) }); setShowModal(true); };
+  const openEdit = (issue) => { setEditingIssue(issue.id); setForm({ confidence: 'medium', series: '', recommendationIntent: 'recap', recommendationDataShape: 'table', recommendationUrgency: 'medium', recommendationFeedback: [], ...normalizeIssue(issue) }); setShowModal(true); };
 
   // F5: Duplicate issue
   const duplicateIssue = (issue) => {
-    const dn = String(nextNum).padStart(3,'0');
+    const dn = issueAllocator.reserveNext();
     setIssues(prev => [...prev, { ...issue, id: `i_${Date.now()}`, issueNum: dn, status: 'draft', createdAt: Date.now(), topic: `${issue.topic} (copy)` }]);
     showToast('Issue duplicated');
   };
@@ -214,15 +244,20 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
       const today = new Date(); today.setHours(0,0,0,0);
       if (d < today) showToast('Publish date is in the past', 'warning');
     }
+    const normalizedTags = normalizeProtocolTags(form.tags || []);
     if (editingIssue) {
-      setIssues(prev => prev.map(i => i.id === editingIssue ? { ...i, ...form, issueNum: normalizedIssueNum } : i));
+      setIssues(prev => prev.map(i => i.id === editingIssue ? { ...i, ...form, tags: normalizedTags.tags, issueNum: normalizedIssueNum } : i));
       showToast('Issue updated');
     } else {
-      setIssues(prev => [...prev, { ...form, issueNum: normalizedIssueNum, id: `i_${Date.now()}`, createdAt: Date.now() }]);
+      setIssues(prev => [...prev, { ...form, tags: normalizedTags.tags, issueNum: normalizedIssueNum, id: `i_${Date.now()}`, createdAt: Date.now() }]);
       showToast(`Issue #${normalizedIssueNum} created`);
     }
     setShowModal(false);
   };
+  useEffect(() => {
+    const suggestions = extractProtocolTagSuggestions({ title: form.topic, body: form.notes, tableRows: [] });
+    setTagSuggestions(suggestions.slice(0, 5));
+  }, [form.topic, form.notes]);
 
   // F3: Fixed delete — no auto-reset timer, explicit cancel
   const deleteIssue = (id) => {
@@ -235,7 +270,19 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
     }
   };
 
-  const updateStatus = (id, status) => setIssues(prev => prev.map(i => i.id === id ? { ...i, status } : i));
+  const updateStatus = (id, status) => setIssues(prev => prev.map((i) => {
+    if (i.id !== id) return i;
+    if (status === 'published' && i.status !== 'published') {
+      const heuristic = heuristicByIssueId[i.id] || scoreEngagementHeuristic({ issue: i, issues: prev });
+      const feedback = createEngagementOutcomeFeedback({
+        issueId: i.id,
+        score: heuristic.score,
+        outcome: { publishedAt: new Date().toISOString(), topic: i.topic || '' },
+      });
+      addActivityEntry({ type: 'telemetry', status: 'info', message: `Heuristic feedback captured for #${i.issueNum || '---'}`, metadata: feedback });
+    }
+    return { ...i, status };
+  }));
 
   // F1: Drop handler for kanban
   const handleKanbanDrop = useCallback((issueId, targetStatus) => {
@@ -244,6 +291,29 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
   }, [setIssues, showToast]);
 
   const dnd = useDragDrop(handleKanbanDrop);
+
+  const milestoneConfig = { fiscalQuarterOffsetMonths: 0, timezone: 'UTC', triggerWindowHours: 24 };
+  const quarterKey = getQuarterRolloverKey({ now: new Date(), config: milestoneConfig });
+  const milestoneState = loadReminderState();
+  const milestoneReminders = createMilestoneReminderEvents({
+    now: new Date(),
+    config: milestoneConfig,
+    objectives: ['Plan pending quarter objectives in planner timeline.','Mid-quarter checkpoint for objective confidence + velocity.','Pre-close checkpoint before cover story publish.'],
+    coverStoryCheckpoint: 'Finalize Cover Story (Frame 50) narrative and asset checklist.',
+  }).map((reminder) => {
+    const state = milestoneState?.[quarterKey]?.[reminder.id] || {};
+    const snoozedUntil = state.snoozedUntil ? new Date(state.snoozedUntil) : null;
+    const snoozedActive = snoozedUntil && snoozedUntil.getTime() > Date.now();
+    return { ...reminder, acknowledged: Boolean(state.acknowledged), snoozedUntil, snoozedActive };
+  }).filter((reminder) => reminder.pending && !reminder.acknowledged && !reminder.snoozedActive);
+
+  const handleAcknowledgeReminder = (id) => { acknowledgeReminder({ id, quarterKey }); setIssues((prev) => [...prev]); };
+  const handleSnoozeReminder = (id) => {
+    const until = new Date(Date.now() + (48 * 60 * 60 * 1000)).toISOString();
+    snoozeReminder({ id, quarterKey, snoozedUntil: until });
+    setIssues((prev) => [...prev]);
+  };
+
 
   const csvHeaders = ['Issue #', 'Topic', 'Frame #', 'Theme', 'Status', 'Publish Date', 'Notes', 'Caption', 'Source Links', 'Priority', 'Confidence', 'Series', 'Assistant Brief', 'Target Metric', 'Metric Confidence', 'Metric Source', 'Metric Value', 'Metric Unit', 'Metric Provenance'];
   const csvEscape = (value) => `"${String(value ?? '').replace(/"/g,'""')}"`;
@@ -360,7 +430,10 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
         const lines = hasHeader ? allRows.slice(1) : allRows;
         if (lines.length < 1) { showToast('CSV has no data rows', 'error'); return; }
         const imported = lines.map((cols, idx) => mapCSVColsToIssue(cols, idx)).filter(i => i.issueNum || i.topic);
-        setIssues(prev => [...prev, ...imported]);
+        setIssues(prev => {
+          const allocator = createIssueNumberAllocator(prev);
+          return [...prev, ...allocator.reconcile(imported)];
+        });
         showToast(`Imported ${imported.length} issues`);
       } catch (err) { showToast('Failed to parse CSV', 'error'); }
     };
@@ -427,17 +500,72 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
     setSeriesFocusFilter(seriesName);
   };
 
+  const rankedIssues = useMemo(() => rankPlannerIssues(issues, { weights: rankingWeights }), [issues, rankingWeights]);
+
   const filtered = useMemo(() => {
-    let f = issues;
+    let f = rankedIssues;
     if (statusFilter !== 'ALL') f = f.filter(i => i.status === statusFilter);
     if (search) { const q = search.toLowerCase(); f = f.filter(i => i.topic?.toLowerCase().includes(q) || i.issueNum?.includes(q) || i.notes?.toLowerCase().includes(q) || i.caption?.toLowerCase().includes(q) || i.sourceLinks?.toLowerCase().includes(q)); }
     if (seriesFocusFilter) f = f.filter(i => (i.series || '').trim() === seriesFocusFilter && (i.confidence || 'medium') === 'low');
     return f.sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0));
   }, [issues, statusFilter, search, seriesFocusFilter]);
+  const heuristicByIssueId = useMemo(() => issues.reduce((acc, issue) => {
+    acc[issue.id] = scoreEngagementHeuristic({ issue, issues });
+    return acc;
+  }, {}), [issues]);
 
   const stats = STATUSES.reduce((acc, s) => { acc[s] = issues.filter(i => i.status === s).length; return acc; }, {});
+  const cadencePolicy = useMemo(() => computeCadencePolicy({ issues, cadenceConfig, now: new Date() }), [issues, cadenceConfig]);
+  const cadenceDebt = cadencePolicy.debt;
+  const registerCadenceOverride = () => {
+    const reason = window.prompt('Override reason for cadence debt?');
+    if (!reason) return;
+    setCadenceOverrideLog((prev) => [...prev, { reason: reason.trim(), timestamp: Date.now() }]);
+    showToast('Cadence override logged', 'warning');
+  };
+
+  const plannerScore = useMemo(() => evaluatePlannerScore(issues), [issues]);
+  const scoreTone = classifyScore(plannerScore.aggregateScore);
+  const scorePalette = {
+    green: { color: '#3CE6A6', label: 'Healthy' },
+    yellow: { color: '#E5B23A', label: 'Watch' },
+    red: { color: '#FF5A5A', label: 'Needs Attention' },
+  };
+  const scoreTrend = useMemo(() => {
+    const windows = Array.from({ length: 8 }, (_, idx) => {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - (7 * (7 - idx)));
+      const subset = issues.filter((issue) => {
+        if (!issue.publishDate) return false;
+        const d = new Date(issue.publishDate);
+        return !Number.isNaN(d.getTime()) && d <= cutoff;
+      });
+      return evaluatePlannerScore(subset, cutoff).aggregateScore;
+    });
+    return windows;
+  }, [issues]);
+
+  const arcModel = useMemo(() => buildNarrativeArcModel(issues), [issues]);
+  const nextArcSuggestion = useMemo(() => suggestNextArcStep(issues), [issues]);
+
+  const outcomeWindows = useMemo(() => aggregateOutcomeWindows(issues), [issues]);
+  const recommendationDeltas = useMemo(() => computeRecommendationDeltas(issues), [issues]);
 
   // F10: Open in Editor with frame/theme pre-loaded
+
+  const frameSuggestions = useMemo(() => rankFrameCandidates({
+    dataShape: form.recommendationDataShape,
+    intent: form.recommendationIntent,
+    urgency: form.recommendationUrgency,
+    confidence: form.confidence,
+  }, { topN: 3, rejectFeedback: form.recommendationFeedback }), [form.recommendationDataShape, form.recommendationIntent, form.recommendationUrgency, form.confidence, form.recommendationFeedback]);
+
+  const rejectSuggestedFrame = (frameId, reason) => {
+    setForm((prev) => ({
+      ...prev,
+      recommendationFeedback: [...(prev.recommendationFeedback || []), { frameId, reason, at: Date.now() }],
+    }));
+  };
   const openInEditor = (issue) => {
     // Fix #21: pass full issue context so Editor can pre-fill content
     const frameId = issue.frameId ? Number(issue.frameId) : undefined;
@@ -465,8 +593,44 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
           <div style={{ fontFamily: 'var(--font-m)', fontSize: 9, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>TOTAL<br/>ISSUES</div>
         </div>
       </div>
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+          <div style={{ fontSize: 12 }}>Weekly cadence score: <strong>{cadencePolicy.score}%</strong> · Debt: <strong>{cadenceDebt}</strong></div>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <label style={{ fontSize: 11 }}>TZ <input value={cadenceConfig.timezone} onChange={(e) => setCadenceConfig((prev) => ({ ...prev, timezone: e.target.value }))} style={{ width: 110, marginLeft: 4 }} /></label>
+            <label style={{ fontSize: 11 }}>Grace h <input type="number" value={cadenceConfig.graceWindowHours} onChange={(e) => setCadenceConfig((prev) => ({ ...prev, graceWindowHours: Number(e.target.value) || 0 }))} style={{ width: 56, marginLeft: 4 }} /></label>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+          {cadencePolicy.slots.map((slot) => {
+            const meta = slot.state === CADENCE_SLOT_STATE.ON_TRACK ? ['On Track', '#3CE6A6'] : slot.state === CADENCE_SLOT_STATE.AT_RISK ? ['At Risk', '#E5B23A'] : ['Missed', '#FF5A5A'];
+            return <span key={slot.slotKey} style={{ border: `1px solid ${meta[1]}`, borderRadius: 999, padding: '2px 8px', fontSize: 10 }}>{slot.slotKey} · {meta[0]}</span>;
+          })}
+        </div>
+        {cadencePolicy.reminders.length > 0 && (
+          <div style={{ marginTop: 10, fontSize: 11, color: '#E5B23A' }}>
+            {cadencePolicy.reminders.map((reminder) => <div key={`${reminder.slotKey}-${reminder.severity}`}>[{reminder.severity.toUpperCase()}] {reminder.message}</div>)}
+          </div>
+        )}
+      </div>
 
 
+
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, gap: 8 }}>
+          <strong>Milestone Tracker</strong>
+          <span style={{ fontFamily: 'var(--font-m)', fontSize: 10, color: 'var(--dim)' }}>{Math.round(milestoneProgress.progress * 100)}%</span>
+        </div>
+        <div style={{ height: 8, background: 'var(--bg-3)', borderRadius: 999, overflow: 'hidden', marginBottom: 10 }}>
+          <div style={{ height: '100%', width: `${Math.round(milestoneProgress.progress * 100)}%`, background: activeTheme.accent }} />
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>Next: {milestoneProgress.nextMilestone.label}</div>
+        <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12 }}>
+          {milestoneProgress.checklist.map((item) => <li key={item.id}>{item.complete ? '✓' : '○'} {item.label}{item.complete ? '' : ` (${item.remaining} left)`}</li>)}
+        </ul>
+        {milestoneProgress.guidance.length > 0 && <div style={{ marginTop: 8, fontSize: 11, color: 'var(--dim)' }}>{milestoneProgress.guidance[0]}</div>}
+      </div>
 
       {/* Intelligence Panel */}
       <div className="card" style={{ marginBottom: 16 }} aria-label="Cadence intelligence panel">
@@ -474,6 +638,7 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
           <div>
             <div style={{ fontFamily: 'var(--font-m)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)' }}>Intelligence</div>
             <div style={{ fontSize: 13, color: 'var(--text)' }}>Top cadence alerts by posting drift.</div>
+            <div style={{ fontSize: 11, color: 'var(--muted)' }}>Next arc step: <strong>{nextArcSuggestion.suggestedPhase}</strong> — {nextArcSuggestion.reason}</div>
           </div>
           {seriesFocusFilter && (
             <button className="btn btn-ghost btn-sm" onClick={() => setSeriesFocusFilter(null)}>
@@ -517,18 +682,27 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
       </div>
 
       <div className="card" style={{ marginBottom: 12 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <strong style={{ fontSize: 12 }}>Capacity model (creator/reviewer)</strong>
-          <button className="btn btn-secondary btn-sm" onClick={applyRebalance} disabled={!rebalanceSuggestions.length}>One-click rebalance ({rebalanceSuggestions.length})</button>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <strong>Quarter Timeline Reminders</strong>
+          <span style={{ fontSize: 11, color: 'var(--dim)' }}>Quarter key: {quarterKey}</span>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 8 }}>
-          {Object.values(capacitySignals.creator).map((person) => (
-            <div key={person.id} style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 8 }}>
-              <div style={{ fontWeight: 700 }}>{person.id} · {person.signal}</div>
-              <div style={{ fontSize: 11, color: 'var(--muted)' }}>slots {person.weeklySlotsUsed}/{person.weeklySlots} · complexity {person.complexityUsed}/{person.complexityBudget} · PTO conflicts {person.ptoCollisionCount}</div>
-            </div>
-          ))}
-        </div>
+        {milestoneReminders.length === 0 ? (
+          <div style={{ fontSize: 12, color: 'var(--muted)' }}>No pending quarter objectives/checkpoints in trigger window.</div>
+        ) : (
+          <div style={{ display: 'grid', gap: 8 }}>
+            {milestoneReminders.map((reminder) => (
+              <div key={reminder.id} style={{ border: '1px solid var(--border)', borderRadius: 'var(--r)', padding: 10 }}>
+                <div style={{ fontWeight: 600 }}>{reminder.label}</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)' }}>{reminder.timelineNote}</div>
+                <div style={{ fontSize: 10, color: 'var(--dim)', marginTop: 3 }}>Due {reminder.dueDateKey} ({milestoneConfig.timezone})</div>
+                <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                  <button className="btn btn-secondary btn-sm" onClick={() => handleAcknowledgeReminder(reminder.id)}>Acknowledge</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => handleSnoozeReminder(reminder.id)}>Snooze 48h</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Toolbar */}
@@ -542,19 +716,86 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
           <option value="ALL">All Statuses</option>
           {STATUSES.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}
         </select>
+        <div style={{ display:'flex', gap:6, alignItems:'center', fontSize:10, color:'var(--muted)' }}>
+          <span>Rank W:</span>
+          {Object.entries(normalizeWeights(rankingWeights)).map(([key, value]) => (
+            <label key={key} style={{ display:'flex', alignItems:'center', gap:4 }}>
+              <span style={{ textTransform:'capitalize' }}>{key === 'freshnessPenalty' ? 'Fresh' : key.slice(0,4)}</span>
+              <input
+                aria-label={`Ranking weight ${key}`}
+                type="number"
+                min="0"
+                step="0.05"
+                value={rankingWeights[key]}
+                onChange={e => setRankingWeights((prev) => ({ ...prev, [key]: Number(e.target.value) }))}
+                style={{ width:54, padding:'2px 4px' }}
+              />
+              <span>{value.toFixed(2)}</span>
+            </label>
+          ))}
+        </div>
         <div className="planner-views">
           <button className={`view-btn ${view==='table'?'active':''}`} onClick={() => setViewSafe('table')}>Table</button>
           <button className={`view-btn ${view==='kanban'?'active':''}`} onClick={() => setViewSafe('kanban')}>Kanban</button>
           <button className={`view-btn ${view==='calendar'?'active':''}`} onClick={() => setViewSafe('calendar')}>Calendar</button>
           <button className={`view-btn ${view==='analytics'?'active':''}`} onClick={() => setViewSafe('analytics')}>Analytics</button>
+          <button className={`view-btn ${view==='arc'?'active':''}`} onClick={() => setViewSafe('arc')}>Arc Planner</button>
         </div>
         <button className="btn btn-secondary btn-sm" onClick={exportCSV}>↓ CSV</button>
         <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer' }}>↑ CSV<input type="file" accept=".csv" onChange={importCSV} style={{ display: 'none' }} /></label>
         <button className="btn btn-primary" onClick={() => openIssueForm()}>+ New Issue</button>
       </div>
+      {cadencePolicy.hardWarning && (
+        <div className="card" style={{ marginBottom: 16, borderColor: '#FF5A5A' }}>
+          <div style={{ fontSize: 12, color: '#FF5A5A', marginBottom: 8 }}>Hard warning: cadence debt exists. Publishing is discouraged until debt is resolved or overridden.</div>
+          <button className="btn btn-danger btn-sm" onClick={registerCadenceOverride}>Override with reason</button>
+          <div style={{ marginTop: 6, fontSize: 10, color: 'var(--muted)' }}>Overrides logged: {cadenceOverrideLog.length}</div>
+        </div>
+      )}
+
+
+
+      {view === 'arc' && (
+        <div className="card" style={{ display: 'grid', gap: 12 }}>
+          <div style={{ fontSize: 13, color: 'var(--text)' }}>Upcoming posts grouped by narrative arc.</div>
+          {arcModel.arcs.length === 0 ? <div style={{ fontSize: 12, color: 'var(--muted)' }}>No arcs defined yet.</div> : arcModel.arcs.map((arc) => (
+            <div key={arc.arcId} style={{ border: '1px solid var(--border)', borderRadius: 'var(--r)', padding: 10 }}>
+              <div style={{ fontWeight: 600 }}>{arc.arcName} <span style={{ color: 'var(--muted)', fontWeight: 400 }}>· {arc.thesisTheme}</span></div>
+              <div style={{ display: 'grid', gap: 6, marginTop: 8 }}>
+                {arc.posts.filter((post) => (post.status || '').trim() !== 'published').map((post) => (
+                  <div key={post.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                    <span>#{post.issueNum} {post.topic}</span>
+                    <span style={{ color: 'var(--muted)' }}>{post.arcPhase || '—'} · {post.publishDate || 'unscheduled'}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 12 }}>Orphan posts (no arc linkage): {arcModel.orphanPosts.length}</div>
+            <div style={{ fontSize: 11, color: 'var(--muted)' }}>{arcModel.orphanPosts.slice(0,5).map((post) => `#${post.issueNum}`).join(', ') || 'None'}</div>
+          </div>
+        </div>
+      )}
 
       {/* Table View */}
-      {view === 'table' && (
+                <div className="panel" style={{ marginBottom: 12 }}>
+            <div className="panel-title">Series Continuity</div>
+            <div style={{ display: 'grid', gap: 8 }}>
+              {continuityReport.length === 0 && <div style={{ fontSize: 12, color: 'var(--muted)' }}>No series chains yet.</div>}
+              {continuityReport.map((entry) => (
+                <div key={entry.seriesId} style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 8 }}>
+                  <div style={{ fontWeight: 600 }}>{entry.seriesId} · {entry.status}</div>
+                  <div style={{ fontSize: 11, color: 'var(--muted)' }}>Missing: {entry.missingParts.join(', ') || 'none'} · Duplicate: {entry.duplicateParts.join(', ') || 'none'}</div>
+                  <div style={{ marginTop: 6, display: 'flex', gap: 6 }}>
+                    <button className="btn btn-ghost btn-sm" onClick={() => applyContinuityFix(entry.seriesId, 'missing')}>Fix missing part</button>
+                    <button className="btn btn-ghost btn-sm" onClick={() => applyContinuityFix(entry.seriesId, 'duplicate')}>Review duplicates</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+{view === 'table' && (
         <div className="card" style={{ padding: 0 }}>
           <div className="data-table-wrap">
           {filtered.length === 0 ? (
@@ -566,16 +807,18 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
             </div>
           ) : (
             <table className="data-table">
-              <thead><tr><th>#</th><th>Topic</th><th>Frame</th><th>Theme</th><th>Status</th><th>Date</th><th>Notes</th><th></th></tr></thead>
+              <thead><tr><th>#</th><th>Topic</th><th>Frame</th><th>Theme</th><th>Status</th><th>Banger Potential</th><th>Date</th><th>Notes</th><th></th></tr></thead>
               <tbody>
                 {filtered.map(issue => {
                   const frame = FRAMES.find(f => String(f.id) === String(issue.frameId));
                   const theme = THEMES.find(t => t.id === issue.themeId);
                   const statusCol = KANBAN_COLS.find(c => c.id === issue.status);
+                  const heuristic = heuristicByIssueId[issue.id] || scoreEngagementHeuristic({ issue, issues });
                   return (
                     <tr key={issue.id}>
                       <td><span style={{ fontFamily: 'var(--font-m)', color: 'var(--dim)' }}>#{issue.issueNum}</span></td>
                       <td><strong style={{ fontSize: 13 }}>{issue.topic || '—'}</strong></td>
+                      <td><div style={{ fontFamily:'var(--font-m)', fontSize:10, color:'var(--muted)', maxWidth:220 }}><div style={{ color:'var(--text)' }}>{issue.ranking.rankScore.toFixed(3)}</div><div title={issue.ranking.breakdown}>{issue.ranking.breakdown}</div></div></td>
                       <td><span style={{ fontFamily: 'var(--font-m)', fontSize: 11, color: 'var(--muted)' }}>{frame ? `${frame.id}. ${frame.name}` : issue.frameId || '—'}</span></td>
                       <td>{theme ? (<div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: theme.accent, display: 'inline-block' }} /><span style={{ fontSize: 11 }}>{theme.name}</span></div>) : <span style={{ color: 'var(--dim)' }}>—</span>}</td>
                       {/* L6: Color + icon for status, not color-only */}
@@ -587,7 +830,9 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
                           </select>
                         </div>
                       </td>
+                      <td><span title={heuristic.reasonCodes.join(', ')} style={{ fontFamily: 'var(--font-m)', fontSize: 11, color: 'var(--muted)' }}>{heuristic.scorePercent}%</span></td>
                       <td><span style={{ fontFamily: 'var(--font-m)', fontSize: 11, color: 'var(--muted)' }}>{issue.publishDate || '—'}</span></td>
+                      <td><div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>{Object.entries(driftData.drift).map(([type, value]) => (<span key={type} title={`${type} drift ${value.score}`} style={{ fontSize:9, padding:'2px 5px', borderRadius:999, border:'1px solid var(--border)', color:value.severity==='critical'?'#FF5A5A':value.severity==='warn'?'#E5B23A':'#6FA8FF' }}>{type[0].toUpperCase()}:{value.score}</span>))}</div></td>
                       <td><span style={{ fontSize: 11, color: 'var(--muted)', maxWidth: 160, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{issue.notes || '—'}</span></td>
                       <td>
                         <div style={{ display: 'flex', gap: 4 }}>
@@ -627,6 +872,7 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
                   ) : colIssues.map(issue => {
                     const frame = FRAMES.find(f => String(f.id) === String(issue.frameId));
                     const theme = THEMES.find(t => t.id === issue.themeId);
+                    const heuristic = heuristicByIssueId[issue.id] || scoreEngagementHeuristic({ issue, issues });
                     return (
                       <div key={issue.id} className="kanban-card" data-status={issue.status}
                         draggable onDragStart={() => dnd.startDrag(issue.id)}
@@ -639,6 +885,7 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
                           {frame && <span style={{ fontFamily: 'var(--font-m)', fontSize: 9, color: 'var(--dim)' }}>F{frame.id}</span>}
                           {theme && <span style={{ width: 6, height: 6, borderRadius: '50%', background: theme.accent, flexShrink: 0, display: 'inline-block' }} />}
                           {issue.publishDate && <span style={{ fontFamily: 'var(--font-m)', fontSize: 9, color: 'var(--dim)' }}>{issue.publishDate}</span>}
+                          <span style={{ fontFamily: 'var(--font-m)', fontSize: 9, color: 'var(--dim)' }}>⚡ {heuristic.scorePercent}%</span>
                         </div>
                       </div>
                     );
@@ -649,6 +896,44 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
               </div>
             );
           })}
+        </div>
+      )}
+
+
+      {view === 'analytics' && (
+        <div className="card" style={{ display: 'grid', gap: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+            <div>
+              <div style={{ fontFamily: 'var(--font-m)', fontSize: 10, textTransform: 'uppercase', color: 'var(--muted)' }}>Planner quality score</div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+                <strong style={{ fontSize: 32, color: scorePalette[scoreTone].color }}>{plannerScore.aggregateScore}</strong>
+                <span style={{ color: scorePalette[scoreTone].color, fontFamily: 'var(--font-m)', fontSize: 11 }}>{scorePalette[scoreTone].label}</span>
+              </div>
+            </div>
+            <svg width="180" height="44" viewBox="0 0 180 44" role="img" aria-label="Score trend sparkline">
+              <polyline
+                fill="none"
+                stroke={scorePalette[scoreTone].color}
+                strokeWidth="2"
+                points={scoreTrend.map((point, index) => `${index * 24},${42 - (point / 100) * 38}`).join(' ')}
+              />
+            </svg>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 8 }}>
+            {Object.entries(plannerScore.breakdown).map(([key, value]) => {
+              const tone = classifyScore(value);
+              return (
+                <div key={key} style={{ border: '1px solid var(--border)', borderLeft: `4px solid ${scorePalette[tone].color}`, borderRadius: 'var(--r)', padding: 10 }}>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>{key}</div>
+                  <div style={{ fontSize: 20, color: scorePalette[tone].color, fontWeight: 700 }}>{value}</div>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ border: '1px dashed var(--border)', borderRadius: 'var(--r)', padding: 10 }}>
+            <strong style={{ fontSize: 12 }}>Recommendation ({plannerScore.weakestSubmetric})</strong>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>{plannerScore.recommendation}</div>
+          </div>
         </div>
       )}
 
@@ -665,17 +950,40 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div className="form-group"><label className="form-label">Confidence</label><select value={form.confidence || 'medium'} onChange={e => setForm(f => ({...f, confidence: e.target.value}))}>{CONFIDENCE.map(s => <option key={s} value={s}>{s.toUpperCase()}</option>)}</select></div>
+            <div className="form-group"><label className="form-label">Claim Type</label><select value={form.claimType || 'slower_indicators'} onChange={e => setForm(f => ({...f, claimType: e.target.value}))}>{CLAIM_TYPES.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
             <div className="form-group"><label className="form-label">Series</label><input value={form.series || ''} onChange={e => setForm(f => ({...f, series: e.target.value}))} placeholder="Stablecoin Risk Pt. 1" /></div>
+            <div className="form-group"><label className="form-label">Series ID</label><input value={form.series_id || ''} onChange={e => setForm(f => ({...f, series_id: e.target.value}))} /></div>
+            <div className="form-group"><label className="form-label">Part #</label><input value={form.part_number || ''} onChange={e => setForm(f => ({...f, part_number: e.target.value.replace(/\D/g,'')}))} /></div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+            <div className="form-group"><label className="form-label">Thesis Theme</label><input value={form.thesisTheme || ''} onChange={e => setForm(f => ({...f, thesisTheme: e.target.value}))} placeholder="Liquidity Fragmentation" /></div>
+            <div className="form-group"><label className="form-label">Arc</label><input value={form.arc || ''} onChange={e => setForm(f => ({...f, arc: e.target.value}))} placeholder="Stablecoin Stress Arc" /></div>
+            <div className="form-group"><label className="form-label">Arc Phase</label><select value={form.arcPhase || ''} onChange={e => setForm(f => ({...f, arcPhase: e.target.value}))}><option value="">— Select —</option><option value="setup">setup</option><option value="evidence">evidence</option><option value="tension">tension</option><option value="resolution">resolution</option></select></div>
           </div>
           <div className="form-group"><label className="form-label">Topic / Headline *</label><input value={form.topic} onChange={e => setForm(f => ({...f, topic: e.target.value}))} placeholder="The End of Mercenary Yield" autoFocus /></div>
+          {(() => {
+            const heuristic = scoreEngagementHeuristic({ issue: form, issues });
+            return <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8 }}><strong style={{ color: 'var(--text)' }}>Banger Potential: {heuristic.scorePercent}%</strong> · advisory only · {heuristic.reasonCodes.join(', ')}</div>;
+          })()}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="form-group"><label className="form-label">Intent</label><input value={form.intent || ''} onChange={e => setForm(f => ({...f, intent: e.target.value}))} placeholder="comparison, risk, timeline..." /></div>
+            <div className="form-group"><label className="form-label">Data Shape</label><select value={form.dataShape || 'generic'} onChange={e => setForm(f => ({...f, dataShape: e.target.value}))}><option value="generic">Generic</option><option value="table">Table</option><option value="timeline">Timeline</option><option value="network">Network/Map</option><option value="split">Bull/Bear Split</option><option value="grid">Grid</option><option value="chart">Chart</option></select></div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="form-group"><label className="form-label">Complexity Budget</label><select value={form.complexityBudget || 'medium'} onChange={e => setForm(f => ({...f, complexityBudget: e.target.value}))}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></div>
             <div className="form-group"><label className="form-label">Frame Template</label><select value={form.frameId} onChange={e => setForm(f => ({...f, frameId: e.target.value}))}><option value="">— Select —</option>{FRAMES.map(fr => <option key={fr.id} value={fr.id}>{fr.id}. {fr.name}</option>)}</select></div>
             <div className="form-group"><label className="form-label">Color Theme</label><select value={form.themeId} onChange={e => setForm(f => ({...f, themeId: e.target.value}))}><option value="">— Select —</option>{THEMES.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-            <div className="form-group"><label className="form-label">Creator</label><input value={form.ownerId || ''} onChange={e => setForm(f => ({...f, ownerId: e.target.value}))} placeholder="alex" /></div>
-            <div className="form-group"><label className="form-label">Reviewer</label><input value={form.reviewerId || ''} onChange={e => setForm(f => ({...f, reviewerId: e.target.value}))} placeholder="riley" /></div>
-            <div className="form-group"><label className="form-label">Complexity Points</label><input type="number" min="1" max="13" value={form.complexityPoints || 3} onChange={e => setForm(f => ({...f, complexityPoints: Number(e.target.value) || 3}))} /></div>
+          <div className="form-group" style={{ border: '1px solid var(--border)', borderRadius: 'var(--r)', padding: 10 }}>
+            <div className="form-label" style={{ marginBottom: 6 }}>Recommended Frames</div>
+            {frameRecommendations.recommendations.map((item) => (
+              <button key={item.frame.id} className="btn btn-ghost btn-sm" style={{ marginRight: 6, marginBottom: 6 }} onClick={() => setForm(f => ({ ...f, frameId: String(item.frame.id) }))}>
+                {item.frame.id}. {item.frame.name} ({Math.round(item.confidence * 100)}%)
+              </button>
+            ))}
+            <div style={{ fontSize: 10, color: 'var(--dim)' }}>
+              Intent: {frameRecommendations.inferredIntent}. {frameRecommendations.fallback ? `${frameRecommendations.fallback.reason}; fallback frames: ${frameRecommendations.fallback.fallbackFrameIds.join(', ')}.` : 'Top result confidence is acceptable.'}
+            </div>
           </div>
           <div className="form-group">
             <label className="form-label">
@@ -696,6 +1004,26 @@ export default function Planner({ showToast, activeTheme, navigateTo, isActive }
           {/* F7: Source links with URL hints */}
           <div className="form-group"><label className="form-label">Source Links (one per line)</label><textarea value={form.sourceLinks} onChange={e => setForm(f => ({...f, sourceLinks: e.target.value}))} rows={2} placeholder="https://defillama.com/protocol/...&#10;https://dune.com/..." />{form.sourceLinks && <div style={{ marginTop: 4 }}>{form.sourceLinks.split('\n').filter(Boolean).map((link, i) => {const isUrl = /^https?:\/\//.test(link.trim()); return (<div key={i} style={{ fontSize: 10, fontFamily: 'var(--font-m)', color: isUrl ? 'var(--muted)' : '#FF5A5A', display: 'flex', alignItems: 'center', gap: 4 }}><span>{isUrl ? '✓' : '⚠'}</span><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{link.trim()}</span></div>);})}</div>}</div>
           <div className="form-group"><label className="form-label">Notes</label><textarea value={form.notes} onChange={e => setForm(f => ({...f, notes: e.target.value}))} rows={2} placeholder="Research notes, key stats, angle ideas..." /></div>
+          <div className="form-group">
+            <label className="form-label">Protocol Tags</label>
+            <input value={(form.tags || []).join(', ')} onChange={e => setForm(f => ({ ...f, tags: e.target.value.split(',').map((t) => t.trim()).filter(Boolean) }))} placeholder="DEX, STABLECOIN" />
+            {tagSuggestions.length > 0 && (
+              <div style={{ marginTop: 8, display: 'grid', gap: 6 }}>
+                {tagSuggestions.map((suggestion) => (
+                  <div key={suggestion.tag} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 8px' }}>
+                    <div style={{ display: 'grid' }}>
+                      <strong style={{ fontSize: 11 }}>{suggestion.tag}</strong>
+                      <span style={{ fontSize: 10, color: 'var(--dim)' }}>{Math.round(suggestion.confidence * 100)}% confidence{suggestion.ambiguous ? ' · ambiguous' : ''}</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button className="btn btn-ghost btn-sm" onClick={() => setTagSuggestions((prev) => prev.filter((p) => p.tag !== suggestion.tag))}>Reject</button>
+                      <button className="btn btn-secondary btn-sm" onClick={() => setForm((prev) => ({ ...prev, tags: [...new Set([...(prev.tags || []), suggestion.tag])] }))}>Accept</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           <div className="modal-footer">
             {editingIssue && <button className="btn btn-danger" onClick={() => { deleteIssue(editingIssue); setShowModal(false); }}>Delete</button>}
             {editingIssue && <button className="btn btn-secondary" onClick={() => { duplicateIssue(issues.find(i=>i.id===editingIssue)); setShowModal(false); }}>Duplicate</button>}

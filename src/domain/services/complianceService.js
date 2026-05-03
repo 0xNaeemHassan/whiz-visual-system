@@ -3,6 +3,7 @@ import {
 } from '../../utils/editorCompliance.js';
 import { classifyProvenanceFreshness, FRESHNESS_STATUS, resolveMetricClassPolicy } from '../provenanceFreshnessPolicy.js';
 import { scoreFrameComplexity, classifyComplexity } from './frameComplexityService.js';
+import { detectDuplicatePublication } from './duplicateDetectorService.js';
 
 export function computeCompliance({ overrides, content }) {
   return getComplianceIssues({ overrides, content });
@@ -87,7 +88,7 @@ export function runExportPreflight({ content = {}, overrides = {}, theme = {}, w
 
 const TRUST_BLOCKING_SEVERITIES = new Set(['blocking']);
 
-export function runTrustPreflightOrchestrator({ content = {}, strictMode = true, exceptionReason = '', requireSignoff = false, signoffRecord = {}, reviewState = 'draft' } = {}) {
+export function runTrustPreflightOrchestrator({ content = {}, strictMode = true, exceptionReason = '', requireSignoff = false, signoffRecord = {}, reviewState = 'draft', frameId = null, layoutId = '', overrides = {}, recentPublications = [], duplicateOverrideReason = '', publicationWindowDays = 14 } = {}) {
   const normalize = (value) => String(value || '').trim();
   const stats = Array.isArray(content?.stats) ? content.stats : [];
   const tableRows = Array.isArray(content?.tableRows) ? content.tableRows : [];
@@ -142,6 +143,21 @@ export function runTrustPreflightOrchestrator({ content = {}, strictMode = true,
   const signoffReady = !requireSignoff || (reviewState === 'approved' && String(signoffRecord?.reviewerName || '').trim() && String(signoffRecord?.reviewerId || '').trim() && Object.values(signoffRecord?.checklist || {}).every(Boolean));
   if (!signoffReady) addIssue('signoff', 'blocking', 'signoffRecord', 'Approval sign-off is incomplete for publish actions.');
 
+
+  const duplicateCheck = detectDuplicatePublication({
+    draft: { frameId, layoutId, overrides, content },
+    recentPublications,
+    windowDays: publicationWindowDays,
+  });
+  if (duplicateCheck.duplicate) {
+    addIssue(
+      'publication-duplicates',
+      duplicateCheck.duplicate.severity,
+      'content.topicTag',
+      `${duplicateCheck.duplicate.reason} match=${duplicateCheck.duplicate.candidateId || 'unknown'} similarity=${duplicateCheck.duplicate.similarity}`,
+    );
+  }
+
   const seen = new Map();
   stats.forEach((stat, idx) => {
     const key = `${normalize(stat?.label).toLowerCase()}::${normalize(stat?.value).toLowerCase()}`;
@@ -152,11 +168,15 @@ export function runTrustPreflightOrchestrator({ content = {}, strictMode = true,
 
   const blocking = issues.filter((issue) => TRUST_BLOCKING_SEVERITIES.has(issue.severity));
   const warnings = issues.filter((issue) => issue.severity === 'warning');
-  const bypassed = !strictMode && blocking.length > 0;
+  const duplicateOverrideApplied = Boolean(duplicateCheck.duplicate && normalize(duplicateOverrideReason));
+  const blockingAfterDuplicateOverride = blocking.filter((issue) => !(issue.checkId === 'publication-duplicates' && duplicateOverrideApplied));
+  const bypassed = !strictMode && blockingAfterDuplicateOverride.length > 0;
   const summary = { blocking: blocking.length, warnings: warnings.length, total: issues.length };
   return {
     strictMode,
     exceptionReason: bypassed ? normalize(exceptionReason) || 'non-strict mode override' : '',
+    duplicateCheck,
+    duplicateOverrideReason: duplicateOverrideApplied ? normalize(duplicateOverrideReason) : '',
     checks: {
       'provenance-completeness': issues.filter((x) => x.checkId === 'provenance-completeness'),
       freshness: issues.filter((x) => x.checkId === 'freshness'),
@@ -164,11 +184,12 @@ export function runTrustPreflightOrchestrator({ content = {}, strictMode = true,
       'unit-compatibility': issues.filter((x) => x.checkId === 'unit-compatibility'),
       'impossible-combinations': issues.filter((x) => x.checkId === 'impossible-combinations'),
       duplicates: issues.filter((x) => x.checkId === 'duplicates'),
+      'publication-duplicates': issues.filter((x) => x.checkId === 'publication-duplicates'),
     },
-    blocking,
+    blocking: blockingAfterDuplicateOverride,
     warnings,
-    canProceed: blocking.length === 0 || !strictMode,
-    bypassPrevented: strictMode && blocking.length > 0,
+    canProceed: blockingAfterDuplicateOverride.length === 0 || !strictMode,
+    bypassPrevented: strictMode && blockingAfterDuplicateOverride.length > 0,
     summary,
     generatedAt: new Date().toISOString(),
   };
