@@ -28,6 +28,7 @@ export const FRAME_CONTENT_SCHEMA = {
   heroUrl: { aliases: ['heroUrl', 'hero_url'], type: 'string' },
   logoUrl: { aliases: ['logoUrl', 'logo_url'], type: 'string' },
   sourceLinks: { aliases: ['sourceLinks', 'source_links', 'sources'], type: 'string' },
+  evidenceLedger: { aliases: ['evidenceLedger', 'evidence_ledger', 'ledger'], type: 'object' },
 };
 
 export const EDITOR_STATE_SCHEMA = {

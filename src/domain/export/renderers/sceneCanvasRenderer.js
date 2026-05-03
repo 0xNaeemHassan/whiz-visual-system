@@ -66,6 +66,31 @@ function wrapText(ctx, text, x, y, maxWidth, lineHeight, maxLines = Infinity) {
   lines.forEach((l, i) => ctx.fillText(l, x, y + i * lineHeight));
 }
 
+function paintCitationStrip(ctx, sceneModel, contract, width, height) {
+  const citations = {
+    ...(sceneModel?.citations || {}),
+    mode: contract?.citationMode || sceneModel?.citations?.mode || 'off',
+  };
+  if (!citations || citations.mode === 'off' || !Array.isArray(citations.entries) || !citations.entries.length) return;
+  const isCompact = citations.mode === 'compact';
+  const padX = Math.round(width * 0.05);
+  const stripHeight = Math.max(32, Math.round(height * (isCompact ? 0.07 : 0.16)));
+  const stripY = height - stripHeight - Math.max(16, Math.round(height * 0.03));
+
+  ctx.fillStyle = 'rgba(9, 12, 16, 0.78)';
+  ctx.fillRect(padX, stripY, width - padX * 2, stripHeight);
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(padX, stripY, width - padX * 2, stripHeight);
+
+  ctx.fillStyle = '#D7DEE8';
+  ctx.font = '500 11px Inter, sans-serif';
+  const lineHeight = 14;
+  const maxLines = isCompact ? 2 : Math.max(2, Math.floor((stripHeight - 12) / lineHeight));
+  const rendered = citations.entries.map((entry) => (isCompact ? `[${entry.number}] ${entry.source || entry.url || entry.label || 'Source'}` : `[${entry.number}] ${entry.label || 'Claim'} — ${entry.source || 'Source'} ${entry.date ? `(${entry.date})` : ''} ${entry.url || ''}`));
+  wrapText(ctx, rendered.join(' · '), padX + 10, stripY + 16, width - padX * 2 - 20, lineHeight, maxLines);
+}
+
 export async function renderSceneToCanvas(sceneModel, contract) {
   const layout = resolveFrameLayout(sceneModel.frameId);
   if (!SCENE_SUPPORTED_LAYOUTS.has(layout)) {
@@ -106,6 +131,7 @@ export async function renderSceneToCanvas(sceneModel, contract) {
   ctx.fillStyle = sceneModel.palette.accent;
   ctx.font = '500 12px "JetBrains Mono", monospace';
   ctx.fillText(sceneModel.content.handle, 44, height - 30);
+  paintCitationStrip(ctx, sceneModel, contract, width, height);
 
   return canvas;
 }

@@ -1,6 +1,7 @@
 import { FRAME_CONTENT_SCHEMA, EDITOR_STATE_SCHEMA } from './mappings';
 import { normalizeContentTaxonomy } from '../../utils/contentNormalization';
 import { normalizeDateInput, normalizeTimelineEvents } from '../services/dateNormalizationService';
+import { normalizeProvenanceShape } from '../../utils/provenance';
 
 function toString(v, fallback = '') { return v == null ? fallback : String(v); }
 function toNumber(v, fallback = 0) { const n = Number(v); return Number.isFinite(n) ? n : fallback; }
@@ -23,13 +24,13 @@ function coerce(type, value) {
     case 'object': return toObject(value, {});
     case 'objectOrNull': return value == null ? null : toObject(value, null);
     case 'stringArray': return toStringArray(value);
-    case 'statArray': return Array.isArray(value) ? value.map((s) => ({ label: toString(s?.label), value: toString(s?.value) })) : [];
+    case 'statArray': return Array.isArray(value) ? value.map((s) => ({ label: toString(s?.label), value: toString(s?.value), provenance: normalizeProvenanceShape(s?.provenance) })) : [];
     case 'tableRows': return Array.isArray(value) ? value.map((row) => {
       const normalizedRow = toObject(row, {});
       const term = toString(normalizedRow.term || normalizedRow.col1);
       const definition = toString(normalizedRow.definition || normalizedRow.col2);
       const group = normalizeGlossaryGroup(normalizedRow.group, term);
-      return { ...normalizedRow, term, definition, group, col1: term, col2: definition };
+      return { ...normalizedRow, term, definition, group, col1: term, col2: definition, provenance: normalizeProvenanceShape(normalizedRow.provenance) };
     }) : [];
     case 'gridItems': return Array.isArray(value) ? value.map((it) => ({ title: toString(it?.title), value: toString(it?.value), sub: toString(it?.sub) })) : [];
     case 'timelineEvents': return normalizeTimelineEvents(value);
@@ -49,7 +50,8 @@ function normalizeBySchema(raw, schema) {
 }
 
 export function normalizeFrameContent(raw, defaults = {}) {
-  const merged = { ...defaults, ...normalizeBySchema(raw, FRAME_CONTENT_SCHEMA) };
+  const source = toObject(raw, {});
+  const merged = { ...defaults, ...source, ...normalizeBySchema(source, FRAME_CONTENT_SCHEMA) };
   const normalizedDate = normalizeDateInput(merged.date);
   if (normalizedDate.valid) merged.date = normalizedDate.displayDate;
   return normalizeContentTaxonomy(merged).content;

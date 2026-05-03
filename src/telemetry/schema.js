@@ -8,8 +8,10 @@ export const TELEMETRY_EVENTS = {
   REDO: 'editor.redo',
   EXPORT_SUCCESS: 'editor.export.success',
   EXPORT_FAILURE: 'editor.export.failure',
+  EXPORT_BLOCKED_PROVENANCE: 'editor.export.blocked.provenance',
   VALIDATION_ERROR: 'editor.validation.error',
   DUPLICATE_AUTOPILOT_METRIC: 'editor.duplicate.autopilot.metric',
+  DUPLICATE_RESOLUTION: 'editor.duplicate.resolution',
 };
 
 export const EVENT_PAYLOAD_SHAPES = {
@@ -43,6 +45,11 @@ export const EVENT_PAYLOAD_SHAPES = {
     reason: 'string',
     strictMode: 'boolean',
   },
+  [TELEMETRY_EVENTS.EXPORT_BLOCKED_PROVENANCE]: {
+    format: 'png|webp|html|json|manifest',
+    issueCount: 'number',
+    issuePaths: 'string[]',
+  },
   [TELEMETRY_EVENTS.VALIDATION_ERROR]: {
     context: 'export|import',
     count: 'number',
@@ -55,6 +62,13 @@ export const EVENT_PAYLOAD_SHAPES = {
     withWizard: 'boolean',
     confidence: 'low|medium|high?',
     provenanceRequired: 'boolean?',
+  },
+  [TELEMETRY_EVENTS.DUPLICATE_RESOLUTION]: {
+    source: 'import_validate|row_edit|resolution',
+    duplicateGroups: 'number',
+    fuzzyPairs: 'number',
+    unresolvedHighConfidence: 'number',
+    action: 'merge|keep_both?',
   },
 };
 
