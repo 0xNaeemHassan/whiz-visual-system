@@ -2,7 +2,7 @@ import { TICKER_CONTRACT, normalizeTickerSpeed } from '../domain/tickerContract'
 import { createTemplateForLayout, checkTemplateLayoutCompatibility, getFrameTemplate } from '../data/templates.js';
 import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
 import { FRAMES } from '../data/frames.js';
-import { applyDefaultSort, validateDefaultSort } from '../domain/tableSort.js';
+import { applyDefaultSort, applyDefaultSortWithMetadata, validateDefaultSort } from '../domain/tableSort.js';
 import { THEMES } from '../data/themes.js';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { useUIEventContext } from '../state/UIEventContext';
@@ -606,7 +606,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
 
     if (selectedFrame?.defaultSort && Array.isArray(nextContent.tableHeaders) && Array.isArray(nextContent.tableRows)) {
       validateDefaultSort({ defaultSort: selectedFrame.defaultSort, tableHeaders: nextContent.tableHeaders, tableRows: nextContent.tableRows });
-      nextContent.tableRows = applyDefaultSort(nextContent.tableRows, nextContent.tableHeaders, selectedFrame.defaultSort);
+      nextContent.tableRows = applyDefaultSortWithMetadata(nextContent.tableRows, nextContent.tableHeaders, selectedFrame.defaultSort, nextContent?.unitMetadata?.tableRows);
     }
 
     resetContent(nextContent);
@@ -784,7 +784,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
       showToast(accepted?'Numeric corrections accepted.':'Numeric corrections rejected.','info');
     }
     if(JSON.stringify(normalizedContent)!==JSON.stringify(content)){setContent(normalizedContent,{immediate:true});}
-    return { normalizedContent, taxonomyAutoCorrected, numericCorrections: numericAudit, contract: numeric.contract };
+    return { normalizedContent, taxonomyAutoCorrected, numericCorrections: numericAudit, contract: numeric.contract, numericCompatibility: numeric.compatibility, unitMetadata: numeric.unitMetadata };
   };
 
   const stateValidation = useMemo(() => validateEditorState({frameId,theme,content,overrides,uploadedImages},{strictMode:Boolean(strictMode)}), [frameId, theme, content, overrides, uploadedImages, strictMode]);
