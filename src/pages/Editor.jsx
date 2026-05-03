@@ -467,6 +467,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
   const[paletteQuery,setPaletteQuery]=useState('');
   const[whizEffects,setWhizEffects]=useLocalStorage('whiz-effects',DEFAULT_EFFECTS);
   const [exportPresetId, setExportPresetId] = useLocalStorage('export-preset-id', 'standard');
+  const [shipNowSummaryOpen, setShipNowSummaryOpen] = useState(false);
   const [workflowPhase,setWorkflowPhase]=useState('draft');
   const [phaseChecklist,setPhaseChecklist]=useState({draftAt:Date.now(),reviewAt:null,publishReadyAt:null,lastTransitionAt:Date.now()});
   const [collaborationMode, setCollaborationMode] = useLocalStorage('whiz-collaboration-mode', 'collaborative');
@@ -1200,6 +1201,24 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
 
   const filteredFrames=useMemo(()=>{if(!frameSearch)return FRAMES;const q=frameSearch.toLowerCase();return FRAMES.filter(f=>f.name.toLowerCase().includes(q)||f.tags.some(t=>t.includes(q))||f.layout.includes(q));},[frameSearch]);
   const isExpertMode = uiExperienceMode === 'expert';
+  const shipNowBlockers = useMemo(() => getShipNowBlockers({
+    stateValidation,
+    editorValidation,
+    complianceIssues,
+    hasRequiredSources: Boolean(String(content.sourceLinks || '').trim()),
+  }), [stateValidation, editorValidation, complianceIssues, content, activeFrame]);
+
+  const activateShipNow = () => {
+    const next = applyShipNowDefaults({ uiExperienceMode, strictMode, workflowPhase, exportPresetId, whizEffects });
+    setUiExperienceMode(next.uiExperienceMode);
+    setStrictMode(next.strictMode);
+    setWorkflowPhase(next.workflowPhase);
+    setExportPresetId(next.exportPresetId);
+    setWhizEffects(next.whizEffects);
+    setShipNowSummaryOpen(true);
+    showToast('Ship Now defaults applied. Review blockers before publish.', 'info');
+  };
+
   const noviceSteps = [
     { id: 'outline', label: 'Outline', hint: 'Define your core message first.', why: 'A clear outline prevents scope drift and weak framing.' },
     { id: 'populate', label: 'Populate', hint: 'Fill in key fields and supporting evidence.', why: 'Data-backed content improves trust and publish readiness.' },
@@ -1268,6 +1287,7 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
             <span style={{fontFamily:'var(--font-m)',fontSize:10,color:'var(--dim)'}}>Mode</span>
             <button className={`btn btn-ghost btn-sm ${!isExpertMode?'active':''}`} onClick={()=>setUiExperienceMode('novice')} title="Guided workflow with progressive disclosure">Novice</button>
             <button className={`btn btn-ghost btn-sm ${isExpertMode?'active':''}`} onClick={()=>setUiExperienceMode('expert')} title="Full direct access with shortcut-centric flow">Expert</button>
+            <button className="btn btn-ghost btn-sm" onClick={activateShipNow} title="Apply Ship Now safe defaults">Ship Now</button>
           </div>
           <button className="btn btn-primary btn-sm" onClick={()=>{setShowSaveModal(true);trackActionBar('save','primary',mobileTab==='preview'?'mobile':'desktop');}}>Save</button>
           <button className="btn btn-ghost btn-sm" onClick={()=>{setSaveSearch('');setShowLoadModal(true);trackActionBar('load','primary',mobileTab==='preview'?'mobile':'desktop');}}>Load</button>
@@ -1301,6 +1321,19 @@ export default function Editor({ activeFontPairing,showToast,activeTheme,setActi
         <strong>Layout Shift · {layoutShiftSnapshot.totalShift.toFixed(4)}</strong>
         <span>{layoutShiftWarnings[0] || 'Within CLS budget for current tier.'}</span>
       </div>
+      {shipNowSummaryOpen && <div className="editor-section" style={{marginBottom:8,border:'1px solid var(--border)'}}>
+        <div className="editor-section-title">Ship Now summary</div>
+        <div style={{fontSize:10,color:'var(--muted)',marginBottom:6}}>Auto-applied defaults: validated frame, constrained typography/theme, required source checks, minimal effects, standard export preset.</div>
+        <ul style={{margin:'0 0 8px 16px',fontSize:11}}>
+          <li>Workflow phase set to <strong>{SHIP_NOW_DEFAULTS.workflowPhase}</strong>.</li>
+          <li>Strict mode is enforced.</li>
+          <li>Effects are minimized to reduce risk.</li>
+          <li>Export preset set to <strong>{SHIP_NOW_DEFAULTS.exportPresetId}</strong>.</li>
+        </ul>
+        <div style={{fontSize:10,color:shipNowBlockers.length?'#FFB3B3':'#8EF0B0'}}>
+          {shipNowBlockers.length ? `Remaining blockers (${shipNowBlockers.length}): ${shipNowBlockers.join(' | ')}` : 'No blockers detected. Non-negotiable gates are currently passing.'}
+        </div>
+      </div>}
       {!isExpertMode && <div className="editor-section" style={{marginBottom:8}}><div className="editor-section-title">Guided Sequence</div><div style={{fontSize:10,color:'var(--muted)',marginBottom:8}}>Follow these steps in order. Advanced controls stay collapsed until you reach their phase.</div><div style={{display:'grid',gridTemplateColumns:'repeat(5,minmax(0,1fr))',gap:6}}>{noviceSteps.map((step,idx)=><button key={step.id} className={`btn btn-ghost btn-sm ${noviceStep===step.id?'active':''}`} onClick={()=>setNoviceStep(step.id)} title={step.why} style={{display:'flex',flexDirection:'column',alignItems:'flex-start',gap:2,padding:'6px 8px'}}><span style={{fontFamily:'var(--font-m)',fontSize:9,color:'var(--dim)'}}>{idx+1}</span><span>{step.label}</span></button>)}</div><div style={{fontSize:10,color:'var(--dim)',marginTop:6}}>{noviceSteps.find((step)=>step.id===noviceStep)?.hint}</div></div>}
       {/* LEFT */}
       <div className={`editor-left ${mobileTab==='frame'?'mob-active':''}`}>
